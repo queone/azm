@@ -2,6 +2,7 @@ package maz
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -176,12 +177,18 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	return result.AccessToken, nil // Return only the AccessToken, which is of type string
 }
 
-// Validates a JWT token *string* as defined in https://tools.ietf.org/html/rfc7519
-func TokenValid(tokenString string) bool {
-	if tokenString == "" || (!strings.HasPrefix(tokenString, "eyJ") && !strings.Contains(tokenString, ".")) {
-		return false
+// Validates a JWT token *string format* as defined in https://tools.ietf.org/html/rfc7519
+func IsValidTokenFormat(tokenString string) (bool, string) {
+	if tokenString == "" {
+		return false, "token is empty"
 	}
-	return true
+	if !strings.HasPrefix(tokenString, "eyJ") {
+		return false, "token does not start with 'eyJ'"
+	}
+	if !strings.Contains(tokenString, ".") {
+		return false, "token does not contain any '.'"
+	}
+	return true, ""
 }
 
 // Decode and dump token string, trusting without formal verification and validation
@@ -203,8 +210,9 @@ func DecodeJwtToken(tokenString string) {
 	//   Signature string                 // The third segment of the token. Populated when you Parse a token
 	//   Valid     bool                   // Is the token valid? Populated when you Parse/Verify a token
 
-	if !TokenValid(tokenString) {
-		utl.Die("%s\n", utl.Red("Invalid token: Does not start with 'eyJ', contain any '.', or it's empty."))
+	valid, errMsg := IsValidTokenFormat(tokenString)
+	if !valid {
+		utl.Die("%s\n", utl.Red(fmt.Sprintf("Invalid token: %s", errMsg)))
 	}
 
 	// Parse the token without verifying the signature
@@ -255,7 +263,8 @@ func DecodeJwtToken(tokenString string) {
 	fmt.Println(utl.Blu("signature") + ":")
 	if string(token.Signature) != "" {
 		k := "signature"
-		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(token.Signature))
+		// Display the base64 encoded signature
+		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(base64.StdEncoding.EncodeToString([]byte(token.Signature))))
 	}
 
 	fmt.Println(utl.Blu("status") + ":")

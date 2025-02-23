@@ -27,18 +27,15 @@ printf "\n==> Compile maz package\ngo build -o /dev/null ./pkg/maz\n"
 #go build pkg/maz/...
 go build -o /dev/null ./pkg/maz
 
-
-printf "\n==> Build ${Yel}$BIN${Rst}\ngo build -ldflags \"-s -w\" -o $BIN\n"
+printf "\n==> Building ${Gre}$Prg${Rst}\ngo build -ldflags \"-s -w\" -o $BIN\n"
 MainGo=cmd/azm/main.go
 go build -ldflags "-s -w" -o $BIN $MainGo
+printf "${Gre}$(ls -l $BIN | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
 
 # Example options to cross-compile to other OSes/archs:
 # GOOS=darwin  GOARCH=arm64       go build -ldflags "-s -w" -o ${Prg}
 # GOOS=windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}.exe
 # GOOS=linux   GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}
-
-printf "\n"
-ls -l $GOPATH/bin/$Prg | grep $Prg
 
 printf "\n==> Warn on any 'replace' in go.mod\n${Red}$(grep replace go.mod)${Rst}\n"
 printf "\n==> grep version in $MainGo\n${Gre}$(grep 'prgver.*=' $MainGo || grep 'program_version.*=' $MainGo)${Rst}\n"

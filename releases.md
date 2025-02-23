@@ -1,5 +1,19 @@
 ## Releases
 
+### v0.1.1
+Release Date: 2025-feb-23
+
+- cmd/azm:
+  - Options migrated to shi new azm version: -uuid, -tmg, -taz, -tc, -st
+  - Now with a basic default usage message, and an extended more detailed one
+- pkg/maz recent changes:
+  - Cosmetic adjustment of PrintCountStatus()
+  - Renamed ValidToken() to IsValidTokenFormat() to emphasize this is only checking string formating
+  - Also update maz.go calls to above
+  - DecodeJwtToken() now displays base64 encoded signature instead of a byte array
+
+---
+
 ### v0.1.0
 Release Date: 2025-feb-21
 

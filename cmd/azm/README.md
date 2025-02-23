@@ -396,31 +396,87 @@ As the **usage** section shows, the secret Expiry defaults to 366 days if none i
 3. Generate a random [UUID](https://en.wikipedia.org/wiki/Universally_unique_identifier). This can be very handy sometimes. Simply do: `azm -uuid`
 
 ### Usage
-
-Merging these functionalities ...
+Run the `azm` utility without arguments to get the default usage message: 
 
 ```bash
-azm v0.1.0
-Azure app registration and service principal utility - github.com/queone/azm
+$ azm
+azm v0.1.1
+Azure IAM CLI manager - github.com/queone/azm
 Usage
   azm [options] [arguments]
 
-  This utility simplifies the management of Azure App and Service Principal (SP) objects.
-  Options starting with '-ap' affect App objects, while those starting with '-sp' affect SP
-  objects. Other options may impact both.
+  This utility simplifies the querying and management of various Azure IAM-related objects.
+  In many options X is a placeholder for a 1-2 character code that specifies the type of
+  Azure object to act on. The available codes are:
 
-READ Options
-  The following options allow you to read and query App and SP objects:
-  -X[j] [FILTER]                   List all X objects (App or SP) tersely; optional JSON
-                                   output; optional match on FILTER string for Id or
-                                   DisplayName. If result is a single object, it is printed
-                                   in more details.
-  -st                              Show count of all App and SP objects in local cache and
-                                   Azure tenant
-WRITE Options
-  The following options enable you to create, update, and manage App and SP objects:
-  -k                               Generate a YAML skeleton file (appsp.yaml) for App/SP
-                                   pair configuration
+    d  = Resource Role Definitions     a  = Resource Role Assignments
+    s  = Resource Subscriptions        m  = Resource Management Groups
+    u  = Directory Users               g  = Directory Groups
+    ap = Directory Applications        sp = Directory Service Principals
+    dr = Directory Role Definitions    da = Directory Role Assignments
+
+  In those options, replace X with the corresponding code to specify the object type.
+
+Quick Examples
+  Try experimenting with different options and arguments, such as:
+  azm -id                                      To display the currently configured login values
+  azm -ap                                      To list all directory applications registered in current tenant
+  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID
+  azm -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names
+  azm -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes
+  azm -s                                       To list all subscriptions in current tenant
+  azm -h                                       To display the full list of options
+```
+
+Run the utility with the `-h` argument to get the full list of options: 
+
+```bash
+$
+np10 code $ azm -h
+azm v0.1.1
+Azure IAM CLI manager - github.com/queone/azm
+Usage
+  azm [options] [arguments]
+
+  This utility simplifies the querying and management of various Azure IAM-related objects.
+  In many options X is a placeholder for a 1-2 character code that specifies the type of
+  Azure object to act on. The available codes are:
+
+    d  = Resource Role Definitions     a  = Resource Role Assignments
+    s  = Resource Subscriptions        m  = Resource Management Groups
+    u  = Directory Users               g  = Directory Groups
+    ap = Directory Applications        sp = Directory Service Principals
+    dr = Directory Role Definitions    da = Directory Role Assignments
+
+  In those options, replace X with the corresponding code to specify the object type.
+
+Quick Examples
+  Try experimenting with different options and arguments, such as:
+  azm -id                                      To display the currently configured login values
+  azm -ap                                      To list all directory applications registered in current tenant
+  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID
+  azm -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names
+  azm -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes
+  azm -s                                       To list all subscriptions in current tenant
+  azm -h                                       To display the full list of options
+
+Read Options (allow reading and querying Azure objects)
+  UUID                             Show all Azure objects associated with the given UUID
+  -X[j] [FILTER]                   List all X objects tersely; optional JSON output; optional
+                                   match on FILTER string for Id, DisplayName, and other attributes.
+                                   If the result is a single object, it is printed in more detail.
+  -vs SPECFILE                     Compare YAML specfile to what's in Azure. Only for certain objects.
+  -ar                              List all RBAC role assignments with resolved names
+  -mt                              List Management Group and subscriptions tree
+  -pags                            List all Azure AD Privileged Access Groups
+  -st                              Show count of all objects in local cache and Azure tenant
+  -tmg                             Display current Microsoft Graph API access token
+  -taz                             Display current Azure Resource API access token
+  -tc "TokenString"                Parse and display the claims contained in the given token
+
+Write Options (allow creating and managing Azure objects)
+  -kX                              Generate a YAML skeleton file for this type of object. Only
+                                   certain objects are currently supported.
   -up[f] SPECFILE|NAME             Create or update an App/SP pair from a given configuration
                                    file or with a specified name; use the 'f' option to
                                    suppress the confirmation prompt. Specifile support currently
@@ -434,63 +490,16 @@ WRITE Options
                                    date (YYYY-MM-DD) or in X number of days
   -sprs[f] ID SECRET_ID            Remove a secret from an SP with the given ID
 
-CONFIG Options
-  The following options manage your login configuration and cache:
+Other Options
   -id                              Display the currently configured login values
   -id TenantId Username            Set up user credentials for interactive login
   -id TenantId ClientId Secret     Configure ID for automated login
   -tx                              Delete the current configured login values and token
-  -apx                             Clear the local App cache
-  -spx                             Clear the local SP cache
-  -?, -h, --help                   Display this usage page
-
-Examples
-  To get started, try experimenting with different options and arguments.
+  -xx                              Delete ALL cache local files
+  -Xx                              Delete X object local file cache
+  -uuid                            Generate a random UUID
+  -?, -h, --help                   Display the full list of options
 ```
-
-```bash
-azm v2.8.1
-Azure IAM CLI utility - https://github.com/git719/azm
-Usage: azm [options]
-  READ Functions
-  UUID                              Show all Azure object(s) related to given UUID
-  -vs Specfile                      Compare YAML specfile to what's in Azure (only for d and a objects)
-  -X[j] [Specifier]                 List all X objects tersely, with option for JSON output and/or match on Specifier
-
-    Where 'X' can be any of these Azure object types:
-    d  = RBAC Role Definitions   a  = RBAC Role Assignments   s  = Azure Subscriptions
-    m  = Management Groups       u  = Azure AD Users          g  = Azure AD Groups
-    sp = Service Principals      ap = Applications            ad = Azure AD Roles
-
-  -ar                               List all RBAC role assignments with resolved names
-  -mt                               List Management Group and subscriptions tree
-  -pags                             List all Azure AD Privileged Access Groups
-  -st                               List local cache count and Azure count of all objects
-  -tmg                              Dump current token string for MS Graph API
-  -taz                              Dump current token string for Azure Resource API
-  -tc "TokenString"                 Dump token claims
-
-  WRITE Functions
-  -rm[f] UUID|Specfile|"role name"  Delete role definition or assignment based on specifier; force option
-  -up[f] Specfile                   Create or update definition or assignment based on YAML specfile; force option
-  -kd[j]                            Create a skeleton role-definition.yaml specfile
-  -ka[j]                            Create a skeleton role-assignment.yaml specfile
-  -spas SP_UUID "name" [Expiry]     Add secret to SP; Expiry in YYYY-MM-DD format or X number of days (defaults to 366)
-  -sprs SP_UUID SecretID            Remove secret from Service Principal
-  -apas APP_UUID "name" [Expiry]    Add secret to APP; Expiry in YYYY-MM-DD format or X number of days (defaults to 366)
-  -aprs APP_UUID SecretID           Remove secret from application
-  -uuid                             Generate new UUID
-
-  CONFIG Functions
-  -Xx                               Delete X object local file cache
-  -xx                               Delete ALL cache local files
-  -id                               Display configured login values
-  -id TenantId Username             Set up user for interactive login
-  -id TenantId ClientId Secret      Set up ID for automated login
-  -tx                               Delete current configured login values and token
-  -?, -h, --help                    Print this usage page
-```
-
 
 ### pman
 

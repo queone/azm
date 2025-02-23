@@ -9,45 +9,56 @@ import (
 
 // Prints a status count of all AZ and MG objects that are in Azure, and the local files.
 func PrintCountStatus(z *Config) {
-	fmt.Printf("Note: Counting some Azure resources can take a long time\n")
-	fmt.Printf("%-36s%10s%10s\n", "OBJECTS", "LOCAL", "AZURE")
-	status := utl.Blu(utl.PostSpc("Azure Directory Users", 36))
-	status += utl.Gre(utl.PreSpc(UsersCountLocal(z), 10))
-	status += utl.Gre(utl.PreSpc(UsersCountAzure(z), 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure Directory Groups", 36))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("g", z), 10))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("g", z), 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure App Registrations", 36))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("ap", z), 10))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("ap", z), 10)) + "\n"
+	c1Width := 50 // Column 1 width
+	c2Width := 10 // Column 2 width
+	c3Width := 10 // Column 3 width
+	fmt.Printf("%s\n", utl.Gra("# Please note that enumerating some Azure resources can be slow"))
+	fmt.Print(utl.Whi2(utl.PostSpc("OBJECTS", c1Width)+
+		utl.PreSpc("LOCAL", c2Width)+
+		utl.PreSpc("AZURE", c3Width)) + "\n")
+	status := utl.Blu(utl.PostSpc("Directory Users", c1Width))
+	status += utl.Gre(utl.PreSpc(UsersCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(UsersCountAzure(z), c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Directory Groups", c1Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("g", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure("g", z), c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Directory Applications", c1Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("ap", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure("ap", z), c3Width)) + "\n"
 	nativeSpsLocal, msSpsLocal := SpsCountLocal(z)
 	nativeSpsAzure, msSpsAzure := SpsCountAzure(z)
-	status += utl.Blu(utl.PostSpc("Azure SPs (multi-tenant)", 36))
-	status += utl.Gre(utl.PreSpc(msSpsLocal, 10))
-	status += utl.Gre(utl.PreSpc(msSpsAzure, 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure SPs (native to tenant)", 36))
-	status += utl.Gre(utl.PreSpc(nativeSpsLocal, 10))
-	status += utl.Gre(utl.PreSpc(nativeSpsAzure, 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure AD Roles", 36))
-	status += utl.Gre(utl.PreSpc(AdRolesCountLocal(z), 10))
-	status += utl.Gre(utl.PreSpc(AdRolesCountAzure(z), 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure Management Groups", 36))
-	status += utl.Gre(utl.PreSpc(MgGroupCountLocal(z), 10))
-	status += utl.Gre(utl.PreSpc(MgGroupCountAzure(z), 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure Subscriptions", 36))
-	status += utl.Gre(utl.PreSpc(SubsCountLocal(z), 10))
-	status += utl.Gre(utl.PreSpc(SubsCountAzure(z), 10)) + "\n"
+	status += utl.Blu(utl.PostSpc("Directory Service Principals (this tenant)", c1Width))
+	status += utl.Gre(utl.PreSpc(nativeSpsLocal, c2Width))
+	status += utl.Gre(utl.PreSpc(nativeSpsAzure, c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Directory Service Principals (multi-tenant)", c1Width))
+	status += utl.Gre(utl.PreSpc(msSpsLocal, c2Width))
+	status += utl.Gre(utl.PreSpc(msSpsAzure, c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Directory Role Definitions", c1Width))
+	status += utl.Gre(utl.PreSpc(AdRolesCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(AdRolesCountAzure(z), c3Width)) + "\n"
+
+	// To be developed
+	// status += utl.Blu(utl.PostSpc("Directory Role Assignments", c1Width))
+	// status += utl.Gre(utl.PreSpc(AdRolesCountLocal(z), c2Width))
+	// status += utl.Gre(utl.PreSpc(AdRolesCountAzure(z), c3Width)) + "\n"
+
+	status += utl.Blu(utl.PostSpc("Resource Management Groups", c1Width))
+	status += utl.Gre(utl.PreSpc(MgGroupCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(MgGroupCountAzure(z), c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Resource Subscriptions", c1Width))
+	status += utl.Gre(utl.PreSpc(SubsCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(SubsCountAzure(z), c3Width)) + "\n"
 	builtinLocal, customLocal := RoleDefinitionCountLocal(z)
 	builtinAzure, customAzure := RoleDefinitionCountAzure(z)
-	status += utl.Blu(utl.PostSpc("Resource Role Definitions BuiltIn", 36))
-	status += utl.Gre(utl.PreSpc(builtinLocal, 10))
-	status += utl.Gre(utl.PreSpc(builtinAzure, 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Resource Role Definitions Custom", 36))
-	status += utl.Gre(utl.PreSpc(customLocal, 10))
-	status += utl.Gre(utl.PreSpc(customAzure, 10)) + "\n"
-	status += utl.Blu(utl.PostSpc("Resource Role Assignments", 36))
-	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountLocal(z), 10))
-	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), 10)) + "\n"
+	status += utl.Blu(utl.PostSpc("Resource Role Definitions (built-in)", c1Width))
+	status += utl.Gre(utl.PreSpc(builtinLocal, c2Width))
+	status += utl.Gre(utl.PreSpc(builtinAzure, c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Resource Role Definitions (custom)", c1Width))
+	status += utl.Gre(utl.PreSpc(customLocal, c2Width))
+	status += utl.Gre(utl.PreSpc(customAzure, c3Width)) + "\n"
+	status += utl.Blu(utl.PostSpc("Resource Role Assignments", c1Width))
+	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), c3Width)) + "\n"
 
 	fmt.Print(status)
 }

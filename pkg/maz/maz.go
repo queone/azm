@@ -272,7 +272,9 @@ func SetupCredentials(z *Config) {
 		z.MgToken = eVars["MAZ_MG_TOKEN"]
 		z.AzToken = eVars["MAZ_AZ_TOKEN"]
 		// Let's assume tokens for each of the 2 APIs have been supplied
-		if !TokenValid(z.AzToken) && !TokenValid(z.MgToken) {
+		AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
+		MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
+		if !AzTokenValid && !MgTokenValid {
 			// If they are both not valid, then we'll process the other variables
 			z.Interactive, _ = strconv.ParseBool(utl.Str(eVars["MAZ_INTERACTIVE"]))
 			if z.Interactive {
@@ -331,7 +333,9 @@ func SetupApiTokens(z *Config) {
 	// separate token. The Microsoft identity platform does not allow using same token for multiple resources at once.
 	// See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-net-user-gets-consent-for-multiple-resources
 
-	if !TokenValid(z.AzToken) && !TokenValid(z.MgToken) {
+	AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
+	MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
+	if !AzTokenValid && !MgTokenValid {
 		// If API tokens have *both* not been supplied via environment variables, let's go ahead and get them
 		// via the other supported methods.
 
