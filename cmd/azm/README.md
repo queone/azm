@@ -400,7 +400,7 @@ Run the `azm` utility without arguments to get the default usage message:
 
 ```bash
 $ azm
-azm v0.1.1
+azm v0.1.2
 Azure IAM CLI manager - github.com/queone/azm
 Usage
   azm [options] [arguments]
@@ -420,10 +420,14 @@ Usage
 Quick Examples
   Try experimenting with different options and arguments, such as:
   azm -id                                      To display the currently configured login values
-  azm -ap                                      To list all directory applications registered in current tenant
-  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID
-  azm -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names
-  azm -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes
+  azm -ap                                      To list all directory applications registered in
+                                               current tenant
+  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with this
+                                               given UUID
+  azm -d Reader                                To show all resource RBAC role definitions with
+                                               'Reader' in their names
+  azm -g MyGroup                               To show any directory group with the filter
+                                               'MyGroup' in its attributes
   azm -s                                       To list all subscriptions in current tenant
   azm -h                                       To display the full list of options
 ```
@@ -431,9 +435,8 @@ Quick Examples
 Run the utility with the `-h` argument to get the full list of options: 
 
 ```bash
-$
-np10 code $ azm -h
-azm v0.1.1
+$ azm -h
+azm v0.1.2
 Azure IAM CLI manager - github.com/queone/azm
 Usage
   azm [options] [arguments]
@@ -453,10 +456,14 @@ Usage
 Quick Examples
   Try experimenting with different options and arguments, such as:
   azm -id                                      To display the currently configured login values
-  azm -ap                                      To list all directory applications registered in current tenant
-  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID
-  azm -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names
-  azm -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes
+  azm -ap                                      To list all directory applications registered in
+                                               current tenant
+  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with this
+                                               given UUID
+  azm -d Reader                                To show all resource RBAC role definitions with
+                                               'Reader' in their names
+  azm -g MyGroup                               To show any directory group with the filter
+                                               'MyGroup' in its attributes
   azm -s                                       To list all subscriptions in current tenant
   azm -h                                       To display the full list of options
 
@@ -475,12 +482,12 @@ Read Options (allow reading and querying Azure objects)
   -tc "TokenString"                Parse and display the claims contained in the given token
 
 Write Options (allow creating and managing Azure objects)
-  -kX                              Generate a YAML skeleton file for this type of object. Only
+  -kX                              Generate a YAML skeleton file for object type X. Only
                                    certain objects are currently supported.
   -up[f] SPECFILE|NAME             Create or update an App/SP pair from a given configuration
                                    file or with a specified name; use the 'f' option to
-                                   suppress the confirmation prompt. Specifile support currently
-                                   has limited functionality.
+                                   suppress the confirmation prompt. Specfile support
+                                   currently has limited functionality.
   -rm[f] NAME|ID                   Delete an existing App/SP pair by displayName or App ID
   -rn[f] NAME|ID NEWNAME           Rename an App/SP pair with the given NAME/ID to NEWNAME
   -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry
