@@ -5,46 +5,72 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/queone/azm/pkg/maz"
 	"github.com/queone/utl"
 )
 
 const (
 	program_name    = "azm"
-	program_version = "0.1.0"
+	program_version = "0.1.1"
 )
 
-func printUsage() {
+func printUsage(extended bool) {
 	n := utl.Whi2(program_name)
 	v := program_version
 	X := utl.Red("X")
-	usage := fmt.Sprintf("%s v%s\n"+
-		"Azure IAM CLI utility - github.com/queone/azm\n"+
+	usageHeader := fmt.Sprintf("%s v%s\n"+
+		"Azure IAM CLI manager - github.com/queone/azm\n"+
 		"%s\n"+
 		"  %s [options] [arguments]\n"+
 		"\n"+
-		"  This utility simplifies the management of Azure App and Service Principal (SP) objects.\n"+
-		"  Options starting with '-ap' affect App objects, while those starting with '-sp' affect SP\n"+
-		"  objects. Other options may impact both.\n"+
+		"  This utility simplifies the querying and management of various Azure IAM-related objects.\n"+
+		"  In many options %s is a placeholder for a 1-2 character code that specifies the type of\n"+
+		"  Azure object to act on. The available codes are:\n\n"+
+		"    %s = Resource Role Definitions     %s = Resource Role Assignments\n"+
+		"    %s = Resource Subscriptions        %s = Resource Management Groups\n"+
+		"    %s = Directory Users               %s = Directory Groups\n"+
+		"    %s = Directory Applications        %s = Directory Service Principals\n"+
+		"    %s = Directory Role Definitions    %s = Directory Role Assignments\n\n"+
+		"  In those options, replace %s with the corresponding code to specify the object type.\n"+
 		"\n"+
 		"%s\n"+
-		"  The following options allow you to read and query App and SP objects:\n"+
-		"  -%s[j] [FILTER]                   List all %s objects (App or SP) tersely; optional JSON\n"+
-		"                                   output; optional match on FILTER string for Id or\n"+
-		"                                   DisplayName. If result is a single object, it is printed\n"+
-		"                                   in more details.\n"+
-		"  -st                              Show count of all App and SP objects in local cache and\n"+
-		"                                   Azure tenant\n"+
-		"%s\n"+
-		"  The following options enable you to create, update, and manage App and SP objects:\n"+
-		"  -k                               Generate a YAML skeleton file (appsp.yaml) for App/SP\n"+
-		"                                   pair configuration\n"+
+		"  Try experimenting with different options and arguments, such as:\n"+
+		"  %s -id                                      To display the currently configured login values\n"+
+		"  %s -ap                                      To list all directory applications registered in current tenant\n"+
+		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID\n"+
+		"  %s -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names\n"+
+		"  %s -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes\n"+
+		"  %s -s                                       To list all subscriptions in current tenant\n"+
+		"  %s -h                                       To display the full list of options\n",
+		n, v, utl.Whi2("Usage"), n, X,
+		utl.Red("d "), utl.Red("a "), utl.Red("s "), utl.Red("m "), utl.Red("u "),
+		utl.Red("g "), utl.Red("ap"), utl.Red("sp"), utl.Red("dr"), utl.Red("da"), X,
+		utl.Whi2("Quick Examples"), n, n, n, n, n, n, n)
+	usageExtended := fmt.Sprintf("\n%s (allow reading and querying Azure objects)\n"+
+		"  UUID                             Show all Azure objects associated with the given UUID\n"+
+		"  -%s[j] [FILTER]                   List all %s objects tersely; optional JSON output; optional\n"+
+		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
+		"                                   If the result is a single object, it is printed in more detail.\n"+
+		"  -vs SPECFILE                     Compare YAML specfile to what's in Azure. Only for certain objects.\n"+
+		"  -ar                              List all RBAC role assignments with resolved names\n"+
+		"  -mt                              List Management Group and subscriptions tree\n"+
+		"  -pags                            List all Azure AD Privileged Access Groups\n"+
+		"  -st                              Show count of all objects in local cache and Azure tenant\n"+
+		"  -tmg                             Display current Microsoft Graph API access token\n"+
+		"  -taz                             Display current Azure Resource API access token\n"+
+		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
+		"\n"+
+		"%s (allow creating and managing Azure objects)\n"+
+		"  -k%s                              Generate a YAML skeleton file for this type of object. Only\n"+
+		"                                   certain objects are currently supported.\n"+
 		"  -up[f] SPECFILE|NAME             Create or update an App/SP pair from a given configuration\n"+
 		"                                   file or with a specified name; use the 'f' option to\n"+
 		"                                   suppress the confirmation prompt. Specifile support currently\n"+
 		"                                   has limited functionality.\n"+
 		"  -rm[f] NAME|ID                   Delete an existing App/SP pair by displayName or App ID\n"+
 		"  -rn[f] NAME|ID NEWNAME           Rename an App/SP pair with the given NAME/ID to NEWNAME\n"+
+
 		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
 		"                                   date (YYYY-MM-DD) or in X number of days\n"+
 		"  -aprs[f] ID SECRET_ID            Remove a secret from an App with the given ID\n"+
@@ -53,20 +79,19 @@ func printUsage() {
 		"  -sprs[f] ID SECRET_ID            Remove a secret from an SP with the given ID\n"+
 		"\n"+
 		"%s\n"+
-		"  The following options manage your login configuration and cache:\n"+
 		"  -id                              Display the currently configured login values\n"+
 		"  -id TenantId Username            Set up user credentials for interactive login\n"+
 		"  -id TenantId ClientId Secret     Configure ID for automated login\n"+
 		"  -tx                              Delete the current configured login values and token\n"+
-		"  -apx                             Clear the local App cache\n"+
-		"  -spx                             Clear the local SP cache\n"+
-		"  -?, -h, --help                   Display this usage page\n"+
-		"\n"+
-		"%s\n"+
-		"  To get started, try experimenting with different options and arguments.\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("READ Options"), X, X,
-		utl.Whi2("WRITE Options"), utl.Whi2("CONFIG Options"), utl.Whi2("Examples"))
-	fmt.Print(usage)
+		"  -xx                              Delete ALL cache local files\n"+
+		"  -%sx                              Delete %s object local file cache\n"+
+		"  -uuid                            Generate a random UUID\n"+
+		"  -?, -h, --help                   Display the full list of options\n",
+		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, utl.Whi2("Other Options"), X, X)
+	fmt.Print(usageHeader)
+	if extended {
+		fmt.Print(usageExtended)
+	}
 	os.Exit(0)
 }
 
@@ -82,7 +107,7 @@ func printUnknownCommandError() {
 func main() {
 	numberOfArguments := len(os.Args[1:]) // Not including the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {
-		printUsage() // Don't accept less than 1 or more than 4 arguments
+		printUsage(false) // Don't accept less than 1 or more than 4 arguments
 	}
 
 	// Set up global config z pointer variable. See Config type in github.com/queone/maz/blob/main/maz.go
@@ -95,17 +120,29 @@ func main() {
 		switch arg1 {
 		case "-id":
 			maz.DumpLoginValues(z)
-		case "-h":
-			printUsage()
+		case "-?", "-h", "--help":
+			printUsage(true)
+		case "-uuid":
+			utl.Die("%s\n", uuid.New().String())
 		}
 		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens to be ready
 		switch arg1 {
 		case "-tx":
 			maz.RemoveCacheFile("t", z)
 			maz.RemoveCacheFile("id", z)
-		case "-apx", "-spx":
-			t := arg1[1:3]
+		case "-xx":
+			maz.RemoveCacheFile("all", z)
+
+		// These are being migrated
+		case "-dx", "-ax", "-sx", "-mx", "-ux", "-adx":
+			// old caching method
+			t := arg1[1 : len(arg1)-1] // Single out the object type
+			maz.RemoveCacheFile(t, z)
+		case "-gx", "-apx", "-spx":
+			// New cached method
+			t := arg1[1 : len(arg1)-1] // Single out the object type
 			maz.RemoveCacheFiles(t, z)
+
 		case "-ap", "-apj", "-sp", "-spj":
 			t := arg1[1:3]
 			jsonOption := len(arg1) > 3 && arg1[3] == 'j'  // Boolean check for 'j'
@@ -119,18 +156,35 @@ func main() {
 					}
 				}
 			}
+		case "-kd", "-ka", "-kg", "-kap":
+			t := arg1[2:] // Single out the type (d, a, g, ap)
+			maz.CreateSkeletonFile(t)
+		case "-ar":
+			maz.PrintRoleAssignmentReport(z)
+		case "-mt":
+			maz.PrintMgTree(z)
+		case "-pags":
+			maz.PrintPags(z)
 		case "-st":
-			maz.PrintCountStatusAppsAndSps(z)
-		case "-k":
-			maz.CreateSkeletonFile("appsp")
+			maz.PrintCountStatus(z)
+		case "-tmg":
+			fmt.Println(z.MgToken)
+		case "-taz":
+			fmt.Println(z.AzToken)
 		default:
-			printUnknownCommandError()
+			if utl.ValidUuid(arg1) {
+				maz.PrintObjectById(arg1, z)
+			} else {
+				printUnknownCommandError()
+			}
 		}
 	case 2: // 2 arguments
 		arg1 := os.Args[1]
 		arg2 := os.Args[2]
 		maz.SetupApiTokens(z)
 		switch arg1 {
+		case "-tc":
+			maz.DecodeJwtToken(arg2)
 		case "-ap", "-apj", "-sp", "-spj":
 			t := arg1[1:3]
 			jsonOption := len(arg1) > 3 && arg1[3] == 'j' // Boolean check for 'j'
@@ -181,6 +235,8 @@ func main() {
 			} else {
 				maz.CreateAppSpByName(force, arg2, z)
 			}
+		case "-vs":
+			maz.CompareSpecfileToAzure(arg2, z)
 		default:
 			printUnknownCommandError()
 		}

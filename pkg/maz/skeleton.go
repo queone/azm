@@ -17,7 +17,7 @@ func CreateSkeletonFile(t string) {
 	fileName, fileContent := "init-file-name.extension", []byte("init-file-content\n")
 	switch t {
 	case "d":
-		fileName = "role-definition.yaml"
+		fileName = "resource-role-definition.yaml"
 		fileContent = []byte("properties:\n" +
 			"  roleName: My RBAC Role\n" +
 			"  description: Description of what this role does.\n" +
@@ -35,7 +35,7 @@ func CreateSkeletonFile(t string) {
 			"      notDataActions:\n" +
 			"        - Microsoft.CognitiveServices/accounts/LUIS/apps/delete\n")
 	case "a":
-		fileName = "role-assignment.yaml"
+		fileName = "resource-role-assignment.yaml"
 		fileContent = []byte("properties:\n" +
 			"  principalId: 65c6427a-1111-5555-7777-274d26531314  # Group = \"My Special Group\"\n" +
 			"  roleDefinitionId: 2489dfa4-3333-4444-9999-b04b7a1e4ea6  # Role = \"My Special Role\"\n" +
@@ -51,7 +51,7 @@ func CreateSkeletonFile(t string) {
 			"# See https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0#properties\n" +
 			"description: My Group description\n" +
 			"isAssignableToRole: false\n")
-	case "appsp":
+	case "ap":
 		fileName = "appsp.yaml"
 		fileContent = []byte("# Azure AppSP Pair SpecFile\n" +
 			"#\n" +

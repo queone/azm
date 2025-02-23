@@ -116,10 +116,12 @@ func DeleteAzObject(force bool, specifier string, z *Config) {
 	}
 }
 
-// Returns list of Azure objects with this UUID. We are saying a list because 1)
-// the UUID could be an appId shared by an app and an SP, or 2) there could be
-// UUID collisions with multiple objects potentially sharing the same UUID. Only
-// checks for the maz package limited set of Azure object types.
+// Returns a list of Azure objects that match the given UUID. Note that multiple
+// objects may be returned because:
+// 1. A single appId can be shared by both an application and a service principal.
+// 2. Although unlikely, UUID collisions can occur, resulting in multiple objects
+// with the same UUID.
+// This function only searches for objects of the Azure types supported by the maz package.
 func FindAzObjectsById(id string, z *Config) (list []interface{}) {
 	list = nil
 	for _, t := range mazTypes {
