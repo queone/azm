@@ -59,51 +59,38 @@ func (obj AzureObject) HasString(filter string) bool {
 func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 	// We restrict caching to only certain fields to make this library more performant.
 	switch t {
-	case "d": // Role Definitions
+	case "d": // Resource Role Definitions
 		trimmed = AzureObject{
 			"id":                 obj["id"],
 			"displayName":        obj["displayName"],
 			"description":        obj["description"],
 			"isAssignableToRole": obj["isAssignableToRole"],
 		}
-	case "a": // Role Assignments
+	case "a": // Resource Role Assignments
 		trimmed = AzureObject{
 			"id":               obj["id"],
 			"principalId":      obj["principalId"],
 			"roleDefinitionId": obj["roleDefinitionId"],
 			"scope":            obj["scope"],
 		}
-	case "s": // Subscriptions
+	case "s": // Resource Subscriptions
 		trimmed = AzureObject{
 			"id":          obj["id"],
 			"displayName": obj["displayName"],
 			"state":       obj["state"],
 		}
-	case "mg": // Management Groups
+	case "m": // Resource Management Groups
 		trimmed = AzureObject{
 			"id":          obj["id"],
 			"displayName": obj["displayName"],
 		}
-	case "ap": // Applications
-		trimmed = AzureObject{
-			"id":          obj["id"],
-			"displayName": obj["displayName"],
-			"appId":       obj["appId"],
-		}
-	case "sp": // Service Principals
-		trimmed = AzureObject{
-			"id":                     obj["id"],
-			"displayName":            obj["displayName"],
-			"appId":                  obj["appId"],
-			"appOwnerOrganizationId": obj["appOwnerOrganizationId"],
-		}
-	case "u": // Users
+	case "u": // Directory Users
 		trimmed = AzureObject{
 			"id":                obj["id"],
 			"displayName":       obj["displayName"],
 			"userPrincipalName": obj["userPrincipalName"],
 		}
-	case "g": // Groups
+	case "g": // Directory Groups
 		trimmed = AzureObject{
 			"id":                 obj["id"],
 			"displayName":        obj["displayName"],
@@ -111,12 +98,35 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 			"createdDateTime":    obj["createdDateTime"],
 			"isAssignableToRole": obj["isAssignableToRole"],
 		}
-	case "ad": // Directory Role Definitions
+	case "ap": // Directory Applications
 		trimmed = AzureObject{
-			"id":                 obj["id"],
-			"displayName":        obj["displayName"],
-			"description":        obj["description"],
-			"isAssignableToRole": obj["isAssignableToRole"],
+			"id":          obj["id"],
+			"displayName": obj["displayName"],
+			"appId":       obj["appId"],
+		}
+	case "sp": // Directory Service Principals
+		trimmed = AzureObject{
+			"id":                     obj["id"],
+			"displayName":            obj["displayName"],
+			"appId":                  obj["appId"],
+			"appOwnerOrganizationId": obj["appOwnerOrganizationId"],
+		}
+	case "dr": // Directory Role Definitions
+		trimmed = AzureObject{
+			"id":          obj["id"],
+			"displayName": obj["displayName"],
+			"description": obj["description"],
+			"isBuiltIn":   obj["isBuiltIn"],
+			"isEnabled":   obj["isEnabled"],
+			"templateId":  obj["templateId"],
+			//"rolePermissions": obj["rolePermissions"],
+		}
+	case "da": // Directory Role Assignments
+		trimmed = AzureObject{
+			"id":               obj["id"],
+			"directoryScopeId": obj["directoryScopeId"],
+			"principalId":      obj["principalId"],
+			"roleDefinitionId": obj["roleDefinitionId"],
 		}
 	default:
 		// If type is unknown, just include the ID field.

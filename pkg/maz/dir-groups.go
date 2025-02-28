@@ -89,12 +89,17 @@ func PrintPags(z *Config) {
 }
 
 func PrintCountStatusGroups(z *Config) {
-	fmt.Printf("%-36s%16s%16s\n", "OBJECTS", "LOCAL", "AZURE")
-	status := utl.Blu(utl.PostSpc("Azure Directory Groups", 36))
+	c1Width := 50 // Column 1 width
+	c2Width := 10 // Column 2 width
+	c3Width := 10 // Column 3 width
+	fmt.Print(utl.Whi2(utl.PostSpc("OBJECTS", c1Width)+
+		utl.PreSpc("LOCAL", c2Width)+
+		utl.PreSpc("AZURE", c3Width)) + "\n")
+	status := utl.Blu(utl.PostSpc("Azure Directory Groups", c1Width))
 	localCount := utl.Int2StrWithCommas(ObjectCountLocal("g", z))
 	azureCount := utl.Int2StrWithCommas(ObjectCountAzure("g", z))
-	status += utl.Gre(utl.PreSpc(localCount, 16))
-	status += utl.Gre(utl.PreSpc(azureCount, 16)) + "\n"
+	status += utl.Gre(utl.PreSpc(localCount, c2Width))
+	status += utl.Gre(utl.PreSpc(azureCount, c3Width)) + "\n"
 	fmt.Print(status)
 }
 

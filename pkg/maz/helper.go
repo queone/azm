@@ -152,7 +152,7 @@ func GetAzObjectById(t, id string, z *Config) (x map[string]interface{}) {
 		return GetObjectFromAzureById(t, id, z)
 	case "sp":
 		return GetObjectFromAzureById(t, id, z)
-	case "ad":
+	case "dr":
 		return GetObjectFromAzureById(t, id, z)
 	}
 	return nil
@@ -217,21 +217,6 @@ func GetObjects(t, filter string, force bool, z *Config) (list []interface{}) {
 		return GetMatchingMgGroups(filter, force, z)
 	case "s":
 		return GetMatchingSubscriptions(filter, force, z)
-
-	case "ap":
-		// return GetMatchingObjects("ap", filter, force, z)
-		return nil
-	case "sp":
-		// return GetMatchingObjects("sp", filter, force, z)
-		return nil
-	case "g":
-		// return GetMatchingObjects("g", filter, force, z)
-		return nil
-
-	case "ad":
-		return GetMatchingAdRoles(filter, force, z)
-	case "u":
-		return GetMatchingUsers(filter, force, z)
 	}
 	return nil
 }
@@ -319,7 +304,7 @@ func RemoveCacheFile(t string, z *Config) {
 	case "ap":
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_applications."+ConstCacheFileExtension))
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_applications_deltaLink."+ConstCacheFileExtension))
-	case "ad":
+	case "dr":
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_directoryRoles."+ConstCacheFileExtension))
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_directoryRoles_deltaLink."+ConstCacheFileExtension))
 	case "all":

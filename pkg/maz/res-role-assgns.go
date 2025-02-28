@@ -194,7 +194,7 @@ func RoleAssignmentsCountAzure(z *Config) int64 {
 func GetMatchingRoleAssignments(filter string, force bool, z *Config) (list []interface{}) {
 	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_roleAssignments."+ConstCacheFileExtension)
 	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.InternetIsAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
+	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
 		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
 		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
 		// and show progress while doing so (true = verbose below)

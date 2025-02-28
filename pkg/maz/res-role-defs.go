@@ -267,7 +267,7 @@ func RoleDefinitionCountAzure(z *Config) (builtin, custom int64) {
 func GetMatchingRoleDefinitions(filter string, force bool, z *Config) (list []interface{}) {
 	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_roleDefinitions."+ConstCacheFileExtension)
 	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.InternetIsAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
+	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
 		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
 		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
 		// and show progress while doing so (true = verbose below)
@@ -363,7 +363,6 @@ func GetAzRoleDefinitionByName(roleName string, z *Config) (y map[string]interfa
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
 		r, _, _ := ApiGet(apiUrl, z, params)
-		ApiErrorCheck("GET", apiUrl, utl.Trace(), r) // DEBUG. Until ApiGet rewrite with nullable _ err
 		if r != nil && r["value"] != nil {
 			results := r["value"].([]interface{})
 			if len(results) == 1 {
@@ -410,7 +409,6 @@ func GetAzRoleDefinitionByObject(x map[string]interface{}, z *Config) (y map[str
 		}
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
 		r, _, _ := ApiGet(apiUrl, z, params)
-		ApiErrorCheck("GET", apiUrl, utl.Trace(), r)
 		if r != nil && r["value"] != nil {
 			results := r["value"].([]interface{})
 			if len(results) == 1 {

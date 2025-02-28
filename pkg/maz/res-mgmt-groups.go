@@ -68,7 +68,7 @@ func GetIdMapMgGroups(z *Config) (nameMap map[string]string) {
 func GetMatchingMgGroups(filter string, force bool, z *Config) (list []interface{}) {
 	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension)
 	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.InternetIsAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
+	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
 		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
 		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
 		// and show progress while doing so (true = verbose below)
@@ -98,7 +98,6 @@ func GetAzMgGroups(z *Config) (list []interface{}) {
 	params := map[string]string{"api-version": "2020-05-01"} // managementGroups
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
 	r, _, _ := ApiGet(apiUrl, z, params)
-	ApiErrorCheck("GET", apiUrl, utl.Trace(), r)
 	if r != nil && r["value"] != nil {
 		objects := r["value"].([]interface{})
 		list = append(list, objects...)
@@ -143,7 +142,6 @@ func PrintMgTree(z *Config) {
 		"$recurse":    "true",
 	}
 	r, _, _ := ApiGet(apiUrl, z, params)
-	ApiErrorCheck("GET", apiUrl, utl.Trace(), r) // DEBUG: Need to see when this is failing for some users
 	if r["properties"] != nil {
 		// Print everything under the hierarchy
 		Prop := r["properties"].(map[string]interface{})

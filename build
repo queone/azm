@@ -23,16 +23,14 @@ go install honnef.co/go/tools/cmd/staticcheck@latest
 printf "\n==> Analyze Go code for potential issues\nstaticcheck ./...\n"
 staticcheck ./...
 
-printf "\n==> Compile maz package\ngo build -o /dev/null ./pkg/maz\n"
-#go build pkg/maz/...
+printf "\n==> Compile required packages\ngo build -o /dev/null ./pkg/maz\n"
 go build -o /dev/null ./pkg/maz
 
-printf "\n==> Building ${Gre}$Prg${Rst}\ngo build -ldflags \"-s -w\" -o $BIN\n"
 MainGo=cmd/azm/main.go
+printf "\n==> Build ${Gre}$Prg${Rst}\ngo build -ldflags \"-s -w\" -o $BIN $MainGo\n"
 go build -ldflags "-s -w" -o $BIN $MainGo
 printf "${Gre}$(ls -l $BIN | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
-
-# Example options to cross-compile to other OSes/archs:
+# OPTIONAL: Examples to cross-compile for other OSes/archs:
 # GOOS=darwin  GOARCH=arm64       go build -ldflags "-s -w" -o ${Prg}
 # GOOS=windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}.exe
 # GOOS=linux   GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}

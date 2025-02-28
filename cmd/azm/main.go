@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.1.1"
+	program_version = "0.1.2"
 )
 
 func printUsage(extended bool) {
@@ -37,10 +37,14 @@ func printUsage(extended bool) {
 		"%s\n"+
 		"  Try experimenting with different options and arguments, such as:\n"+
 		"  %s -id                                      To display the currently configured login values\n"+
-		"  %s -ap                                      To list all directory applications registered in current tenant\n"+
-		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with given UUID\n"+
-		"  %s -d Reader                                To show all resource RBAC role definitions with 'Reader' in their names\n"+
-		"  %s -g MyGroup                               To show any directory group with the filter 'MyGroup' in its attributes\n"+
+		"  %s -ap                                      To list all directory applications registered in\n"+
+		"                                               current tenant\n"+
+		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with this\n"+
+		"                                               given UUID\n"+
+		"  %s -d Reader                                To show all resource RBAC role definitions with\n"+
+		"                                               'Reader' in their names\n"+
+		"  %s -g MyGroup                               To show any directory group with the filter\n"+
+		"                                               'MyGroup' in its attributes\n"+
 		"  %s -s                                       To list all subscriptions in current tenant\n"+
 		"  %s -h                                       To display the full list of options\n",
 		n, v, utl.Whi2("Usage"), n, X,
@@ -62,15 +66,15 @@ func printUsage(extended bool) {
 		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
 		"\n"+
 		"%s (allow creating and managing Azure objects)\n"+
-		"  -k%s                              Generate a YAML skeleton file for this type of object. Only\n"+
+		"  -k%s                              Generate a YAML skeleton file for object type %s. Only\n"+
 		"                                   certain objects are currently supported.\n"+
-		"  -up[f] SPECFILE|NAME             Create or update an App/SP pair from a given configuration\n"+
-		"                                   file or with a specified name; use the 'f' option to\n"+
-		"                                   suppress the confirmation prompt. Specifile support currently\n"+
-		"                                   has limited functionality.\n"+
-		"  -rm[f] NAME|ID                   Delete an existing App/SP pair by displayName or App ID\n"+
-		"  -rn[f] NAME|ID NEWNAME           Rename an App/SP pair with the given NAME/ID to NEWNAME\n"+
-
+		"  -up[f] SPECFILE|NAME             Create or update object from given SPECFILE (only for certain\n"+
+		"                                   objects); create with given name (again, only some objects); use\n"+
+		"                                   the 'f' option to suppress the confirmation prompt\n"+
+		"  -rn[f] NAME|ID NEWNAME           Rename object with given NAME or ID to NEWNAME (not all objects\n"+
+		"                                   are supported); use 'f' to suppress confirmation\n"+
+		"  -rm[f] NAME|ID                   Delete object with given NAME or ID (by name is only supported\n"+
+		"                                   on some objects); use 'f' to suppress confirmation\n"+
 		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
 		"                                   date (YYYY-MM-DD) or in X number of days\n"+
 		"  -aprs[f] ID SECRET_ID            Remove a secret from an App with the given ID\n"+
@@ -83,11 +87,11 @@ func printUsage(extended bool) {
 		"  -id TenantId Username            Set up user credentials for interactive login\n"+
 		"  -id TenantId ClientId Secret     Configure ID for automated login\n"+
 		"  -tx                              Delete the current configured login values and token\n"+
-		"  -xx                              Delete ALL cache local files\n"+
+		"  -xx                              Delete ALL local file cache\n"+
 		"  -%sx                              Delete %s object local file cache\n"+
 		"  -uuid                            Generate a random UUID\n"+
 		"  -?, -h, --help                   Display the full list of options\n",
-		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, utl.Whi2("Other Options"), X, X)
+		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, X, utl.Whi2("Other Options"), X, X)
 	fmt.Print(usageHeader)
 	if extended {
 		fmt.Print(usageExtended)
@@ -99,7 +103,7 @@ func printUnknownCommandError() {
 	helpCmd := utl.Yel(program_name + " -h")
 	args := strings.Join(os.Args[1:], " ")
 	unknownArgs := fmt.Sprintf("Unknown command or arguments: %s\n"+
-		"Please use %s to see available options and usage.\n", utl.Yel(args), helpCmd)
+		"Run %s to see extended usage.\n", utl.Yel(args), helpCmd)
 	fmt.Print(unknownArgs)
 	os.Exit(1)
 }
@@ -110,7 +114,8 @@ func main() {
 		printUsage(false) // Don't accept less than 1 or more than 4 arguments
 	}
 
-	// Set up global config z pointer variable. See Config type in github.com/queone/maz/blob/main/maz.go
+	// Set up global config z pointer variable
+	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
 	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", etc
 
 	switch numberOfArguments {
@@ -133,31 +138,49 @@ func main() {
 		case "-xx":
 			maz.RemoveCacheFile("all", z)
 
-		// These are being migrated
-		case "-dx", "-ax", "-sx", "-mx", "-ux", "-adx":
-			// old caching method
-			t := arg1[1 : len(arg1)-1] // Single out the object type
+		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
+		case "-dx", "-ax", "-sx", "-mx":
+			t := arg1[1:] // Single out the object type
 			maz.RemoveCacheFile(t, z)
-		case "-gx", "-apx", "-spx":
-			// New cached method
-			t := arg1[1 : len(arg1)-1] // Single out the object type
+		case "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
+			t := arg1[1 : len(arg1)-1]
 			maz.RemoveCacheFiles(t, z)
 
-		case "-ap", "-apj", "-sp", "-spj":
-			t := arg1[1:3]
-			jsonOption := len(arg1) > 3 && arg1[3] == 'j'  // Boolean check for 'j'
-			all := maz.GetMatchingObjects(t, "", false, z) // false = don't go to Azure
-			if all != nil {                                // This nil check avoids printing 'null'
-				if jsonOption {
-					utl.PrintJsonColor(all) // Print entire JSON list
-				} else {
-					for _, i := range all { // Print list tersely
-						maz.PrintTersely(t, i)
-					}
+		// Migrating from GetObjects() ==> to GetMatchingObjects()
+		case "-d", "-a", "-s", "-m", "-dj", "-aj", "-sj", "-mj":
+			//utl.Die("%s\n", "Not yet supported")  // TEMPORARY
+			t := arg1[1:]                         // Remove the leading '-'
+			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
+			if printJson {
+				t = t[:len(t)-1] // Remove the 'j' from t
+			}
+			// Get all from cache. false = don't go to Azure
+			all := maz.GetObjects(t, "", false, z)
+			if printJson {
+				utl.PrintJsonColor(all) // Print entire set in JSON
+			} else {
+				for _, i := range all { // Print entire set tersely
+					maz.PrintTersely(t, i)
 				}
 			}
+		case "-u", "-g", "-ap", "-sp", "-dr", "-da", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
+			t := arg1[1:]                         // Remove the leading '-'
+			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
+			if printJson {
+				t = t[:len(t)-1] // Remove the 'j' from t
+			}
+			// Get all from cache. false = don't go to Azure
+			all := maz.GetMatchingObjects(t, "", false, z)
+			if printJson {
+				utl.PrintJsonColor(all) // Print entire set in JSON
+			} else {
+				for _, i := range all { // Print entire set tersely
+					maz.PrintTersely(t, i)
+				}
+			}
+
 		case "-kd", "-ka", "-kg", "-kap":
-			t := arg1[2:] // Single out the type (d, a, g, ap)
+			t := arg1[2:]
 			maz.CreateSkeletonFile(t)
 		case "-ar":
 			maz.PrintRoleAssignmentReport(z)
@@ -185,46 +208,96 @@ func main() {
 		switch arg1 {
 		case "-tc":
 			maz.DecodeJwtToken(arg2)
-		case "-ap", "-apj", "-sp", "-spj":
-			t := arg1[1:3]
-			jsonOption := len(arg1) > 3 && arg1[3] == 'j' // Boolean check for 'j'
+
+		// TERSE: Migrating from GetObjects() ==> to GetMatchingObjects()
+		case "-d", "-a", "-s", "-m", "-dj", "-aj", "-sj", "-mj":
+			utl.Die("%s\n", "Not yet supported")  // TEMPORARY
+			t := arg1[1:]                         // Remove the leading '-'
+			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
+			if printJson {
+				t = t[:len(t)-1] // Remove the 'j' from t
+			}
+
 			if utl.ValidUuid(arg2) {
+				// If arg2 (FILTER) is a UUID then search by ID and print if found
 				x := maz.GetObjectFromAzureById(t, arg2, z) // Search by id
-				if x != nil {                               // This nil check avoids printing 'null'
-					if jsonOption {
-						utl.PrintJsonColor(x) // Prints JSON object
+				if x != nil {
+					if printJson {
+						utl.PrintJsonColor(x) // Print single object JSONly
 					} else {
-						maz.PrintObject(t, x, z)
+						maz.PrintObject(t, x, z) // Print single object in regular format
 					}
 				}
 			} else {
-				matchingObjects := maz.GetMatchingObjects(t, arg2, false, z)
+				// Get matching from cache. false = don't go to Azure
+				matchingObjects := maz.GetObjects(t, arg2, false, z)
 				if len(matchingObjects) > 1 {
-					if jsonOption {
-						utl.PrintJsonColor(matchingObjects)
+					if printJson {
+						utl.PrintJsonColor(matchingObjects) // Print list JSONly
 					} else {
-						for _, i := range matchingObjects { // Print list tersely
-							maz.PrintTersely(t, i)
+						for _, i := range matchingObjects {
+							maz.PrintTersely(t, i) // Print list tersely
 						}
 					}
 				} else if len(matchingObjects) == 1 {
-					// Single object, let's get the latest from Azure
-					obj := matchingObjects[0]
-					id := obj["id"].(string)
+					// It's a single object, let's get the latest one from Azure
+					obj := matchingObjects[0].(maz.AzureObject)
+					id := utl.Str(obj["id"])
 					x := maz.GetObjectFromAzureById(t, id, z)
-					if jsonOption {
-						utl.PrintJsonColor(x)
+					if printJson {
+						utl.PrintJsonColor(x) // Print single object JSONly
 					} else {
-						maz.PrintObject(t, x, z)
+						maz.PrintObject(t, x, z) // Print single object in regular format
 					}
 				}
 			}
+		case "-u", "-g", "-ap", "-sp", "-dr", "-da", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj": // JSON format printing
+			t := arg1[1:]                         // Remove the leading '-'
+			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
+			if printJson {
+				t = t[:len(t)-1] // Remove the 'j' from t
+			}
+
+			if utl.ValidUuid(arg2) {
+				// If arg2 (FILTER) is a UUID then search by ID and print if found
+				x := maz.GetObjectFromAzureById(t, arg2, z) // Search by id
+				if x != nil {
+					if printJson {
+						utl.PrintJsonColor(x) // Print single object JSONly
+					} else {
+						maz.PrintObject(t, x, z) // Print single object in regular format
+					}
+				}
+			} else {
+				// Get matching from cache. false = don't go to Azure
+				matchingObjects := maz.GetMatchingObjects(t, arg2, false, z)
+				if len(matchingObjects) > 1 {
+					if printJson {
+						utl.PrintJsonColor(matchingObjects) // Print list JSONly
+					} else {
+						for _, i := range matchingObjects {
+							maz.PrintTersely(t, i) // Print list tersely
+						}
+					}
+				} else if len(matchingObjects) == 1 {
+					// It's a single object, let's get the latest one from Azure
+					obj := matchingObjects[0]
+					x := maz.GetObjectFromAzureById(t, obj["id"].(string), z)
+					if printJson {
+						utl.PrintJsonColor(x) // Print single object JSONly
+					} else {
+						maz.PrintObject(t, x, z) // Print single object in regular format
+					}
+				}
+			}
+
 		case "-rm", "-rmf":
 			force := false
 			if arg1 == "-rmf" {
 				force = true
 			}
 			maz.DeleteAppSpByIdentifier(force, arg2, z)
+			// maz.DeleteAzObject(force, arg2, z) // MIGRATION
 		case "-up", "-upf":
 			force := false
 			if arg1 == "-upf" {
@@ -235,6 +308,7 @@ func main() {
 			} else {
 				maz.CreateAppSpByName(force, arg2, z)
 			}
+			//maz.UpsertAzObject(force, arg2, z) // MIGRATION
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
 		default:

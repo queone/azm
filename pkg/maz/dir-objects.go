@@ -163,36 +163,31 @@ func PreFetchAzureObject(t, identifier string, z *Config) (x AzureObject) {
 
 // Gets all objects of given type, matching on 'filter'. Returns the entire list if filter is empty "".
 func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList {
+	// Get current cache data, or initialize a new cache for this type
 	cache, err := GetCache(t, z)
 	if err != nil {
 		utl.Die("Error: %s\n", err.Error())
 	}
 
-	// Update cache if necessary
-	UpdateCacheIfNeeded(t, cache, force, z)
+	// Return an empty list if cache is nil and internet is not available
+	internetIsAvailable := utl.IsInternetAvailable()
+	if cache == nil && !internetIsAvailable {
+		return AzureObjectList{} // Return empty list
+	}
+
+	// Determine if cache is empty or outdated and needs to be refreshed from Azure
+	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	if internetIsAvailable && cacheNeedsRefreshing {
+		SyncDirObjectsWithAzure(t, cache, z, true) // Call Azure to refresh cache
+	}
 
 	// Filter the objects based on the provided filter
-	return FilterObjects(cache.data, filter)
-}
-
-// Updates the local director object cache is needed
-func UpdateCacheIfNeeded(t string, cache *Cache, force bool, z *Config) {
-	mustGoToAzure := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
-
-	if utl.InternetIsAvailable() && mustGoToAzure {
-		SyncDirObjectsWithAzure(t, cache, z, true) // Sync the cache directly
-	}
-}
-
-// Filter objects by matching any field to filter string.
-func FilterObjects(data AzureObjectList, filter string) AzureObjectList {
 	if filter == "" {
-		return data // Return all data if no filter is specified
+		return cache.data // Return all data if no filter is specified
 	}
-
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
 	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
-	for _, obj := range data {
+	for _, obj := range cache.data {
 		id := obj["id"].(string)
 		if ids.Exists(id) {
 			continue // Skip repeated entries
@@ -211,21 +206,23 @@ func FilterObjects(data AzureObjectList, filter string) AzureObjectList {
 // Shows progress if verbose = true.
 func SyncDirObjectsWithAzure(t string, cache *Cache, z *Config, verbose bool) {
 	// Setup REST API URL for the specific type
-	baseUrl := ConstMgUrl + ApiEndpoint[t] // e.g., 'https://graph.microsoft.com/v1.0/groups'
+	apiUrl := ConstMgUrl + ApiEndpoint[t] // e.g., 'https://graph.microsoft.com/v1.0/groups'
 
-	// Setup select criteria: what fields will trigger delta updates upon changing
-	selection := ""
+	// Setup select criteria for each object type: what fields will trigger delta updates upon changing
 	switch t {
-	case "ap":
-		selection = "?$select=displayName,appId,requiredResourceAccess,passwordCredentials"
-	case "sp":
-		selection = "?$select=displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials"
 	case "u":
-		selection = "?$select=displayName,userPrincipalName,onPremisesSamAccountName"
+		apiUrl += "/delta?$select=displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
 	case "g":
-		selection = "?$select=displayName,description,isAssignableToRole,createdDateTime"
+		apiUrl += "/delta?$select=displayName,description,isAssignableToRole,createdDateTime&$top=999"
+	case "ap":
+		apiUrl += "?$select=displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
+	case "sp":
+		apiUrl += "?$select=displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
+	case "dr":
+		//No additional adjustment required
+	case "da":
+		//No additional adjustment required
 	}
-	apiUrl := baseUrl + "/delta" + selection + "&$top=999"
 
 	if len(cache.data) < 1 {
 		// These headers are only needed on the initial cache run
@@ -239,7 +236,10 @@ func SyncDirObjectsWithAzure(t string, cache *Cache, z *Config, verbose bool) {
 		utl.Die("Error loading delta link: %s\n", err.Error())
 	}
 	if deltaLinkMap != nil {
-		apiUrl = deltaLinkMap["@odata.deltaLink"].(string) // Use delta link for the API call
+		// Try using delta link for the API call
+		if deltaLink, ok := deltaLinkMap["@odata.deltaLink"].(string); ok {
+			apiUrl = deltaLink // Use delta link for the API call
+		}
 	}
 
 	// Fetch Azure objects using the updated URL (either a full or a delta query)
@@ -298,9 +298,16 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 			}
 			return deltaSet, deltaLinkMap
 		}
-		r, _, _ = ApiGet(r["@odata.nextLink"].(string), z, nil) // Get next batch
-		k++
+		// Check if nextLink is nil before attempting to use it
+		if r["@odata.nextLink"] != nil {
+			nextLink := r["@odata.nextLink"].(string) // Safe to assert as string now
+			r, _, _ = ApiGet(nextLink, z, nil)        // Get next batch
+			k++
+		} else {
+			break // If nextLink is nil, we can break out of the loop
+		}
 	}
+	return deltaSet, deltaLinkMap
 }
 
 // Deletes directory object of given type in Azure, and updates local cache.

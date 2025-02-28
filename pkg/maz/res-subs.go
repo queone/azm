@@ -78,7 +78,7 @@ func GetIdMapSubs(z *Config) (nameMap map[string]string) {
 func GetMatchingSubscriptions(filter string, force bool, z *Config) (list []interface{}) {
 	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension)
 	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.InternetIsAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
+	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
 		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
 		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
 		// and show progress while doing so (true = verbose below)
@@ -108,7 +108,6 @@ func GetAzSubscriptions(z *Config) (list []interface{}) {
 	params := map[string]string{"api-version": "2022-09-01"} // subscriptions
 	apiUrl := ConstAzUrl + "/subscriptions"
 	r, _, _ := ApiGet(apiUrl, z, params)
-	ApiErrorCheck("GET", apiUrl, utl.Trace(), r)
 	if r != nil && r["value"] != nil {
 		objects := r["value"].([]interface{})
 		list = append(list, objects...)
@@ -123,6 +122,5 @@ func GetAzSubscriptionById(id string, z *Config) map[string]interface{} {
 	params := map[string]string{"api-version": "2022-09-01"} // subscriptions
 	apiUrl := ConstAzUrl + "/subscriptions/" + id
 	r, _, _ := ApiGet(apiUrl, z, params)
-	//ApiErrorCheck("GET", apiUrl, utl.Trace(), r) // Commented out to do this quietly. Use for DEBUGging
 	return r
 }

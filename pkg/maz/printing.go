@@ -17,8 +17,8 @@ func PrintCountStatus(z *Config) {
 		utl.PreSpc("LOCAL", c2Width)+
 		utl.PreSpc("AZURE", c3Width)) + "\n")
 	status := utl.Blu(utl.PostSpc("Directory Users", c1Width))
-	status += utl.Gre(utl.PreSpc(UsersCountLocal(z), c2Width))
-	status += utl.Gre(utl.PreSpc(UsersCountAzure(z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("u", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure("u", z), c3Width)) + "\n"
 	status += utl.Blu(utl.PostSpc("Directory Groups", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("g", z), c2Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountAzure("g", z), c3Width)) + "\n"
@@ -33,14 +33,17 @@ func PrintCountStatus(z *Config) {
 	status += utl.Blu(utl.PostSpc("Directory Service Principals (multi-tenant)", c1Width))
 	status += utl.Gre(utl.PreSpc(msSpsLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(msSpsAzure, c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Directory Role Definitions", c1Width))
-	status += utl.Gre(utl.PreSpc(AdRolesCountLocal(z), c2Width))
-	status += utl.Gre(utl.PreSpc(AdRolesCountAzure(z), c3Width)) + "\n"
 
-	// To be developed
-	// status += utl.Blu(utl.PostSpc("Directory Role Assignments", c1Width))
-	// status += utl.Gre(utl.PreSpc(AdRolesCountLocal(z), c2Width))
-	// status += utl.Gre(utl.PreSpc(AdRolesCountAzure(z), c3Width)) + "\n"
+	// Note: ObjectCountAzure() doesn't support dr nor da objects so we just count
+	// the ones in the local cache and print them for local and Azure
+	status += utl.Blu(utl.PostSpc("Directory Role Definitions", c1Width))
+	drCount := ObjectCountLocal("dr", z)
+	status += utl.Gre(utl.PreSpc(drCount, c2Width))
+	status += utl.Gre(utl.PreSpc(drCount, c3Width)) + "\n"
+	daCount := ObjectCountLocal("da", z)
+	status += utl.Blu(utl.PostSpc("Directory Role Assignments", c1Width))
+	status += utl.Gre(utl.PreSpc(daCount, c2Width))
+	status += utl.Gre(utl.PreSpc(daCount, c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource Management Groups", c1Width))
 	status += utl.Gre(utl.PreSpc(MgGroupCountLocal(z), c2Width))
@@ -102,18 +105,18 @@ func PrintTersely(t string, object interface{}) {
 		xProp := x["properties"].(map[string]interface{})
 		fmt.Printf("%-38s  %-20s  %s\n", utl.Str(x["name"]), utl.Str(xProp["displayName"]), MgType(utl.Str(x["type"])))
 	case "u":
-		x := object.(map[string]interface{}) // Assert as JSON object
+		x := object.(AzureObject) // Assert as AzureObject
 		upn := utl.Str(x["userPrincipalName"])
-		onPremisesSamAccountName := utl.Str(x["onPremisesSamAccountName"])
-		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(x["id"]), upn, onPremisesSamAccountName, utl.Str(x["displayName"]))
+		onPremName := utl.Str(x["onPremisesSamAccountName"])
+		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(x["id"]), upn, onPremName, utl.Str(x["displayName"]))
 	case "g":
-		x := object.(AzureObject)
+		x := object.(AzureObject) // Assert as AzureObject
 		fmt.Printf("%s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]))
 	case "sp", "ap":
-		x := object.(AzureObject) // Assert as JSON object
+		x := object.(AzureObject) // Assert as AzureObject
 		fmt.Printf("%s  %-66s %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), utl.Str(x["appId"]))
-	case "ad":
-		x := object.(map[string]interface{}) // Assert as JSON object
+	case "dr":
+		x := object.(AzureObject) // Assert as AzureObject
 		builtIn := "Custom"
 		if utl.Str(x["isBuiltIn"]) == "true" {
 			builtIn = "BuiltIn"
@@ -122,7 +125,13 @@ func PrintTersely(t string, object interface{}) {
 		if utl.Str(x["isEnabled"]) == "true" {
 			enabled = "Enabled"
 		}
-		fmt.Printf("%s  %-60s  %s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), builtIn, enabled)
+		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), builtIn, enabled)
+	case "da":
+		x := object.(AzureObject) // Assert as AzureObject
+		scope := utl.Str(x["directoryScopeId"])
+		principalId := utl.Str(x["principalId"])
+		roleDefId := utl.Str(x["roleDefinitionId"])
+		fmt.Printf("%-66s  %-37s  %-36s  %s\n", utl.Str(x["id"]), scope, principalId, roleDefId)
 	}
 }
 
@@ -165,6 +174,7 @@ func PrintObject(t string, x map[string]interface{}, z *Config) {
 		PrintSubscription(x)
 	case "m":
 		PrintMgGroup(x)
+
 	case "u":
 		PrintUser(x, z)
 	case "g":
@@ -173,8 +183,10 @@ func PrintObject(t string, x map[string]interface{}, z *Config) {
 		PrintSp(x, z)
 	case "ap":
 		PrintApp(x, z)
-	case "ad":
-		PrintAdRole(x, z)
+	case "dr":
+		PrintDirRoleDefinition(x, z)
+	case "da":
+		PrintDirRoleAssignment(x, z)
 	}
 }
 
