@@ -133,7 +133,7 @@ func PrintApp(x AzureObject, z *Config) {
 			params := map[string]string{"$filter": "appId eq '" + resAppId + "'"}
 			apiUrl := ConstMgUrl + "/beta/servicePrincipals"
 			r, _, _ := ApiGet(apiUrl, z, params)
-			ApiErrorCheck("GET", apiUrl, utl.Trace(), r) // TODO: Get rid of this by using StatuCode checks, etc
+
 			// Result is a list because this could be a multi-tenant app, having multiple SPs
 			if r["value"] == nil {
 				fmt.Printf("  %-50s %s\n", resAppId, "Unable to get Resource App object. Skipping this API.")

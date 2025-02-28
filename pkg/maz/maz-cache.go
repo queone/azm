@@ -21,7 +21,7 @@ func GetCache(t string, z *Config) (*Cache, error) {
 	// Ensure the type is valid
 	suffix, ok := CacheSuffix[t]
 	if !ok {
-		return nil, fmt.Errorf("invalid type code: %s", t)
+		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(t))
 	}
 
 	// Construct both file paths
@@ -62,8 +62,6 @@ func RemoveCacheFiles(t string, z *Config) error {
 		return fmt.Errorf("failed to erase cache files for type '%s': %w", t, err)
 	}
 
-	// Log or provide feedback on successful removal (optional)
-	fmt.Printf("Successfully removed '%s' cache files\n", t)
 	return nil
 }
 
@@ -142,8 +140,9 @@ func (c *Cache) Delete(id string) error {
 
 func (c *Cache) Upsert(obj AzureObject) error {
 	id := utl.Str(obj["id"])
-	if !utl.ValidUuid(id) {
-		return fmt.Errorf("object with invalid ID '%s' not added to cache", id)
+	if id == "" {
+		utl.PrintJsonColor(obj)
+		return fmt.Errorf("object with blank ID not added to cache")
 	}
 
 	// Check if the object already exists in the cache

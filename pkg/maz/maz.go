@@ -35,39 +35,42 @@ const (
 )
 
 var (
-	mazTypes    = []string{"d", "a", "s", "mg", "u", "g", "sp", "ap", "ad"}
+	mazTypes    = []string{"d", "a", "s", "m", "u", "g", "ap", "sp", "dr", "da"}
 	CacheSuffix = map[string]string{
 		"d":  "_res-role-defs",   // Resource RBAC role definition objects
 		"a":  "_res-role-assgns", // Resource RBAC role assignment objects
 		"s":  "_res-subs",        // Resource subscriptions objects
-		"mg": "_res-mgmt-groups", // Resource management groups objects
+		"m":  "_res-mgmt-groups", // Resource management groups objects
 		"u":  "_dir-users",       // Directory users objects
 		"g":  "_dir-groups",      // Directory group objects
-		"sp": "_dir-sps",         // Directory service principal objects
 		"ap": "_dir-apps",        // Directory application objects
-		"ad": "_dir-roles",       // Directory role definition objects
+		"sp": "_dir-sps",         // Directory service principal objects
+		"dr": "_dir-role-defs",   // Directory role definition objects
+		"da": "_dir-role-assgns", // Directory role assignment objects
 	}
 	ApiEndpoint = map[string]string{
 		"d":  "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
 		"a":  "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
 		"s":  "/subscriptions",
-		"mg": "/providers/Microsoft.Management/managementGroups",
+		"m":  "/providers/Microsoft.Management/managementGroups",
 		"u":  "/v1.0/users",
 		"g":  "/v1.0/groups",
-		"sp": "/v1.0/servicePrincipals",
 		"ap": "/v1.0/applications",
-		"ad": "/v1.0/roleDefinitions",
+		"sp": "/v1.0/servicePrincipals",
+		"dr": "/v1.0/roleManagement/directory/roleDefinitions",
+		"da": "/v1.0/roleManagement/directory/roleAssignments",
 	}
 	MazObjName = map[string]string{
 		"d":  "resource RBAC role definition",
 		"a":  "resource RBAC role assignment",
 		"s":  "resource subscription",
-		"mg": "resource management group",
+		"m":  "resource management group",
 		"u":  "directory user",
 		"g":  "directory group",
-		"sp": "directory service principal",
 		"ap": "directory application",
-		"ad": "directory role definition",
+		"sp": "directory service principal",
+		"dr": "directory role definition",
+		"da": "directory role assignment",
 	}
 	eVars = map[string]string{
 		"MAZ_TENANT_ID":     "",

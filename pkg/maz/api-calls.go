@@ -64,7 +64,7 @@ func ApiDelete(apiUrl string, z *Config, params strMapT) (result jsonT, rsc int,
 }
 
 // ApiCall alias to do a DELETE with debugging on
-func ApiDeleteDebug(apiUrl string, z *Config, params strMapT) (result jsonT, rsc int, err error) {
+func ApiDeleteDebug(apiUrl string, z *Config, params strMapT) (jsonT, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
@@ -154,16 +154,15 @@ func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, ve
 	// number, or 2) a JSON object string that needs unmarshalling. Below conditional is based on
 	// this interpretation, but may need confirmation then better handling
 
-	// Create jsonResult variable object to be return
-	var jsonResult map[string]interface{} = nil
+	result = nil // JSON object to be returned
 	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
 		// It's an integer, probably an API object count value
-		jsonResult = make(map[string]interface{})
-		jsonResult["value"] = intValue
+		result = make(map[string]interface{})
+		result["value"] = intValue
 	} else {
 		// It's a regular JSON result, or null
 		if len(body) > 0 { // Make sure we have something to unmarshal, else guaranteed panic
-			if err = json.Unmarshal([]byte(body), &jsonResult); err != nil {
+			if err = json.Unmarshal([]byte(body), &result); err != nil {
 				panic(err.Error())
 			}
 		}
@@ -173,7 +172,7 @@ func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, ve
 		fmt.Println(utl.Blu("==== RESPONSE ================================"))
 		fmt.Printf("%s: %d %s\n", utl.Blu("status"), r.StatusCode, http.StatusText(r.StatusCode))
 		fmt.Println(utl.Blu("result") + ":")
-		utl.PrintJsonColor(jsonResult)
+		utl.PrintJsonColor(result)
 		resHeaders, err := httputil.DumpResponse(r, false)
 		if err != nil {
 			panic(err.Error())
@@ -181,16 +180,14 @@ func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, ve
 		fmt.Println(utl.Blu("headers") + ":")
 		fmt.Println(string(resHeaders))
 	}
-	return jsonResult, r.StatusCode, err
-}
 
-// Prints useful error information if they occur
-func ApiErrorCheck(method, apiUrl, caller string, r jsonT) {
-	if r["error"] != nil {
-		e := r["error"].(map[string]interface{})
-		errMsg := method + " " + apiUrl + "\n" + caller + "Error: " + e["message"].(string) + "\n"
-		fmt.Println(utl.Red(errMsg))
+	if result["error"] != nil || (r.StatusCode >= 300 && r.StatusCode <= 599) {
+		e := result["error"].(map[string]interface{})
+		eMsg := e["message"].(string)
+		msg := fmt.Sprintf("%s %s\nHTTP %d : %s", method, apiUrl, r.StatusCode, eMsg)
+		fmt.Printf("%s\n", utl.Yel(msg))
 	}
+	return result, r.StatusCode, err
 }
 
 // Prints API error messages in 2 parts separated by a newline: A header, then a JSON byte slice
