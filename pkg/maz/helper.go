@@ -292,21 +292,6 @@ func RemoveCacheFile(t string, z *Config) {
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension))
 	case "m":
 		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension))
-	case "u":
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_users."+ConstCacheFileExtension))
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_users_deltaLink."+ConstCacheFileExtension))
-	case "g":
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_groups."+ConstCacheFileExtension))
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_groups_deltaLink."+ConstCacheFileExtension))
-	case "sp":
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_servicePrincipals."+ConstCacheFileExtension))
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_servicePrincipals_deltaLink."+ConstCacheFileExtension))
-	case "ap":
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_applications."+ConstCacheFileExtension))
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_applications_deltaLink."+ConstCacheFileExtension))
-	case "dr":
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_directoryRoles."+ConstCacheFileExtension))
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_directoryRoles_deltaLink."+ConstCacheFileExtension))
 	case "all":
 		// See https://stackoverflow.com/questions/48072236/remove-files-with-wildcard
 		fileList, err := filepath.Glob(filepath.Join(z.ConfDir, z.TenantId+"_*."+ConstCacheFileExtension))

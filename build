@@ -35,12 +35,18 @@ printf "${Gre}$(ls -l $BIN | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}
 # GOOS=windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}.exe
 # GOOS=linux   GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}
 
+ProgramVersion=$(grep 'prgver.*=' $MainGo || grep 'program_version.*=' $MainGo | cut -d'"' -f2)
+printf "\n==> New program version = ${Gre}$ProgramVersion${Rst}\n"
+
 printf "\n==> Warn on any 'replace' in go.mod\n${Red}$(grep replace go.mod)${Rst}\n"
-printf "\n==> grep version in $MainGo\n${Gre}$(grep 'prgver.*=' $MainGo || grep 'program_version.*=' $MainGo)${Rst}\n"
-printf "\n==> Last 5 tags\n"
-git tag | sort -V | tail -5
+printf "==> Last 5 tags = $(git tag | sort -V | tail -5 | tr '\n' ', ' | sed 's/,/  /g')\n"
 CurrentTag=`git tag | sort -V | tail -1`
-printf "\n==> To ${Gre}release${Rst}, advance below Tag version, then run below one-liner:\n"
-printf "\n    Tag=$CurrentTag && git add . && git commit -m \"x updates\" && git tag \$Tag && git push origin \$Tag && git push\n\n"
+IFS='.' read -r Major Minor Patch <<< "${CurrentTag#v}"
+NextTag="v$Major.$Minor.$((Patch+1))"
+if [ "$ProgramVersion" != "${NextTag#v}" ]; then
+    printf "==> Program version ${Gre}$ProgramVersion${Rst} and next tag ${Yel}$NextTag${Rst} do ${Red}NOT${Rst} match!\n"
+fi
+printf "==> To release as ${Gre}$NextTag${Rst}, adjust comment and run below one-liner:\n"
+printf "\n    NEWTAG=${Gre}$NextTag${Rst} && git add . && git commit -m \"${Yel}<insert comment>${Rst}\" && git tag \$NEWTAG && git push origin \$NEWTAG && git push\n\n"
 
 exit 0

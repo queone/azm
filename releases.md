@@ -1,10 +1,21 @@
 ## Releases
 
+### v0.1.3
+Release Date: 2025-mar-??
+
+- Improved `build` script
+- Renamed all Api*Debug() functions to Api*Verbose()
+- Rewrote CheckApiError(utl.Trace2(1), obj, statusCode, err) function for debugging
+- Fixed -xx option by improving RemoveCacheFiles(), which now also does not load cache first
+- Fixed issues with directory objects and cache, especially role asisgnments which do not use UUIDs
+  
+---
+
 ### v0.1.2
 Release Date: 2025-feb-28
 
 - Still incomplete and not fully working
-- Directory objects are mostly working but still many bugs wit cache
+- Directory objects are mostly working but still many bugs with cache
 - Resource objects are still to be migrated
 - cmd/azm:
   - Continuing to migrate old azm options to this new version 

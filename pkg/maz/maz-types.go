@@ -169,9 +169,6 @@ func (list *AzureObjectList) Replace(newObj AzureObject) bool {
 
 // Deletes an object from the list by matching on its ID.
 func (list *AzureObjectList) DeleteById(targetId string) bool {
-	if !utl.ValidUuid(targetId) {
-		return false
-	}
 	// Use Delete with ID criteria for deletion
 	return list.Delete(AzureObject{"id": targetId})
 }
@@ -207,9 +204,6 @@ func (list *AzureObjectList) Delete(criteria AzureObject) bool {
 
 // Finds an object in the list by its ID and returns a pointer to it.
 func (list AzureObjectList) FindById(targetId string) *AzureObject {
-	if !utl.ValidUuid(targetId) {
-		return nil
-	}
 	return list.Find(AzureObject{"id": targetId})
 }
 
@@ -241,9 +235,6 @@ func (list AzureObjectList) Find(criteria AzureObject) *AzureObject {
 
 // Checks if an object exists in the list by its ID.
 func (list AzureObjectList) ExistsById(targetId string) bool {
-	if !utl.ValidUuid(targetId) {
-		return false
-	}
 	return list.Exists(AzureObject{"id": targetId})
 }
 
