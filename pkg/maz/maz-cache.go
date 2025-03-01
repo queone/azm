@@ -51,15 +51,24 @@ func GetCache(t string, z *Config) (*Cache, error) {
 // Removes cache files for a given type code and configuration.
 // It ensures both the cache file and deltaLink file associated with the type are deleted.
 func RemoveCacheFiles(t string, z *Config) error {
-	// Initialize the cache object based on type and configuration
-	cache, err := GetCache(t, z)
-	if err != nil {
-		return fmt.Errorf("failed to initialize cache for type '%s': %w", t, err)
+	// Validate the input type and get the suffix.
+	suffix, ok := CacheSuffix[t]
+	if !ok {
+		return fmt.Errorf("invalid object type code: %s", utl.Red(t))
 	}
 
-	// Erase the cache files
-	if err := cache.Erase(); err != nil {
-		return fmt.Errorf("failed to erase cache files for type '%s': %w", t, err)
+	// Construct the cache file and delta link file paths without loading the cache.
+	cacheFile := filepath.Join(z.ConfDir, z.TenantId+suffix+".bin")
+	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
+
+	// Remove the cache file.
+	if err := os.Remove(cacheFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove cache file: %w", err)
+	}
+
+	// Remove the delta link file.
+	if err := os.Remove(deltaLinkFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove deltaLink file: %w", err)
 	}
 
 	return nil

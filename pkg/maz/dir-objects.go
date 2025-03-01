@@ -57,6 +57,7 @@ func GetObjectFromAzureById(t, id string, z *Config) AzureObject {
 	baseUrl := ConstMgUrl + ApiEndpoint[t]
 	apiUrl := baseUrl + "/" + id
 	obj, _, _ := ApiGet(apiUrl, z, nil)
+	//CheckApiError(utl.Trace2(1), obj, statusCode, err) // DEBUGGING
 	if obj == nil || obj["id"] == nil {
 		if t == "ap" || t == "sp" {
 			// If 1st search doesn't find the object, then for Apps and SPS,
@@ -139,7 +140,7 @@ func GetObjectFromAzureByName(t, displayName string, z *Config) AzureObjectList 
 
 // Retrieves existing object from Azure by its ID or displayName. This is
 // typically used as preprocessing for operations like renaming, deleting,
-// or updating a group.
+// or updating the object.
 func PreFetchAzureObject(t, identifier string, z *Config) (x AzureObject) {
 	if utl.ValidUuid(identifier) {
 		return GetObjectFromAzureById(t, identifier, z)
@@ -211,13 +212,13 @@ func SyncDirObjectsWithAzure(t string, cache *Cache, z *Config, verbose bool) {
 	// Setup select criteria for each object type: what fields will trigger delta updates upon changing
 	switch t {
 	case "u":
-		apiUrl += "/delta?$select=displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
+		apiUrl += "/delta?$select=id,displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
 	case "g":
-		apiUrl += "/delta?$select=displayName,description,isAssignableToRole,createdDateTime&$top=999"
+		apiUrl += "/delta?$select=id,displayName,description,isAssignableToRole,createdDateTime&$top=999"
 	case "ap":
-		apiUrl += "?$select=displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
+		apiUrl += "?$select=id,displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
 	case "sp":
-		apiUrl += "?$select=displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
+		apiUrl += "?$select=id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
 	case "dr":
 		//No additional adjustment required
 	case "da":
@@ -304,6 +305,9 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 			r, _, _ = ApiGet(nextLink, z, nil)        // Get next batch
 			k++
 		} else {
+			if verbose {
+				fmt.Print(rUp) // Go up to overwrite progress line
+			}
 			break // If nextLink is nil, we can break out of the loop
 		}
 	}

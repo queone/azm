@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.1.2"
+	program_version = "0.1.3"
 )
 
 func printUsage(extended bool) {
@@ -136,7 +136,12 @@ func main() {
 			maz.RemoveCacheFile("t", z)
 			maz.RemoveCacheFile("id", z)
 		case "-xx":
-			maz.RemoveCacheFile("all", z)
+			// Loop through each type in CacheSuffix.
+			for t := range maz.CacheSuffix {
+				if err := maz.RemoveCacheFiles(t, z); err != nil {
+					fmt.Printf("Error removing cache files for type '%s': %v\n", t, err)
+				}
+			}
 
 		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
 		case "-dx", "-ax", "-sx", "-mx":
