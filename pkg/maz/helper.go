@@ -125,7 +125,7 @@ func DeleteAzObject(force bool, specifier string, z *Config) {
 func FindAzObjectsById(id string, z *Config) (list []interface{}) {
 	list = nil
 	for _, t := range mazTypes {
-		x := GetAzObjectById(t, id, z)
+		x := GetAzureObjectById(t, id, z)
 		if x != nil && x["id"] != nil { // Valid objects have an 'id' attribute
 			// Found one of these types with this UUID
 			x["mazType"] = t // Extend object with mazType as an ADDITIONAL field
@@ -135,15 +135,15 @@ func FindAzObjectsById(id string, z *Config) (list []interface{}) {
 	return list
 }
 
-// Retrieves Azure object by Object UUID
-func GetAzObjectById(t, id string, z *Config) (x map[string]interface{}) {
+// Retrieves Azure object by object ID
+func GetAzureObjectById(t, id string, z *Config) (x map[string]interface{}) {
 	switch t {
 	case "d":
-		return GetAzRoleDefinitionById(id, z)
+		return GetResRoleDefinitionById(id, z)
 	case "a":
 		return GetAzRoleAssignmentById(id, z)
 	case "s":
-		return GetAzSubscriptionById(id, z)
+		return GetAzureSubscriptionById(id, z)
 	case "u":
 		return GetObjectFromAzureById(t, id, z)
 	case "g":
@@ -167,7 +167,7 @@ func GetAzRbacScopes(z *Config) (scopes []string) {
 		x := i.(map[string]interface{})
 		scopes = append(scopes, utl.Str(x["id"]))
 	}
-	subIds := GetAzSubscriptionsIds(z) // Now add all the subscription scopes
+	subIds := GetAzureSubscriptionsIds(z) // Now add all the subscription scopes
 	scopes = append(scopes, subIds...)
 
 	// SCOPES below subscriptions do not appear to be REALLY NEEDED. Most list
@@ -205,18 +205,23 @@ func GetCachedObjects(cacheFile string) (cachedList []interface{}) {
 	return cachedList
 }
 
-// Generic function to get objects of type t whose attributes match on filter.
-// If filter is the "" empty string return ALL of the objects of this type.
-func GetObjects(t, filter string, force bool, z *Config) (list []interface{}) {
+// Generic querying function to get Azure objects of any type t whose attributes
+// match on filter. If the filter is the "" empty string, return ALL of the objects
+// of this particular type. Works accross MS Graph and ARM objects.
+func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList {
 	switch t {
 	case "d":
-		return GetMatchingRoleDefinitions(filter, force, z)
+		return GetMatchingAzRoleDefinitions(filter, force, z)
 	case "a":
-		return GetMatchingRoleAssignments(filter, force, z)
-	case "m":
-		return GetMatchingMgGroups(filter, force, z)
+		fmt.Println("Being added...")
+		// return GetMatchingRoleAssignments(filter, force, z)
 	case "s":
-		return GetMatchingSubscriptions(filter, force, z)
+		return GetMatchingAzureSubscriptions(filter, force, z)
+	case "m":
+		fmt.Println("Being added...")
+		// return GetMatchingMgGroups(filter, force, z)
+	case "u", "g", "ap", "sp", "dr", "da":
+		return GetMatchingDirObjects(t, filter, force, z)
 	}
 	return nil
 }

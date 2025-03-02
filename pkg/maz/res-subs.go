@@ -2,125 +2,165 @@ package maz
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/queone/utl"
 )
 
-// Prints subscription object in YAML-like format
-func PrintSubscription(x map[string]interface{}) {
-	fmt.Printf("%s\n", utl.Gra("# Subscription"))
-
-	if x == nil {
+// Prints Azure subscription object in YAML-like format
+func PrintSubscription(x AzureObject) {
+	id := utl.Str(x["subscriptionId"])
+	if id == "" {
 		return
 	}
-	id := utl.Str(x["subscriptionId"])
+	fmt.Printf("%s\n", utl.Gra("# Subscription"))
 	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
 	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(utl.Str(x["displayName"])))
 	fmt.Printf("%s: %s\n", utl.Blu("state"), utl.Gre(utl.Str(x["state"])))
 	fmt.Printf("%s: %s\n", utl.Blu("tenant_id"), utl.Gre(utl.Str(x["tenantId"])))
 }
 
-// Returns count of all subscriptions in local cache file
-func SubsCountLocal(z *Config) int64 {
-	var cachedList []interface{} = nil
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension)
-	if utl.FileUsable(cacheFile) {
-		rawList, _ := utl.LoadFileJson(cacheFile, true) // Read compressed file
-		if rawList != nil {
-			cachedList = rawList.([]interface{})
-			return int64(len(cachedList))
-		}
-	}
-	return 0
-}
-
-// Returns count of all subscriptions in current Azure tenant
-func SubsCountAzure(z *Config) int64 {
-	list := GetAzSubscriptions(z)
-	return int64(len(list))
-}
-
-// Gets all subscription full IDs, i.e. "/subscriptions/UUID", which are commonly
-// used as scopes for Azure resource RBAC role definitions and assignments
-func GetAzSubscriptionsIds(z *Config) (scopes []string) {
-	scopes = nil
-	subscriptions := GetAzSubscriptions(z)
-	for _, i := range subscriptions {
-		x := i.(map[string]interface{})
+// Gets the full ID, i.e. "/subscriptions/UUID", of all subscription currently in cache.
+// Full IDs are commonly used when handling resource role definitions and assignments.
+// GetAzSubscriptionsIds(
+func GetAzureSubscriptionsIds(z *Config) (ids []string) {
+	ids = nil
+	// Get all subscriptions currently in cache; false = don't go to Azure
+	subscriptions := GetMatchingAzureSubscriptions("", false, z)
+	for _, item := range subscriptions {
 		// Skip disabled and legacy subscriptions
-		displayName := utl.Str(x["displayName"])
-		state := utl.Str(x["state"])
+		displayName := utl.Str(item["displayName"])
+		state := utl.Str(item["state"])
 		if state != "Enabled" || displayName == "Access to Azure Active Directory" {
 			continue
 		}
-		subId := utl.Str(x["id"])
-		scopes = append(scopes, subId)
+		ids = append(ids, utl.Str(item["id"]))
 	}
-	return scopes
+	return ids
 }
 
-// Returns id:name map of all subscriptions
-func GetIdMapSubs(z *Config) (nameMap map[string]string) {
-	nameMap = make(map[string]string)
-	roleDefs := GetMatchingSubscriptions("", false, z) // false = don't force a call to Azure
-	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
-	for _, i := range roleDefs {
-		x := i.(map[string]interface{})
-		if x["subscriptionId"] != nil && x["displayName"] != nil {
-			nameMap[utl.Str(x["subscriptionId"])] = utl.Str(x["displayName"])
+// Returns an id:name map of all Azure subscriptions
+func GetAzureSubscriptionsIdMap(z *Config) map[string]string {
+	nameMap := make(map[string]string)
+	// Get all subscriptions currently in cache; false = don't go to Azure
+	subscriptions := GetMatchingAzureSubscriptions("", false, z)
+	for _, item := range subscriptions {
+		// Safely extract "subscriptionId" and "displayName" with type assertions
+		subscriptionId, okID := item["subscriptionId"].(string)
+		displayName, okName := item["displayName"].(string)
+		if okID && okName {
+			nameMap[subscriptionId] = displayName
+		} else {
+			// Log or handle entries with missing or invalid fields
+			//fmt.Printf("Skipping object with invalid id or displayName: %+v\n", x) // DEBUG
 		}
 	}
 	return nameMap
 }
 
+// ======================================================================
+
 // Gets all Azure subscriptions matching on 'filter'. Returns entire list if filter is empty ""
-func GetMatchingSubscriptions(filter string, force bool, z *Config) (list []interface{}) {
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension)
-	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
-		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
-		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
-		// and show progress while doing so (true = verbose below)
-		list = GetAzSubscriptions(z)
-	} else {
-		// Use local cache for all other conditions
-		list = GetCachedObjects(cacheFile)
+func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) (list AzureObjectList) {
+	// If the filter is a UUID, we deliberately treat it as an ID and perform a
+	// quick Azure lookup for the specific object.
+	if utl.ValidUuid(filter) {
+		x := GetAzureSubscriptionById(filter, z)
+		if x != nil {
+			// If found, return a list containing just this object.
+			return AzureObjectList{x}
+		}
+		// If not found, then filter will be used below in obj.HasString(filter)
 	}
 
-	if filter == "" {
-		return list
+	// Get current cache, or initialize a new cache for this type
+	cache, err := GetCache("s", z) // Get subscriptions type cache
+	if err != nil {
+		utl.Die("Error: %s\n", err.Error())
 	}
-	var matchingList []interface{} = nil
-	for _, i := range list { // Parse every object
-		x := i.(map[string]interface{})
-		// Match against relevant strings within subscription JSON object (Note: Not all attributes are maintained)
-		if utl.StringInJson(x, filter) {
-			matchingList = append(matchingList, x)
+
+	// Return an empty list if cache is nil and internet is not available
+	internetIsAvailable := utl.IsInternetAvailable()
+	if cache == nil && !internetIsAvailable {
+		return AzureObjectList{} // Return empty list
+	}
+
+	// Determine if cache is empty or outdated and needs to be refreshed from Azure
+	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	if internetIsAvailable && cacheNeedsRefreshing {
+		CacheAzureSubscriptions(cache, z, true)
+	}
+
+	// Filter the objects based on the provided filter
+	if filter == "" {
+		return cache.data // Return all data if no filter is specified
+	}
+	matchingList := AzureObjectList{} // Initialize an empty list for matching items
+	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	for _, obj := range cache.data {
+		id := obj["id"].(string)
+		if ids.Exists(id) {
+			continue // Skip repeated entries
+		}
+		if obj.HasString(filter) {
+			matchingList.Add(obj) // Add matching object to the list
+			ids.Add(id)           // Mark this ID as seen
 		}
 	}
+
 	return matchingList
 }
 
-// Gets all subscription in current Azure tenant, and saves them to local cache file
-func GetAzSubscriptions(z *Config) (list []interface{}) {
-	list = nil                                               // We have to zero it out
-	params := map[string]string{"api-version": "2022-09-01"} // subscriptions
+// Retrieves all Azure subscription objects in current tenant and saves them to local
+// cache. Note that we are updating the cache via its pointer, so no return value.
+func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
+	params := map[string]string{"api-version": "2022-09-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
 	r, _, _ := ApiGet(apiUrl, z, params)
-	if r != nil && r["value"] != nil {
-		objects := r["value"].([]interface{})
-		list = append(list, objects...)
+	if r["value"] != nil {
+		rawSubscriptions, ok := r["value"].([]interface{})
+		if !ok {
+			utl.Die("unexpected type for subscriptions")
+		}
+		for _, raw := range rawSubscriptions {
+			azObj, ok := raw.(map[string]interface{})
+			if !ok {
+				fmt.Printf("WARNING: Unexpected type for subscription object: %v\n", raw)
+				continue
+			}
+			trimmedObj := AzureObject(azObj).TrimForCache("s")
+			if err := cache.Upsert(trimmedObj); err != nil {
+				fmt.Printf("WARNING: Failed to upsert cache for subscription object with ID '%s': %v\n",
+					azObj["id"], err)
+			}
+		}
 	}
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension)
-	utl.SaveFileJson(list, cacheFile, true) // Update the local cache, true = gzipped
-	return list
+	// Save updated cache
+	if err := cache.Save(); err != nil {
+		utl.Die("Error saving updated cache: %s\n", err.Error())
+	}
 }
 
-// Gets specific Azure subscription by Object UUID
-func GetAzSubscriptionById(id string, z *Config) map[string]interface{} {
-	params := map[string]string{"api-version": "2022-09-01"} // subscriptions
+// Gets a specific Azure subscription by its stand-alone object UUID
+func GetAzureSubscriptionById(id string, z *Config) AzureObject {
+	params := map[string]string{"api-version": "2022-09-01"}
 	apiUrl := ConstAzUrl + "/subscriptions/" + id
 	r, _, _ := ApiGet(apiUrl, z, params)
-	return r
+	azObj := AzureObject(r)
+	azObj["maz_from_azure"] = true
+	return azObj
+}
+
+// Returns count of all subscriptions in current Azure tenant
+func CountAzureSubscriptions(z *Config) int64 {
+	params := map[string]string{"api-version": "2022-09-01"}
+	apiUrl := ConstAzUrl + "/subscriptions"
+	r, _, _ := ApiGet(apiUrl, z, params)
+	if r["count"] != nil {
+		rawCount, ok := r["count"].(map[string]interface{})
+		if ok {
+			count := utl.Int64(rawCount["value"]) // Get int64 value
+			return count
+		}
+	}
+	return 0
 }

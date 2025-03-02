@@ -51,7 +51,7 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 	comment = "# " + pType + " \"" + pName + "\""
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("principalId"), utl.Gre(principalId), utl.Gra(comment))
 
-	subNameMap := GetIdMapSubs(z) // Get all subscription id:name pairs
+	subNameMap := GetAzureSubscriptionsIdMap(z) // Get all subscription id:name pairs
 	scope := utl.Str(xProp["scope"])
 	if scope == "" {
 		scope = utl.Str(xProp["Scope"])
@@ -72,11 +72,11 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 
 // Prints a human-readable report of all RBAC role assignments
 func PrintRoleAssignmentReport(z *Config) {
-	roleNameMap := GetIdMapRoleDefs(z)        // Get all role definition id:name pairs
-	subNameMap := GetIdMapSubs(z)             // Get all subscription id:name pairs
-	groupNameMap := GetDirObjectIdMap("g", z) // Get all groups id:name pairs
-	userNameMap := GetDirObjectIdMap("u", z)  // Get all users id:name pairs
-	spNameMap := GetDirObjectIdMap("sp", z)   // Get all SPs id:name pairs
+	roleNameMap := GetIdMapRoleDefs(z)          // Get all role definition id:name pairs
+	subNameMap := GetAzureSubscriptionsIdMap(z) // Get all subscription id:name pairs
+	groupNameMap := GetDirObjectIdMap("g", z)   // Get all groups id:name pairs
+	userNameMap := GetDirObjectIdMap("u", z)    // Get all users id:name pairs
+	spNameMap := GetDirObjectIdMap("sp", z)     // Get all SPs id:name pairs
 
 	assignments := GetAzRoleAssignments(z, false)
 	for _, i := range assignments {
@@ -236,7 +236,7 @@ func GetAzRoleAssignments(z *Config, verbose bool) (list []interface{}) {
 	var mgGroupNameMap, subNameMap map[string]string
 	if verbose {
 		mgGroupNameMap = GetIdMapMgGroups(z)
-		subNameMap = GetIdMapSubs(z)
+		subNameMap = GetAzureSubscriptionsIdMap(z)
 	}
 
 	scopes := GetAzRbacScopes(z)                             // Get all scopes

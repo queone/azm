@@ -75,9 +75,10 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 		}
 	case "s": // Resource Subscriptions
 		trimmed = AzureObject{
-			"id":          obj["id"],
-			"displayName": obj["displayName"],
-			"state":       obj["state"],
+			"id":             obj["id"],
+			"subscriptionId": obj["subscriptionId"],
+			"displayName":    obj["displayName"],
+			"state":          obj["state"],
 		}
 	case "m": // Resource Management Groups
 		trimmed = AzureObject{

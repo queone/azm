@@ -9,7 +9,7 @@ import (
 
 // Prints a status count of all AZ and MG objects that are in Azure, and the local files.
 func PrintCountStatus(z *Config) {
-	c1Width := 50 // Column 1 width
+	c1Width := 44 // Column 1 width
 	c2Width := 10 // Column 2 width
 	c3Width := 10 // Column 3 width
 	fmt.Printf("%s\n", utl.Gra("# Please note that enumerating some Azure resources can be slow"))
@@ -49,8 +49,8 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(MgGroupCountLocal(z), c2Width))
 	status += utl.Gre(utl.PreSpc(MgGroupCountAzure(z), c3Width)) + "\n"
 	status += utl.Blu(utl.PostSpc("Resource Subscriptions", c1Width))
-	status += utl.Gre(utl.PreSpc(SubsCountLocal(z), c2Width))
-	status += utl.Gre(utl.PreSpc(SubsCountAzure(z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("s", z), c2Width))
+	status += utl.Gre(utl.PreSpc(CountAzureSubscriptions(z), c3Width)) + "\n"
 	builtinLocal, customLocal := RoleDefinitionCountLocal(z)
 	builtinAzure, customAzure := RoleDefinitionCountAzure(z)
 	status += utl.Blu(utl.PostSpc("Resource Role Definitions (built-in)", c1Width))
@@ -98,7 +98,7 @@ func PrintTersely(t string, object interface{}) {
 		scope := utl.Str(xProp["scope"])
 		fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(x["name"]), rdId, principalId, "("+principalType+")", scope)
 	case "s":
-		x := object.(map[string]interface{}) // Assert as JSON object
+		x := object.(AzureObject) // Assert as AzureObject
 		fmt.Printf("%s  %-10s  %s\n", utl.Str(x["subscriptionId"]), utl.Str(x["state"]), utl.Str(x["displayName"]))
 	case "m":
 		x := object.(map[string]interface{}) // Assert as JSON object
@@ -404,7 +404,7 @@ func PrintStringMapColor(strMap map[string]string) {
 func PrintMatching(printFormat, t, specifier string, z *Config) {
 	if utl.ValidUuid(specifier) {
 		// If valid UUID string, get object direct from Azure
-		x := GetAzObjectById(t, specifier, z)
+		x := GetAzureObjectById(t, specifier, z)
 		if x != nil {
 			if printFormat == "json" {
 				utl.PrintJsonColor(x)
@@ -414,13 +414,13 @@ func PrintMatching(printFormat, t, specifier string, z *Config) {
 			return
 		}
 	}
-	matchingObjects := GetObjects(t, specifier, false, z)
+	matchingObjects := GetMatchingObjects(t, specifier, false, z)
 	if len(matchingObjects) == 1 {
 		// If it's only one object, try getting it direct from Azure instead of using the local cache
-		x := matchingObjects[0].(map[string]interface{})
+		x := matchingObjects[0]
 		id := utl.Str(x["id"])
 		if utl.ValidUuid(id) {
-			x = GetAzObjectById(t, id, z) // Replace object with version directly in Azure
+			x = GetAzureObjectById(t, id, z) // Replace object with version directly in Azure
 		}
 		if printFormat == "json" {
 			utl.PrintJsonColor(x)
@@ -431,8 +431,8 @@ func PrintMatching(printFormat, t, specifier string, z *Config) {
 		if printFormat == "json" {
 			utl.PrintJsonColor(matchingObjects) // Print all matching objects in JSON
 		} else if printFormat == "reg" {
-			for _, i := range matchingObjects { // Print all matching object teresely
-				x := i.(map[string]interface{})
+			for _, x := range matchingObjects { // Print all matching object teresely
+				//x := i.(map[string]interface{})
 				PrintTersely(t, x)
 			}
 		}
