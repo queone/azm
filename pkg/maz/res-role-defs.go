@@ -331,7 +331,7 @@ func SyncAzRoleDefinitionsToLocalCache(cache *Cache, z *Config, verbose bool) {
 
 	var mgGroupNameMap, subNameMap map[string]string
 	if verbose {
-		mgGroupNameMap = GetIdMapMgGroups(z)
+		mgGroupNameMap = GetAzureMgmtGroupsIdMap(z)
 		subNameMap = GetAzureSubscriptionsIdMap(z)
 	}
 

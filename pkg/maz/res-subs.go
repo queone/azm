@@ -21,11 +21,9 @@ func PrintSubscription(x AzureObject) {
 
 // Gets the full ID, i.e. "/subscriptions/UUID", of all subscription currently in cache.
 // Full IDs are commonly used when handling resource role definitions and assignments.
-// GetAzSubscriptionsIds(
 func GetAzureSubscriptionsIds(z *Config) (ids []string) {
 	ids = nil
-	// Get all subscriptions currently in cache; false = don't go to Azure
-	subscriptions := GetMatchingAzureSubscriptions("", false, z)
+	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
 	for _, item := range subscriptions {
 		// Skip disabled and legacy subscriptions
 		displayName := utl.Str(item["displayName"])
@@ -41,8 +39,7 @@ func GetAzureSubscriptionsIds(z *Config) (ids []string) {
 // Returns an id:name map of all Azure subscriptions
 func GetAzureSubscriptionsIdMap(z *Config) map[string]string {
 	nameMap := make(map[string]string)
-	// Get all subscriptions currently in cache; false = don't go to Azure
-	subscriptions := GetMatchingAzureSubscriptions("", false, z)
+	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
 	for _, item := range subscriptions {
 		// Safely extract "subscriptionId" and "displayName" with type assertions
 		subscriptionId, okID := item["subscriptionId"].(string)
@@ -57,10 +54,8 @@ func GetAzureSubscriptionsIdMap(z *Config) map[string]string {
 	return nameMap
 }
 
-// ======================================================================
-
 // Gets all Azure subscriptions matching on 'filter'. Returns entire list if filter is empty ""
-func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) (list AzureObjectList) {
+func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureObjectList {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
 	// quick Azure lookup for the specific object.
 	if utl.ValidUuid(filter) {
@@ -113,7 +108,7 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) (list A
 // Retrieves all Azure subscription objects in current tenant and saves them to local
 // cache. Note that we are updating the cache via its pointer, so no return value.
 func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
-	params := map[string]string{"api-version": "2022-09-01"}
+	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
 	r, _, _ := ApiGet(apiUrl, z, params)
 	if r["value"] != nil {
@@ -142,7 +137,7 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 
 // Gets a specific Azure subscription by its stand-alone object UUID
 func GetAzureSubscriptionById(id string, z *Config) AzureObject {
-	params := map[string]string{"api-version": "2022-09-01"}
+	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions/" + id
 	r, _, _ := ApiGet(apiUrl, z, params)
 	azObj := AzureObject(r)
@@ -152,7 +147,7 @@ func GetAzureSubscriptionById(id string, z *Config) AzureObject {
 
 // Returns count of all subscriptions in current Azure tenant
 func CountAzureSubscriptions(z *Config) int64 {
-	params := map[string]string{"api-version": "2022-09-01"}
+	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
 	r, _, _ := ApiGet(apiUrl, z, params)
 	if r["count"] != nil {

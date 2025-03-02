@@ -35,7 +35,7 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(msSpsAzure, c3Width)) + "\n"
 
 	// Note: ObjectCountAzure() doesn't support dr nor da objects so we just count
-	// the ones in the local cache and print them for local and Azure
+	// the ones in the local cache and print them for local *and* Azure
 	status += utl.Blu(utl.PostSpc("Directory Role Definitions", c1Width))
 	drCount := ObjectCountLocal("dr", z)
 	status += utl.Gre(utl.PreSpc(drCount, c2Width))
@@ -46,11 +46,13 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(daCount, c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource Management Groups", c1Width))
-	status += utl.Gre(utl.PreSpc(MgGroupCountLocal(z), c2Width))
-	status += utl.Gre(utl.PreSpc(MgGroupCountAzure(z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("m", z), c2Width))
+	status += utl.Gre(utl.PreSpc(CountAzureMgmtGroups(z), c3Width)) + "\n"
+
 	status += utl.Blu(utl.PostSpc("Resource Subscriptions", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("s", z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureSubscriptions(z), c3Width)) + "\n"
+
 	builtinLocal, customLocal := RoleDefinitionCountLocal(z)
 	builtinAzure, customAzure := RoleDefinitionCountAzure(z)
 	status += utl.Blu(utl.PostSpc("Resource Role Definitions (built-in)", c1Width))
@@ -98,25 +100,31 @@ func PrintTersely(t string, object interface{}) {
 		scope := utl.Str(xProp["scope"])
 		fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(x["name"]), rdId, principalId, "("+principalType+")", scope)
 	case "s":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		fmt.Printf("%s  %-10s  %s\n", utl.Str(x["subscriptionId"]), utl.Str(x["state"]), utl.Str(x["displayName"]))
 	case "m":
-		x := object.(map[string]interface{}) // Assert as JSON object
-		xProp := x["properties"].(map[string]interface{})
-		fmt.Printf("%-38s  %-20s  %s\n", utl.Str(x["name"]), utl.Str(xProp["displayName"]), MgType(utl.Str(x["type"])))
+		x := object.(AzureObject)
+		displayName := utl.Str(x["displayName"])
+		// REVIEW
+		// Is below really needed? We are normalizing these properties values to root of object cache
+		if x["properties"] != nil {
+			xProp := x["properties"].(map[string]interface{})
+			displayName = utl.Str(xProp["displayName"])
+		}
+		fmt.Printf("%-38s  %s\n", utl.Str(x["name"]), displayName)
 	case "u":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		upn := utl.Str(x["userPrincipalName"])
 		onPremName := utl.Str(x["onPremisesSamAccountName"])
 		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(x["id"]), upn, onPremName, utl.Str(x["displayName"]))
 	case "g":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		fmt.Printf("%s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]))
 	case "sp", "ap":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		fmt.Printf("%s  %-66s %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), utl.Str(x["appId"]))
 	case "dr":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		builtIn := "Custom"
 		if utl.Str(x["isBuiltIn"]) == "true" {
 			builtIn = "BuiltIn"
@@ -127,7 +135,7 @@ func PrintTersely(t string, object interface{}) {
 		}
 		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), builtIn, enabled)
 	case "da":
-		x := object.(AzureObject) // Assert as AzureObject
+		x := object.(AzureObject)
 		scope := utl.Str(x["directoryScopeId"])
 		principalId := utl.Str(x["principalId"])
 		roleDefId := utl.Str(x["roleDefinitionId"])
@@ -137,22 +145,21 @@ func PrintTersely(t string, object interface{}) {
 
 // Prints object by given UUID
 func PrintObjectById(id string, z *Config) {
-	list := FindAzObjectsById(id, z) // Search for this UUID under all maz objects types
+	list := FindAzureObjectsById(id, z) // Search for this UUID under all maz objects types
 
-	for _, obj := range list {
-		x := obj.(map[string]interface{})
-		mazType := utl.Str(x["mazType"]) // Function FindAzObjectsById() should have added this field
+	for _, azObj := range list {
+		mazType := utl.Str(azObj["maz_type"]) // Function FindAzureObjectsById() should have added this field
 		if mazType != "" {
-			PrintObject(mazType, x, z)
+			PrintObject(mazType, azObj, z)
 		} else {
 			fmt.Println(utl.Gra("# Unknown object type, but dumping it anyway:"))
-			utl.PrintYamlColor(x)
+			utl.PrintYamlColor(azObj)
 		}
 	}
 
-	// Multiple objects shared this ID. Print additional comments
+	// When multiple objects shared this ID, print below additional comments
 	if len(list) > 1 {
-		x0 := list[0].(map[string]interface{})
+		x0 := AzureObject(list[0]) // Cast single object
 		appId := utl.Str(x0["appId"])
 		if id == appId {
 			msg := utl.Gra("# Given UUID is a ") + utl.Whi("Client Id") + utl.Gra(" shared by above App and SP(s)")
@@ -164,7 +171,7 @@ func PrintObjectById(id string, z *Config) {
 }
 
 // Generic print object function
-func PrintObject(t string, x map[string]interface{}, z *Config) {
+func PrintObject(t string, x AzureObject, z *Config) {
 	switch t {
 	case "d":
 		PrintRoleDefinition(x, z)
@@ -173,8 +180,7 @@ func PrintObject(t string, x map[string]interface{}, z *Config) {
 	case "s":
 		PrintSubscription(x)
 	case "m":
-		PrintMgGroup(x)
-
+		PrintMgmtGroup(x)
 	case "u":
 		PrintUser(x, z)
 	case "g":
@@ -401,40 +407,44 @@ func PrintStringMapColor(strMap map[string]string) {
 }
 
 // Prints all objects that match on given specifier
-func PrintMatching(printFormat, t, specifier string, z *Config) {
-	if utl.ValidUuid(specifier) {
-		// If valid UUID string, get object direct from Azure
-		x := GetAzureObjectById(t, specifier, z)
-		if x != nil {
-			if printFormat == "json" {
-				utl.PrintJsonColor(x)
-			} else if printFormat == "reg" {
-				PrintObject(t, x, z)
-			}
-			return
-		}
+func PrintMatchingObjects(specifier, filter string, z *Config) {
+	// Range of possible specifiers: "d", "a", "s", "m", "u", "g", "ap", "sp", "dr",
+	// "da", "dj", "aj", "sj", "mj", "uj", "gj", "apj", "spj", "drj", "daj"
+	t := specifier
+	printJson := t[len(t)-1] == 'j' // If last char is 'j', then JSON output is required
+	if printJson {
+		t = t[:len(t)-1] // Remove the 'j' from t
 	}
-	matchingObjects := GetMatchingObjects(t, specifier, false, z)
-	if len(matchingObjects) == 1 {
-		// If it's only one object, try getting it direct from Azure instead of using the local cache
-		x := matchingObjects[0]
-		id := utl.Str(x["id"])
-		if utl.ValidUuid(id) {
-			x = GetAzureObjectById(t, id, z) // Replace object with version directly in Azure
-		}
-		if printFormat == "json" {
-			utl.PrintJsonColor(x)
-		} else if printFormat == "reg" {
-			PrintObject(t, x, z)
-		}
-	} else if len(matchingObjects) > 1 {
-		if printFormat == "json" {
-			utl.PrintJsonColor(matchingObjects) // Print all matching objects in JSON
-		} else if printFormat == "reg" {
-			for _, x := range matchingObjects { // Print all matching object teresely
-				//x := i.(map[string]interface{})
-				PrintTersely(t, x)
+
+	matchingObjects := GetMatchingObjects(t, filter, false, z) // false = get from cache, not Azure
+	matchingCount := len(matchingObjects)
+	if matchingCount > 1 {
+		if printJson {
+			utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
+		} else {
+			for _, item := range matchingObjects { // Print matching set in terse format
+				PrintTersely(t, item)
 			}
+		}
+	} else if matchingCount == 1 {
+		singleObj := matchingObjects[0]
+		isFromCache := !utl.Bool(singleObj["maz_from_azure"])
+		if isFromCache {
+			//utl.PrintJsonColor(singleObj)
+			// If object is from cache, then get the full version from Azure
+			id := singleObj["id"].(string)
+			if t == "s" { // For subscriptions, use 'subscriptionId' (UUID) instead of the fully-qualified 'id'
+				id = singleObj["subscriptionId"].(string)
+			}
+			if t == "m" { // For mgmt groups, use 'name' (string) instead of the fully-qualified 'id'
+				id = singleObj["name"].(string)
+			}
+			singleObj = GetAzureObjectById(t, id, z)
+		}
+		if printJson {
+			utl.PrintJsonColor(singleObj) // Print in JSON format
+		} else {
+			PrintObject(t, singleObj, z) // Print in regular format
 		}
 	}
 }

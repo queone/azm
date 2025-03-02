@@ -2,142 +2,182 @@ package maz
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/queone/utl"
 )
 
-// Prints management group object in YAML-like format
-func PrintMgGroup(x map[string]interface{}) {
-	fmt.Printf("%s\n", utl.Gra("# Management Group"))
-	if x == nil {
+// Prints Azure management group object in YAML-like format
+func PrintMgmtGroup(x AzureObject) {
+	id := utl.Str(x["name"])
+	if id == "" {
 		return
 	}
 
-	xProp := x["properties"].(map[string]interface{})
-	fmt.Printf("%-12s: %s\n", utl.Blu("id"), utl.Gre(utl.Str(x["name"])))
-	fmt.Printf("%-12s: %s\n", utl.Blu("display_name"), utl.Gre(utl.Str(xProp["displayName"])))
-	fmt.Printf("%-12s: %s\n", utl.Blu("type"), utl.Gre(MgType(utl.Str(x["type"]))))
-}
-
-// Returns ARM object type based on long string
-func MgType(typeIn string) string {
-	switch typeIn {
-	case "Microsoft.Management/managementGroups":
-		return "ManagementGroup"
-	case "Microsoft.Management/managementGroups/subscriptions", "/subscriptions":
-		return "Subscription"
-	default:
-		return "??"
+	fmt.Printf("%s\n", utl.Gra("# Management Group"))
+	displayName := utl.Str(x["displayName"])
+	tenantId := utl.Str(x["tenantId"])
+	// REVIEW
+	// Is below really needed? We are normalizing these properties values to root of object cache
+	if x["properties"] != nil {
+		xProp := x["properties"].(map[string]interface{})
+		displayName = utl.Str(xProp["displayName"])
+		tenantId = utl.Str(xProp["tenantId"])
 	}
+	fmt.Printf("%-12s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%-12s: %s\n", utl.Blu("display_name"), utl.Gre(displayName))
+	fmt.Printf("%-12s: %s\n", utl.Blu("tenant_id"), utl.Gre(tenantId))
 }
 
-// Returns count of management group objects in local cache file
-func MgGroupCountLocal(z *Config) int64 {
-	var cachedList []interface{} = nil
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension)
-	if utl.FileUsable(cacheFile) {
-		rawList, _ := utl.LoadFileJson(cacheFile, true) // Read compressed file
-		if rawList != nil {
-			cachedList = rawList.([]interface{})
-			return int64(len(cachedList))
+// Gets the full ID of all management groups currently in cache.
+// Full IDs are commonly used when handling resource role definitions and assignments.
+func GetAzureMgmtGroupsIds(z *Config) (mgmtGroupIds []string) {
+	mgmtGroupIds = nil
+	mgmtGroups := GetMatchingAzureMgmtGroups("", false, z) // false = get from cache, not Azure
+	for _, item := range mgmtGroups {
+		mgmtGroupIds = append(mgmtGroupIds, utl.Str(item["id"]))
+	}
+	return mgmtGroupIds
+}
+
+// Returns an id:name map of all Azure management groups
+// REVIEW
+// The 'id' is the fully-qualified name that always ends with the 'name' field. Maybe
+// what we want is the 'displayName', or properties['displayName']?
+func GetAzureMgmtGroupsIdMap(z *Config) map[string]string {
+	nameMap := make(map[string]string)
+	mgmtGroups := GetMatchingAzureMgmtGroups("", false, z) // false = get from cache, not Azure
+	for _, item := range mgmtGroups {
+		// Safely extract "subscriptionId" and "displayName" with type assertions
+		mgmtGroupId, okID := item["id"].(string)
+		mgmtGroupName, okName := item["name"].(string)
+		if okID && okName {
+			nameMap[mgmtGroupId] = mgmtGroupName
+		} else {
+			// Log or handle entries with missing or invalid fields
+			//fmt.Printf("Skipping object with invalid id or displayName: %+v\n", x) // DEBUG
 		}
-	}
-	return 0
-}
-
-// Returns count of management groups in Azure
-func MgGroupCountAzure(z *Config) int64 {
-	list := GetAzMgGroups(z)
-	return int64(len(list))
-}
-
-// Returns id:name map of management groups
-func GetIdMapMgGroups(z *Config) (nameMap map[string]string) {
-	nameMap = make(map[string]string)
-	mgGroups := GetMatchingMgGroups("", false, z) // false = don't force a call to Azure
-	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
-	for _, i := range mgGroups {
-		x := i.(map[string]interface{})
-		nameMap[utl.Str(x["id"])] = utl.Str(x["name"])
 	}
 	return nameMap
 }
 
 // Gets all Azure management groups matching on 'filter'. Returns entire list if filter is empty ""
-func GetMatchingMgGroups(filter string, force bool, z *Config) (list []interface{}) {
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension)
-	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
-		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
-		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
-		// and show progress while doing so (true = verbose below)
-		list = GetAzMgGroups(z)
-	} else {
-		// Use local cache for all other conditions
-		list = GetCachedObjects(cacheFile)
+func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjectList {
+	// If the filter is a UUID, we deliberately treat it as an ID and perform a
+	// quick Azure lookup for the specific object.
+	if utl.ValidUuid(filter) {
+		x := GetAzureMgmtGroupById(filter, z)
+		if x != nil {
+			// If found, return a list containing just this object.
+			return AzureObjectList{x}
+		}
+		// If not found, then filter will be used below in obj.HasString(filter)
 	}
 
-	if filter == "" {
-		return list
+	// Get current cache, or initialize a new cache for this type
+	cache, err := GetCache("m", z) // Get subscriptions type cache
+	if err != nil {
+		utl.Die("Error: %s\n", err.Error())
 	}
-	var matchingList []interface{} = nil
-	for _, i := range list { // Parse every object
-		x := i.(map[string]interface{})
-		// Match against relevant strings within managementGroups JSON object (Note: Not all attributes are maintained)
-		if utl.StringInJson(x, filter) {
-			matchingList = append(matchingList, x)
+
+	// Return an empty list if cache is nil and internet is not available
+	internetIsAvailable := utl.IsInternetAvailable()
+	if cache == nil && !internetIsAvailable {
+		return AzureObjectList{} // Return empty list
+	}
+
+	// Determine if cache is empty or outdated and needs to be refreshed from Azure
+	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	if internetIsAvailable && cacheNeedsRefreshing {
+		CacheAzureMgmtGroups(cache, z, true)
+	}
+
+	// Filter the objects based on the provided filter
+	if filter == "" {
+		return cache.data // Return all data if no filter is specified
+	}
+	matchingList := AzureObjectList{} // Initialize an empty list for matching items
+	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	for _, obj := range cache.data {
+		id := obj["id"].(string)
+		if ids.Exists(id) {
+			continue // Skip repeated entries
+		}
+		if obj.HasString(filter) {
+			matchingList.Add(obj) // Add matching object to the list
+			ids.Add(id)           // Mark this ID as seen
 		}
 	}
+
 	return matchingList
 }
 
-// Gets all management groups in current Azure tenant, and saves them to local cache file
-func GetAzMgGroups(z *Config) (list []interface{}) {
-	list = nil                                               // We have to zero it out
-	params := map[string]string{"api-version": "2020-05-01"} // managementGroups
+// Retrieves all Azure management groups objects in current tenant and saves them to
+// local cache. Note that we are updating the cache via its pointer, so no return value.
+// Old function = func GetAzMgGroups(z *Config) (list []interface{}) {
+func CacheAzureMgmtGroups(cache *Cache, z *Config, verbose bool) {
+	params := map[string]string{"api-version": "2023-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
 	r, _, _ := ApiGet(apiUrl, z, params)
-	if r != nil && r["value"] != nil {
-		objects := r["value"].([]interface{})
-		list = append(list, objects...)
+	if r["value"] != nil {
+		rawMgmtGroups, ok := r["value"].([]interface{})
+		if !ok {
+			utl.Die("unexpected type for management groups")
+		}
+		for _, raw := range rawMgmtGroups {
+			azObj, ok := raw.(map[string]interface{})
+			if !ok {
+				fmt.Printf("WARNING: Unexpected type for management group object: %v\n", raw)
+				continue
+			}
+			trimmedObj := AzureObject(azObj).TrimForCache("m")
+			if err := cache.Upsert(trimmedObj); err != nil {
+				fmt.Printf("WARNING: Failed to upsert cache for management group object with ID '%s': %v\n",
+					azObj["id"], err)
+			}
+		}
 	}
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension)
-	utl.SaveFileJson(list, cacheFile, true) // Update the local cache, true = gzipped
-	return list
+	// Save updated cache
+	if err := cache.Save(); err != nil {
+		utl.Die("Error saving updated cache: %s\n", err.Error())
+	}
 }
 
-// Recursively print management groups and all its children MGs and subscriptions
-func PrintMgChildren(indent int, children []interface{}) {
-	for _, i := range children {
-		child := i.(map[string]interface{})
-		Name := utl.Str(child["displayName"])
-		Type := MgType(utl.Str(child["type"]))
-		if Name == "Access to Azure Active Directory" && Type == "Subscription" {
-			continue // Skip legacy subscriptions. We don't care
+// Recursively prints children management groups subscriptions
+func PrintMgmtGroupChildren(indent int, children []interface{}) {
+	mgmtType := map[string]string{
+		"Microsoft.Management/managementGroups":               "(Management Group)",
+		"Microsoft.Management/managementGroups/subscriptions": "(Subscription)",
+		"/subscriptions": "(Subscription)",
+	}
+
+	for _, item := range children {
+		child := item.(map[string]interface{})
+		displayName := utl.Str(child["displayName"])
+		Type := mgmtType[utl.Str(child["type"])]
+		if displayName == "Access to Azure Active Directory" && Type == "(Subscription)" {
+			continue // Ignore legacy subscriptions
 		}
 		fmt.Printf("%*s", indent, " ") // Space padded indent
-		padding := 38 - indent
+		padding := 44 - indent
 		if padding < 12 {
 			padding = 12
 		}
-		colorName := utl.Blu(utl.PostSpc(Name, padding))
-		childName := utl.Gre(utl.PostSpc(utl.Str(child["name"]), 38))
-		fmt.Printf("%s%s%s\n", colorName, childName, utl.Gre(Type))
+		cDisplayName := utl.Blu(utl.PostSpc(displayName, padding))
+		cName := utl.Gre(utl.PostSpc(utl.Str(child["name"]), 38))
+		fmt.Printf("%s%s%s\n", cDisplayName, cName, utl.Gre(Type))
 		if child["children"] != nil {
 			descendants := child["children"].([]interface{})
-			PrintMgChildren(indent+4, descendants)
+			PrintMgmtGroupChildren(indent+4, descendants)
 			// Using recursion here to print additional children
 		}
 	}
 }
 
-// Gets current tenant management group tree, and recursively calls function
-// PrintMgChildren() to print the hierarchy
-func PrintMgTree(z *Config) {
+// Prints the current Azure tenant management group tree.
+func PrintAzureMgmtGroupTree(z *Config) {
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups/" + z.TenantId
 	params := map[string]string{
-		"api-version": "2020-05-01", // managementGroups
+		"api-version": "2023-04-01",
 		"$expand":     "children",
 		"$recurse":    "true",
 	}
@@ -145,12 +185,37 @@ func PrintMgTree(z *Config) {
 	if r["properties"] != nil {
 		// Print everything under the hierarchy
 		Prop := r["properties"].(map[string]interface{})
-		name := utl.Blu(utl.PostSpc(utl.Str(Prop["displayName"]), 38))
+		name := utl.Blu(utl.PostSpc(utl.Str(Prop["displayName"]), 44))
 		tenantId := utl.Blu(utl.PostSpc(utl.Str(Prop["tenantId"]), 38))
-		fmt.Printf("%s%s%s\n", name, tenantId, utl.Blu("TENANT"))
+		fmt.Printf("%s%s%s\n", name, tenantId, utl.Blu("(Tenant)"))
 		if Prop["children"] != nil {
 			children := Prop["children"].([]interface{})
-			PrintMgChildren(4, children)
+			PrintMgmtGroupChildren(4, children)
 		}
 	}
+}
+
+// Gets a specific Azure management group by its stand-alone object UUID or name
+func GetAzureMgmtGroupById(id string, z *Config) AzureObject {
+	params := map[string]string{"api-version": "2023-04-01"}
+	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups/" + id
+	r, _, _ := ApiGet(apiUrl, z, params)
+	azObj := AzureObject(r)
+	azObj["maz_from_azure"] = true
+	return azObj
+}
+
+// Returns count of all subscriptions in current Azure tenant
+func CountAzureMgmtGroups(z *Config) int64 {
+	params := map[string]string{"api-version": "2023-04-01"}
+	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
+	r, _, _ := ApiGet(apiUrl, z, params)
+	if r["value"] != nil {
+		rawList, ok := r["value"].([]interface{})
+		if ok {
+			count := len(rawList)
+			return int64(count)
+		}
+	}
+	return 0
 }

@@ -82,8 +82,24 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 		}
 	case "m": // Resource Management Groups
 		trimmed = AzureObject{
-			"id":          obj["id"],
-			"displayName": obj["displayName"],
+			"id":   obj["id"],
+			"name": obj["name"],
+		}
+		// Normalize object by extracting fields from the nested "properties" object
+		if properties, ok := obj["properties"].(map[string]interface{}); ok {
+			trimmed["displayName"] = properties["displayName"]
+			trimmed["tenantId"] = properties["tenantId"]
+			// // OPTIONAL: Keep the same struct as Azure does
+			// trimmed["properties"] = map[string]interface{}{
+			// 	"displayName": properties["displayName"],
+			// 	"tenantId":    properties["tenantId"],
+			// }
+		} else {
+			// Fallback if "properties" is missing or not a map
+			trimmed["displayName"] = nil
+			trimmed["tenantId"] = nil
+			// // OPTIONAL: Keep the same struct as Azure does
+			// trimmed["properties"] = map[string]interface{}{}
 		}
 	case "u": // Directory Users
 		trimmed = AzureObject{

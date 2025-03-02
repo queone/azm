@@ -35,16 +35,16 @@ func UpsertAzObject(force bool, filePath string, z *Config) {
 // 3) Print and prompt for confirmation; 4) Delete or abort
 func DeleteAzObject(force bool, specifier string, z *Config) {
 	if utl.ValidUuid(specifier) {
-		list := FindAzObjectsById(specifier, z) // Get all objects that may match this UUID, hopefully just one
+		list := FindAzureObjectsById(specifier, z) // Get all objects that may match this UUID, hopefully just one
 		if len(list) > 1 {
 			utl.Die("%s\n", utl.Red("UUID collision? Run utility with UUID argument to see the list."))
 		}
 		if len(list) < 1 {
 			utl.Die("Object does not exist.\n")
 		}
-		y := list[0].(map[string]interface{}) // Single out the only object
-		if y != nil && y["mazType"] != nil {
-			t := utl.Str(y["mazType"])
+		y := AzureObject(list[0]) // Cast single object
+		if y != nil && y["maz_type"] != nil {
+			t := utl.Str(y["maz_type"])
 			fqid := utl.Str(y["id"]) // Grab fully qualified object Id
 			PrintObject(t, y, z)
 			if !force {
@@ -116,19 +116,18 @@ func DeleteAzObject(force bool, specifier string, z *Config) {
 	}
 }
 
-// Returns a list of Azure objects that match the given UUID. Note that multiple
-// objects may be returned because:
-// 1. A single appId can be shared by both an application and a service principal.
-// 2. Although unlikely, UUID collisions can occur, resulting in multiple objects
-// with the same UUID.
-// This function only searches for objects of the Azure types supported by the maz package.
-func FindAzObjectsById(id string, z *Config) (list []interface{}) {
+// Returns a list of Azure objects that match the given UUID. Only object types that are
+// supported by the maz package are searched.
+func FindAzureObjectsById(id string, z *Config) (list AzureObjectList) {
+	// Note that multiple objects may be returned because: 1) A single appId can be shared by
+	// both an App and an SP, 2) Although unlikely, UUID collisions can occur, resulting in
+	// multiple objects with the same UUID.
 	list = nil
 	for _, t := range mazTypes {
 		x := GetAzureObjectById(t, id, z)
 		if x != nil && x["id"] != nil { // Valid objects have an 'id' attribute
 			// Found one of these types with this UUID
-			x["mazType"] = t // Extend object with mazType as an ADDITIONAL field
+			x["maz_type"] = t // Extend object with maz_type as an ADDITIONAL field
 			list = append(list, x)
 		}
 	}
@@ -136,7 +135,7 @@ func FindAzObjectsById(id string, z *Config) (list []interface{}) {
 }
 
 // Retrieves Azure object by object ID
-func GetAzureObjectById(t, id string, z *Config) (x map[string]interface{}) {
+func GetAzureObjectById(t, id string, z *Config) (x AzureObject) {
 	switch t {
 	case "d":
 		return GetResRoleDefinitionById(id, z)
@@ -144,6 +143,8 @@ func GetAzureObjectById(t, id string, z *Config) (x map[string]interface{}) {
 		return GetAzRoleAssignmentById(id, z)
 	case "s":
 		return GetAzureSubscriptionById(id, z)
+	case "m":
+		return GetAzureMgmtGroupById(id, z)
 	case "u":
 		return GetObjectFromAzureById(t, id, z)
 	case "g":
@@ -158,16 +159,14 @@ func GetAzureObjectById(t, id string, z *Config) (x map[string]interface{}) {
 	return nil
 }
 
-// Gets all scopes in the Azure tenant RBAC hierarchy: Tenant Root Group and all
+// Gets all scopes in the Azure tenant RBAC hierarchy: Tenant Root Group, all
 // management groups, plus all subscription scopes
 func GetAzRbacScopes(z *Config) (scopes []string) {
+	// Collect all managementGroups and sbuscription scopes
 	scopes = nil
-	managementGroups := GetAzMgGroups(z) // Start by adding all the managementGroups scopes
-	for _, i := range managementGroups {
-		x := i.(map[string]interface{})
-		scopes = append(scopes, utl.Str(x["id"]))
-	}
-	subIds := GetAzureSubscriptionsIds(z) // Now add all the subscription scopes
+	mgmtGroupIds := GetAzureMgmtGroupsIds(z)
+	scopes = append(scopes, mgmtGroupIds...)
+	subIds := GetAzureSubscriptionsIds(z)
 	scopes = append(scopes, subIds...)
 
 	// SCOPES below subscriptions do not appear to be REALLY NEEDED. Most list
@@ -218,8 +217,7 @@ func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList
 	case "s":
 		return GetMatchingAzureSubscriptions(filter, force, z)
 	case "m":
-		fmt.Println("Being added...")
-		// return GetMatchingMgGroups(filter, force, z)
+		return GetMatchingAzureMgmtGroups(filter, force, z)
 	case "u", "g", "ap", "sp", "dr", "da":
 		return GetMatchingDirObjects(t, filter, force, z)
 	}
