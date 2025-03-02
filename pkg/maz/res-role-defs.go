@@ -38,7 +38,7 @@ func PrintRoleDefinition(x map[string]interface{}, z *Config) {
 		fmt.Printf("\n")
 		scopes := xProp["assignableScopes"].([]interface{})
 		if len(scopes) > 0 {
-			subNameMap := GetIdMapSubs(z) // Get all subscription id:name pairs
+			subNameMap := GetAzureSubscriptionsIdMap(z) // Get all subscription id:name pairs
 			for _, i := range scopes {
 				if strings.HasPrefix(i.(string), "/subscriptions") {
 					// Print subscription name as a comment at end of line
@@ -208,10 +208,10 @@ func DeleteAzRoleDefinitionByFqid(fqid string, z *Config) map[string]interface{}
 // Returns id:name map of all RBAC role definitions
 func GetIdMapRoleDefs(z *Config) (nameMap map[string]string) {
 	nameMap = make(map[string]string)
-	roleDefs := GetMatchingRoleDefinitions("", false, z) // false = don't force going to Azure
+	roleDefs := GetMatchingAzRoleDefinitions("", false, z) // false = don't force going to Azure
 	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
-	for _, i := range roleDefs {
-		x := i.(map[string]interface{})
+	for _, x := range roleDefs {
+		//x := i.(AzureObjectList)
 		if x["name"] != nil {
 			xProp := x["properties"].(map[string]interface{})
 			if xProp["roleName"] != nil {
@@ -264,48 +264,75 @@ func RoleDefinitionCountAzure(z *Config) (builtin, custom int64) {
 }
 
 // Gets all role definitions matching on 'filter'. Returns entire list if filter is empty ""
-func GetMatchingRoleDefinitions(filter string, force bool, z *Config) (list []interface{}) {
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_roleDefinitions."+ConstCacheFileExtension)
-	cacheFileAge := utl.FileAge(cacheFile)
-	if utl.IsInternetAvailable() && (force || cacheFileAge == 0 || cacheFileAge > ConstAzCacheFileAgePeriod) {
-		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
-		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
-		// and show progress while doing so (true = verbose below)
-		list = GetAzRoleDefinitions(z, true)
-	} else {
-		// Use local cache for all other conditions
-		list = GetCachedObjects(cacheFile)
+func GetMatchingAzRoleDefinitions(filter string, force bool, z *Config) (list AzureObjectList) {
+	// If the filter is a UUID, we deliberately treat it as an ID and perform a
+	// quick Azure lookup for the specific object.
+	if utl.ValidUuid(filter) {
+		x := GetResRoleDefinitionById(filter, z)
+		if x != nil {
+			// If found, return a list containing just this object.
+			return AzureObjectList{x}
+		}
+		// If not found, then filter will be used below in obj.HasString(filter)
 	}
 
-	if filter == "" {
-		return list
+	// Get current cache, or initialize a new cache for this type
+	cache, err := GetCache("d", z)
+	if err != nil {
+		utl.Die("Error: %s\n", err.Error())
 	}
-	var matchingList []interface{} = nil
-	for _, i := range list { // Parse every object
-		x := i.(map[string]interface{})
-		// Match against relevant strings within roleDefinitions JSON object (Note: Not all attributes are maintained)
-		if utl.StringInJson(x, filter) {
-			matchingList = append(matchingList, x)
+
+	// Return an empty list if cache is nil and internet is not available
+	internetIsAvailable := utl.IsInternetAvailable()
+	if cache == nil && !internetIsAvailable {
+		return AzureObjectList{} // Return empty list
+	}
+
+	// Determine if cache is empty or outdated and needs to be refreshed from Azure
+	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	if internetIsAvailable && cacheNeedsRefreshing {
+		SyncAzRoleDefinitionsToLocalCache(cache, z, true)
+	}
+
+	// Filter the objects based on the provided filter
+	if filter == "" {
+		return cache.data // Return all data if no filter is specified
+	}
+	matchingList := AzureObjectList{} // Initialize an empty list for matching items
+	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	for _, obj := range cache.data {
+		id := obj["id"].(string)
+		if ids.Exists(id) {
+			continue // Skip repeated entries
+		}
+		if obj.HasString(filter) {
+			matchingList.Add(obj) // Add matching object to the list
+			ids.Add(id)           // Mark this ID as seen
 		}
 	}
+
 	return matchingList
 }
 
-// Gets all role definitions in current Azure tenant and save them to local cache file
-// Option to be verbose (true) or quiet (false), since it can take a while.
-// References:
-//
-//	https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
-//	https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/list
-func GetAzRoleDefinitions(z *Config, verbose bool) (list []interface{}) {
-	list = nil                      // We have to zero it out
-	uniqueIds := utl.NewStringSet() // Unique resourceIds (API SPs)
-	k := 1                          // Track number of API calls to provide progress
+// OLD, being replaced by below
+func GetAzRoleDefinitions(z *Config, verbose bool) map[string]interface{} {
+	return nil
+}
+
+// Retrieves all Azure resource role definitions in current tenant and save them to local cache.
+// Note that we are updating the cache via its pointer. Shows progress if verbose == true.
+// Reference:
+// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
+// https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/list
+func SyncAzRoleDefinitionsToLocalCache(cache *Cache, z *Config, verbose bool) {
+	list := NewList()         // Start with a new empty list
+	ids := utl.NewStringSet() // Keep track of unique IDs to eliminate duplicates
+	k := 1                    // Track number of API calls to provide progress
 
 	var mgGroupNameMap, subNameMap map[string]string
 	if verbose {
 		mgGroupNameMap = GetIdMapMgGroups(z)
-		subNameMap = GetIdMapSubs(z)
+		subNameMap = GetAzureSubscriptionsIdMap(z)
 	}
 
 	scopes := GetAzRbacScopes(z)                             // Get all scopes
@@ -319,10 +346,10 @@ func GetAzRoleDefinitions(z *Config, verbose bool) (list []interface{}) {
 			for _, i := range objectsUnderThisScope {
 				x := i.(map[string]interface{})
 				id := utl.Str(x["name"])
-				if uniqueIds.Exists(id) {
+				if ids.Exists(id) {
 					continue // Skip this repeated one. This can happen due to inherited nesting
 				}
-				uniqueIds.Add(id) // Mark this id as seen
+				ids.Add(id) // Mark this id as seen
 				list = append(list, x)
 				count++
 			}
@@ -346,33 +373,10 @@ func GetAzRoleDefinitions(z *Config, verbose bool) (list []interface{}) {
 		fmt.Print(rUp) // Go up to overwrite progress line
 	}
 
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+"_roleDefinitions."+ConstCacheFileExtension)
-	utl.SaveFileJson(list, cacheFile, true) // Update the local cache, true = gzipped
-	return list
-}
-
-// Gets role definition by displayName
-// See https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/list
-func GetAzRoleDefinitionByName(roleName string, z *Config) (y map[string]interface{}) {
-	y = nil
-	scopes := GetAzRbacScopes(z) // Get all scopes
-	params := map[string]string{
-		"api-version": "2022-04-01", // roleDefinitions
-		"$filter":     "roleName eq '" + roleName + "'",
+	// Save the updated cache back to file
+	if err := cache.Save(); err != nil {
+		utl.Die("Error saving updated cache: %s\n", err.Error())
 	}
-	for _, scope := range scopes {
-		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-		r, _, _ := ApiGet(apiUrl, z, params)
-		if r != nil && r["value"] != nil {
-			results := r["value"].([]interface{})
-			if len(results) == 1 {
-				y = results[0].(map[string]interface{}) // Select first, only index entry
-				return y                                // We found it
-			}
-		}
-	}
-	// If above logic ever finds than 1, then we have serious issuses, just nil below
-	return nil
 }
 
 // Gets role definition object if it exists exactly as x object (as per essential attributes).
@@ -422,9 +426,33 @@ func GetAzRoleDefinitionByObject(x map[string]interface{}, z *Config) (y map[str
 	return nil
 }
 
-// Gets role definition by Object Id. Unfortunately we have to iterate
+// Gets role definition by displayName
+// See https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/list
+func GetAzRoleDefinitionByName(roleName string, z *Config) (y map[string]interface{}) {
+	y = nil
+	scopes := GetAzRbacScopes(z) // Get all scopes
+	params := map[string]string{
+		"api-version": "2022-04-01", // roleDefinitions
+		"$filter":     "roleName eq '" + roleName + "'",
+	}
+	for _, scope := range scopes {
+		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
+		r, _, _ := ApiGet(apiUrl, z, params)
+		if r != nil && r["value"] != nil {
+			results := r["value"].([]interface{})
+			if len(results) == 1 {
+				y = results[0].(map[string]interface{}) // Select first, only index entry
+				return y                                // We found it
+			}
+		}
+	}
+	// If above logic ever finds more than 1, then we have serious issuses, just nil below
+	return nil
+}
+
+// Gets resource role definition by Object Id. Unfortunately we have to iterate
 // through the entire tenant scope hierarchy, which can take time.
-func GetAzRoleDefinitionById(id string, z *Config) map[string]interface{} {
+func GetResRoleDefinitionById(id string, z *Config) map[string]interface{} {
 	scopes := GetAzRbacScopes(z)
 	params := map[string]string{"api-version": "2022-04-01"} // roleDefinitions
 	for _, scope := range scopes {

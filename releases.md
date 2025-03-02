@@ -1,7 +1,16 @@
 ## Releases
 
+### v0.1.4
+Release Date: 2025-mar-02
+
+- **res-subs.go**: Migrated resource subscriptions -s option and object handling to new Cache type model
+- Renamed GetMatchingObjects() to GetMatchingDirObjects() to indicate it's only for Directory, MS Graph objects
+- Renamed GetObjects() to GetMatchingObjects() to be the generic object matching and querying function, to operate on **any** MS Graph and Azure ARM object supported by this library
+
+---
+
 ### v0.1.3
-Release Date: 2025-mar-??
+Release Date: 2025-mar-01
 
 - Improved `build` script
 - Renamed all Api*Debug() functions to Api*Verbose()

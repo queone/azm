@@ -80,7 +80,7 @@ func PrintGroup(x AzureObject, z *Config) {
 
 // Lists all cached Privileged Access Groups (PAGs)
 func PrintPags(z *Config) {
-	groups := GetMatchingObjects("g", "", false, z) // Get all groups, false = don't hit Azure
+	groups := GetMatchingDirObjects("g", "", false, z) // false = get from cache, not Azure
 	for _, x := range groups {
 		if utl.Bool(x["isAssignableToRole"]) {
 			PrintTersely("g", x)
@@ -89,7 +89,7 @@ func PrintPags(z *Config) {
 }
 
 func PrintCountStatusGroups(z *Config) {
-	c1Width := 50 // Column 1 width
+	c1Width := 44 // Column 1 width
 	c2Width := 10 // Column 2 width
 	c3Width := 10 // Column 3 width
 	fmt.Print(utl.Whi2(utl.PostSpc("OBJECTS", c1Width)+

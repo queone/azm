@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.1.3"
+	program_version = "0.1.4"
 )
 
 func printUsage(extended bool) {
@@ -130,7 +130,7 @@ func main() {
 		case "-uuid":
 			utl.Die("%s\n", uuid.New().String())
 		}
-		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens to be ready
+		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens
 		switch arg1 {
 		case "-tx":
 			maz.RemoveCacheFile("t", z)
@@ -144,46 +144,28 @@ func main() {
 			}
 
 		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
-		case "-dx", "-ax", "-sx", "-mx":
+		case "-dx", "-ax", "-mx":
 			t := arg1[1:] // Single out the object type
 			maz.RemoveCacheFile(t, z)
-		case "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
+		case "-sx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
 			t := arg1[1 : len(arg1)-1]
 			maz.RemoveCacheFiles(t, z)
 
-		// Migrating from GetObjects() ==> to GetMatchingObjects()
-		case "-d", "-a", "-s", "-m", "-dj", "-aj", "-sj", "-mj":
-			//utl.Die("%s\n", "Not yet supported")  // TEMPORARY
+		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
+			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			t := arg1[1:]                         // Remove the leading '-'
 			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
 			if printJson {
 				t = t[:len(t)-1] // Remove the 'j' from t
 			}
-			// Get all from cache. false = don't go to Azure
-			all := maz.GetObjects(t, "", false, z)
+			allObjects := maz.GetMatchingObjects(t, "", false, z) // false = get from cache, not Azure
 			if printJson {
-				utl.PrintJsonColor(all) // Print entire set in JSON
+				utl.PrintJsonColor(allObjects) // Print entire set in JSON
 			} else {
-				for _, i := range all { // Print entire set tersely
+				for _, i := range allObjects { // Print entire set tersely
 					maz.PrintTersely(t, i)
 				}
 			}
-		case "-u", "-g", "-ap", "-sp", "-dr", "-da", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
-			t := arg1[1:]                         // Remove the leading '-'
-			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
-			if printJson {
-				t = t[:len(t)-1] // Remove the 'j' from t
-			}
-			// Get all from cache. false = don't go to Azure
-			all := maz.GetMatchingObjects(t, "", false, z)
-			if printJson {
-				utl.PrintJsonColor(all) // Print entire set in JSON
-			} else {
-				for _, i := range all { // Print entire set tersely
-					maz.PrintTersely(t, i)
-				}
-			}
-
 		case "-kd", "-ka", "-kg", "-kap":
 			t := arg1[2:]
 			maz.CreateSkeletonFile(t)
@@ -214,95 +196,46 @@ func main() {
 		case "-tc":
 			maz.DecodeJwtToken(arg2)
 
-		// TERSE: Migrating from GetObjects() ==> to GetMatchingObjects()
-		case "-d", "-a", "-s", "-m", "-dj", "-aj", "-sj", "-mj":
-			utl.Die("%s\n", "Not yet supported")  // TEMPORARY
+		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
+			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			t := arg1[1:]                         // Remove the leading '-'
 			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
 			if printJson {
 				t = t[:len(t)-1] // Remove the 'j' from t
 			}
-
-			if utl.ValidUuid(arg2) {
-				// If arg2 (FILTER) is a UUID then search by ID and print if found
-				x := maz.GetObjectFromAzureById(t, arg2, z) // Search by id
-				if x != nil {
-					if printJson {
-						utl.PrintJsonColor(x) // Print single object JSONly
-					} else {
-						maz.PrintObject(t, x, z) // Print single object in regular format
+			matchingObjects := maz.GetMatchingObjects(t, arg2, false, z) // false = get from cache, not Azure
+			if len(matchingObjects) > 1 {
+				if printJson {
+					utl.PrintJsonColor(matchingObjects) // Print macthing list in JSON format
+				} else {
+					for _, i := range matchingObjects {
+						maz.PrintTersely(t, i) // Print list tersely
 					}
 				}
-			} else {
-				// Get matching from cache. false = don't go to Azure
-				matchingObjects := maz.GetObjects(t, arg2, false, z)
-				if len(matchingObjects) > 1 {
-					if printJson {
-						utl.PrintJsonColor(matchingObjects) // Print list JSONly
-					} else {
-						for _, i := range matchingObjects {
-							maz.PrintTersely(t, i) // Print list tersely
-						}
+			} else if len(matchingObjects) == 1 {
+				singleObj := matchingObjects[0]
+				isFromCache := !utl.Bool(singleObj["maz_from_azure"])
+				if isFromCache {
+					// If object is from cache, then get the full version from Azure
+					id := singleObj["id"].(string)
+					if t == "s" {
+						// For subscriptions, use 'subscriptionId' (UUID) instead of the fully-qualified 'id'
+						id = singleObj["subscriptionId"].(string)
 					}
-				} else if len(matchingObjects) == 1 {
-					// It's a single object, let's get the latest one from Azure
-					obj := matchingObjects[0].(maz.AzureObject)
-					id := utl.Str(obj["id"])
-					x := maz.GetObjectFromAzureById(t, id, z)
-					if printJson {
-						utl.PrintJsonColor(x) // Print single object JSONly
-					} else {
-						maz.PrintObject(t, x, z) // Print single object in regular format
-					}
+					singleObj = maz.GetAzureObjectById(t, id, z)
+				}
+				if printJson {
+					utl.PrintJsonColor(singleObj) // Print in JSON format
+				} else {
+					maz.PrintObject(t, singleObj, z) // Print in regular format
 				}
 			}
-		case "-u", "-g", "-ap", "-sp", "-dr", "-da", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj": // JSON format printing
-			t := arg1[1:]                         // Remove the leading '-'
-			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
-			if printJson {
-				t = t[:len(t)-1] // Remove the 'j' from t
-			}
-
-			if utl.ValidUuid(arg2) {
-				// If arg2 (FILTER) is a UUID then search by ID and print if found
-				x := maz.GetObjectFromAzureById(t, arg2, z) // Search by id
-				if x != nil {
-					if printJson {
-						utl.PrintJsonColor(x) // Print single object JSONly
-					} else {
-						maz.PrintObject(t, x, z) // Print single object in regular format
-					}
-				}
-			} else {
-				// Get matching from cache. false = don't go to Azure
-				matchingObjects := maz.GetMatchingObjects(t, arg2, false, z)
-				if len(matchingObjects) > 1 {
-					if printJson {
-						utl.PrintJsonColor(matchingObjects) // Print list JSONly
-					} else {
-						for _, i := range matchingObjects {
-							maz.PrintTersely(t, i) // Print list tersely
-						}
-					}
-				} else if len(matchingObjects) == 1 {
-					// It's a single object, let's get the latest one from Azure
-					obj := matchingObjects[0]
-					x := maz.GetObjectFromAzureById(t, obj["id"].(string), z)
-					if printJson {
-						utl.PrintJsonColor(x) // Print single object JSONly
-					} else {
-						maz.PrintObject(t, x, z) // Print single object in regular format
-					}
-				}
-			}
-
 		case "-rm", "-rmf":
 			force := false
 			if arg1 == "-rmf" {
 				force = true
 			}
 			maz.DeleteAppSpByIdentifier(force, arg2, z)
-			// maz.DeleteAzObject(force, arg2, z) // MIGRATION
 		case "-up", "-upf":
 			force := false
 			if arg1 == "-upf" {
@@ -313,7 +246,6 @@ func main() {
 			} else {
 				maz.CreateAppSpByName(force, arg2, z)
 			}
-			//maz.UpsertAzObject(force, arg2, z) // MIGRATION
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
 		default:

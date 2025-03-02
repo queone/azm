@@ -37,7 +37,7 @@ func ObjectCountAzure(t string, z *Config) int64 {
 func GetDirObjectIdMap(t string, z *Config) map[string]string {
 	nameMap := make(map[string]string)
 	// Fetch objects of the given type, using the cache for speed
-	objects := GetMatchingObjects(t, "", false, z) // false = don't go to Azure
+	objects := GetMatchingDirObjects(t, "", false, z) // false = get from cache, not Azure
 	for _, x := range objects {
 		// Safely extract "id" and "displayName" with type assertions
 		id, okID := x["id"].(string)
@@ -85,21 +85,22 @@ func GetObjectFromAzureById(t, id string, z *Config) AzureObject {
 		return nil // No valid object found after all attempts
 	}
 
-	x := AzureObject(obj) // Cast the result to AzureObject
+	azObj := AzureObject(obj)      // Cast the result to AzureObject
+	azObj["maz_from_azure"] = true // Mark it as being from Azure
 
 	// Update the object in the local cache
 	cache, err := GetCache(t, z)
 	if err != nil {
 		fmt.Printf("Warning: Failed to load cache for type '%s': %v\n", t, err)
-		return x // Return the fetched object even if cache update fails
+		return azObj // Return the fetched object even if cache update fails
 	}
 
-	cache.Upsert(x.TrimForCache(t)) // Add or update the object in the cache
+	cache.Upsert(azObj.TrimForCache(t)) // Add or update the object in the cache
 	if err := cache.Save(); err != nil {
 		fmt.Printf("Warning: Failed to save updated cache for type '%s': %v\n", t, err)
 	}
 
-	return x // Return the found object or nil
+	return azObj // Return the found object or nil
 }
 
 // Fetches objects of the given type from Azure by displayName. It returns a list of
@@ -163,7 +164,18 @@ func PreFetchAzureObject(t, identifier string, z *Config) (x AzureObject) {
 }
 
 // Gets all objects of given type, matching on 'filter'. Returns the entire list if filter is empty "".
-func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList {
+func GetMatchingDirObjects(t, filter string, force bool, z *Config) AzureObjectList {
+	// If the filter is a UUID, we deliberately treat it as an ID and perform a
+	// quick Azure lookup for the specific object.
+	if utl.ValidUuid(filter) {
+		x := GetObjectFromAzureById(t, filter, z)
+		if x != nil {
+			// If found, return a list containing just this object.
+			return AzureObjectList{x}
+		}
+		// If not found, then filter will be used below in obj.HasString()
+	}
+
 	// Get current cache data, or initialize a new cache for this type
 	cache, err := GetCache(t, z)
 	if err != nil {
@@ -179,7 +191,7 @@ func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		SyncDirObjectsWithAzure(t, cache, z, true) // Call Azure to refresh cache
+		RefreshLocalCacheWithAzure(t, cache, z, true) // Call Azure to refresh cache
 	}
 
 	// Filter the objects based on the provided filter
@@ -193,7 +205,6 @@ func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList
 		if ids.Exists(id) {
 			continue // Skip repeated entries
 		}
-
 		if obj.HasString(filter) {
 			matchingList.Add(obj) // Add matching object to the list
 			ids.Add(id)           // Mark this ID as seen
@@ -204,8 +215,8 @@ func GetMatchingObjects(t, filter string, force bool, z *Config) AzureObjectList
 }
 
 // Retrieves all directory objects of given type from Azure and syncs them to local cache.
-// Shows progress if verbose = true.
-func SyncDirObjectsWithAzure(t string, cache *Cache, z *Config, verbose bool) {
+// Note that we are updating the cache via its pointer. Shows progress if verbose = true.
+func RefreshLocalCacheWithAzure(t string, cache *Cache, z *Config, verbose bool) {
 	// Setup REST API URL for the specific type
 	apiUrl := ConstMgUrl + ApiEndpoint[t] // e.g., 'https://graph.microsoft.com/v1.0/groups'
 
