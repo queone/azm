@@ -235,7 +235,7 @@ func GetAzRoleAssignments(z *Config, verbose bool) (list []interface{}) {
 
 	var mgGroupNameMap, subNameMap map[string]string
 	if verbose {
-		mgGroupNameMap = GetIdMapMgGroups(z)
+		mgGroupNameMap = GetAzureMgmtGroupsIdMap(z)
 		subNameMap = GetAzureSubscriptionsIdMap(z)
 	}
 

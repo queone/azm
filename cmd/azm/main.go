@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.1.4"
+	program_version = "0.2.0"
 )
 
 func printUsage(extended bool) {
@@ -100,12 +100,9 @@ func printUsage(extended bool) {
 }
 
 func printUnknownCommandError() {
-	helpCmd := utl.Yel(program_name + " -h")
-	args := strings.Join(os.Args[1:], " ")
-	unknownArgs := fmt.Sprintf("Unknown command or arguments: %s\n"+
-		"Run %s to see extended usage.\n", utl.Yel(args), helpCmd)
-	fmt.Print(unknownArgs)
-	os.Exit(1)
+	args := utl.Yel(program_name + " " + strings.Join(os.Args[1:], " "))
+	help := utl.Yel(program_name + " -h")
+	utl.Die("Unsupported command: %s. Run %s for more info.\n", args, help)
 }
 
 func main() {
@@ -144,35 +141,24 @@ func main() {
 			}
 
 		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
-		case "-dx", "-ax", "-mx":
+		case "-ax":
 			t := arg1[1:] // Single out the object type
 			maz.RemoveCacheFile(t, z)
-		case "-sx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
+		case "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
 			t := arg1[1 : len(arg1)-1]
 			maz.RemoveCacheFiles(t, z)
 
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
-			t := arg1[1:]                         // Remove the leading '-'
-			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
-			if printJson {
-				t = t[:len(t)-1] // Remove the 'j' from t
-			}
-			allObjects := maz.GetMatchingObjects(t, "", false, z) // false = get from cache, not Azure
-			if printJson {
-				utl.PrintJsonColor(allObjects) // Print entire set in JSON
-			} else {
-				for _, i := range allObjects { // Print entire set tersely
-					maz.PrintTersely(t, i)
-				}
-			}
+			specifier := arg1[1:] // Remove arg1 leading '-'
+			maz.PrintMatchingObjects(specifier, "", z)
 		case "-kd", "-ka", "-kg", "-kap":
 			t := arg1[2:]
 			maz.CreateSkeletonFile(t)
 		case "-ar":
 			maz.PrintRoleAssignmentReport(z)
 		case "-mt":
-			maz.PrintMgTree(z)
+			maz.PrintAzureMgmtGroupTree(z)
 		case "-pags":
 			maz.PrintPags(z)
 		case "-st":
@@ -198,38 +184,8 @@ func main() {
 
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
-			t := arg1[1:]                         // Remove the leading '-'
-			printJson := arg1[len(arg1)-1] == 'j' // If last char is 'j' JSON output is required
-			if printJson {
-				t = t[:len(t)-1] // Remove the 'j' from t
-			}
-			matchingObjects := maz.GetMatchingObjects(t, arg2, false, z) // false = get from cache, not Azure
-			if len(matchingObjects) > 1 {
-				if printJson {
-					utl.PrintJsonColor(matchingObjects) // Print macthing list in JSON format
-				} else {
-					for _, i := range matchingObjects {
-						maz.PrintTersely(t, i) // Print list tersely
-					}
-				}
-			} else if len(matchingObjects) == 1 {
-				singleObj := matchingObjects[0]
-				isFromCache := !utl.Bool(singleObj["maz_from_azure"])
-				if isFromCache {
-					// If object is from cache, then get the full version from Azure
-					id := singleObj["id"].(string)
-					if t == "s" {
-						// For subscriptions, use 'subscriptionId' (UUID) instead of the fully-qualified 'id'
-						id = singleObj["subscriptionId"].(string)
-					}
-					singleObj = maz.GetAzureObjectById(t, id, z)
-				}
-				if printJson {
-					utl.PrintJsonColor(singleObj) // Print in JSON format
-				} else {
-					maz.PrintObject(t, singleObj, z) // Print in regular format
-				}
-			}
+			specifier := arg1[1:] // Remove the leading '-'
+			maz.PrintMatchingObjects(specifier, arg2, z)
 		case "-rm", "-rmf":
 			force := false
 			if arg1 == "-rmf" {

@@ -1,5 +1,21 @@
 ## Releases
 
+### v0.2.0
+Release Date: 2025-mar-02
+
+- **res-mgmt-groups.go**:
+  - Migrated resource management groups -m option and object handling to new Cache type model
+  - Updated all mgmt group API calls to use api-version=2023-04-01
+  - Renamed PrintMgTree() to PrintAzureMgmtGroupTree()
+- **res-subs.go**:
+  - Updated all subscription API calls to use api-version=2024-11-01
+- **helper.go**:
+  - Renamed FindAzObjectsById() to FindAzureObjectsById()
+- **cmd/azm/main.go**:
+  - Simplified utility by moving code to and calling PrintMatchingObjects()
+                      
+---
+
 ### v0.1.4
 Release Date: 2025-mar-02
 
