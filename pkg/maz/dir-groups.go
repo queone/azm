@@ -49,8 +49,9 @@ func PrintGroup(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/transitiveMemberOf"
 	r, statusCode, _ = ApiGet(apiUrl, z, nil)
 	if statusCode == 200 && r != nil && r["value"] != nil {
-		memberOf := r["value"].([]interface{})
-		PrintMemberOfs("g", memberOf)
+		if memberOf, ok := r["value"].([]interface{}); ok {
+			PrintMemberOfs(memberOf)
+		}
 	}
 
 	// Print members of this group
@@ -182,4 +183,13 @@ func UpsertGroupFromFile(opts *Options, z *Config) {
 		id := utl.Str(x["id"])
 		UpdateDirObject(force, id, obj, "g", z)
 	}
+}
+
+// Helper function to check if the object is a directory group
+func IsDirectoryGroup(obj AzureObject) bool {
+	displayName := utl.Str(obj["displayName"])
+	mailEnabled := utl.Str(obj["mailEnabled"])
+	mailNickname := utl.Str(obj["mailNickname"])
+	securityEnabled := utl.Str(obj["securityEnabled"])
+	return displayName != "" && mailEnabled != "" && mailNickname != "" && securityEnabled != ""
 }

@@ -53,13 +53,13 @@ func GetDirObjectIdMap(t string, z *Config) map[string]string {
 }
 
 // Gets object of given type from Azure by id. Updates entry in local cache.
-func GetObjectFromAzureById(t, id string, z *Config) AzureObject {
-	baseUrl := ConstMgUrl + ApiEndpoint[t]
+func GetObjectFromAzureById(mazType, id string, z *Config) AzureObject {
+	baseUrl := ConstMgUrl + ApiEndpoint[mazType]
 	apiUrl := baseUrl + "/" + id
 	obj, _, _ := ApiGet(apiUrl, z, nil)
 	//CheckApiError(utl.Trace2(1), obj, statusCode, err) // DEBUGGING
 	if obj == nil || obj["id"] == nil {
-		if t == "ap" || t == "sp" {
+		if mazType == Application || mazType == ServicePrincipal {
 			// If 1st search doesn't find the object, then for Apps and SPS,
 			// do a 2nd search based on their Client Id.
 			apiUrl := baseUrl
@@ -89,15 +89,15 @@ func GetObjectFromAzureById(t, id string, z *Config) AzureObject {
 	azObj["maz_from_azure"] = true // Mark it as being from Azure
 
 	// Update the object in the local cache
-	cache, err := GetCache(t, z)
+	cache, err := GetCache(mazType, z)
 	if err != nil {
-		fmt.Printf("Warning: Failed to load cache for type '%s': %v\n", t, err)
+		fmt.Printf("Warning: Failed to load cache for type '%s': %v\n", mazType, err)
 		return azObj // Return the fetched object even if cache update fails
 	}
 
-	cache.Upsert(azObj.TrimForCache(t)) // Add or update the object in the cache
+	cache.Upsert(azObj.TrimForCache(mazType)) // Add or update the object in the cache
 	if err := cache.Save(); err != nil {
-		fmt.Printf("Warning: Failed to save updated cache for type '%s': %v\n", t, err)
+		fmt.Printf("Warning: Failed to save updated cache for type '%s': %v\n", mazType, err)
 	}
 
 	return azObj // Return the found object or nil
@@ -142,18 +142,18 @@ func GetObjectFromAzureByName(t, displayName string, z *Config) AzureObjectList 
 // Retrieves existing object from Azure by its ID or displayName. This is
 // typically used as preprocessing for operations like renaming, deleting,
 // or updating the object.
-func PreFetchAzureObject(t, identifier string, z *Config) (x AzureObject) {
+func PreFetchAzureObject(mazType, identifier string, z *Config) AzureObject {
 	if utl.ValidUuid(identifier) {
-		return GetObjectFromAzureById(t, identifier, z)
+		return GetObjectFromAzureById(mazType, identifier, z)
 	}
 
-	matchingObjects := GetObjectFromAzureByName(t, identifier, z)
+	matchingObjects := GetObjectFromAzureByName(mazType, identifier, z)
 	if len(matchingObjects) == 0 {
 		return nil
 	}
 
 	if len(matchingObjects) > 1 {
-		fmt.Printf("Found multiple '%s' objects with same name '%s'\n", t, utl.Red(identifier))
+		fmt.Printf("Found multiple '%s' objects with same name '%s'\n", mazType, utl.Red(identifier))
 		for _, x := range matchingObjects {
 			fmt.Printf("  %s  %s\n", x["id"], x["displayName"])
 		}
@@ -164,11 +164,11 @@ func PreFetchAzureObject(t, identifier string, z *Config) (x AzureObject) {
 }
 
 // Gets all objects of given type, matching on 'filter'. Returns the entire list if filter is empty "".
-func GetMatchingDirObjects(t, filter string, force bool, z *Config) AzureObjectList {
+func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureObjectList {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
 	// quick Azure lookup for the specific object.
 	if utl.ValidUuid(filter) {
-		x := GetObjectFromAzureById(t, filter, z)
+		x := GetObjectFromAzureById(mazType, filter, z)
 		if x != nil {
 			// If found, return a list containing just this object.
 			return AzureObjectList{x}
@@ -177,9 +177,9 @@ func GetMatchingDirObjects(t, filter string, force bool, z *Config) AzureObjectL
 	}
 
 	// Get current cache data, or initialize a new cache for this type
-	cache, err := GetCache(t, z)
+	cache, err := GetCache(mazType, z)
 	if err != nil {
-		utl.Die("Error: %s\n", err.Error())
+		utl.Die("Error: %v\n", err)
 	}
 
 	// Return an empty list if cache is nil and internet is not available
@@ -191,23 +191,32 @@ func GetMatchingDirObjects(t, filter string, force bool, z *Config) AzureObjectL
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		RefreshLocalCacheWithAzure(t, cache, z, true) // Call Azure to refresh cache
+		RefreshLocalCacheWithAzure(mazType, cache, z, true) // Call Azure to refresh cache
 	}
 
 	// Filter the objects based on the provided filter
 	if filter == "" {
 		return cache.data // Return all data if no filter is specified
 	}
+
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
 	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
-	for _, obj := range cache.data {
-		id := obj["id"].(string)
-		if ids.Exists(id) {
-			continue // Skip repeated entries
+
+	for i := range cache.data {
+		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
+
+		// Extract the ID
+		id := utl.Str((*obj)["id"])
+
+		// Skip if the ID is empty or already seen
+		if id == "" || ids.Exists(id) {
+			continue
 		}
+
+		// Check if the object matches the filter
 		if obj.HasString(filter) {
-			matchingList.Add(obj) // Add matching object to the list
-			ids.Add(id)           // Mark this ID as seen
+			matchingList.Add(*obj) // Add matching object to the list
+			ids.Add(id)            // Mark this ID as seen
 		}
 	}
 
@@ -216,23 +225,21 @@ func GetMatchingDirObjects(t, filter string, force bool, z *Config) AzureObjectL
 
 // Retrieves all directory objects of given type from Azure and syncs them to local cache.
 // Note that we are updating the cache via its pointer. Shows progress if verbose = true.
-func RefreshLocalCacheWithAzure(t string, cache *Cache, z *Config, verbose bool) {
+func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose bool) {
 	// Setup REST API URL for the specific type
-	apiUrl := ConstMgUrl + ApiEndpoint[t] // e.g., 'https://graph.microsoft.com/v1.0/groups'
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] // e.g., 'https://graph.microsoft.com/v1.0/groups'
 
 	// Setup select criteria for each object type: what fields will trigger delta updates upon changing
-	switch t {
-	case "u":
+	switch mazType {
+	case DirectoryUser:
 		apiUrl += "/delta?$select=id,displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
-	case "g":
+	case DirectoryGroup:
 		apiUrl += "/delta?$select=id,displayName,description,isAssignableToRole,createdDateTime&$top=999"
-	case "ap":
+	case Application:
 		apiUrl += "?$select=id,displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
-	case "sp":
+	case ServicePrincipal:
 		apiUrl += "?$select=id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
-	case "dr":
-		//No additional adjustment required
-	case "da":
+	case DirRoleDefinition, DirRoleAssignment:
 		//No additional adjustment required
 	}
 
@@ -264,7 +271,7 @@ func RefreshLocalCacheWithAzure(t string, cache *Cache, z *Config, verbose bool)
 	}
 
 	// Merge the deltaSet with the cache
-	cache.Normalize(t, deltaSet)
+	cache.Normalize(mazType, deltaSet)
 
 	// Save the updated cache back to file
 	if err := cache.Save(); err != nil {
@@ -326,15 +333,16 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 }
 
 // Deletes directory object of given type in Azure, and updates local cache.
-func DeleteDirObjectInAzure(t, id string, z *Config) error {
-	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/" + id
+func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
+	mazTypeName := MazTypeNames[mazType]
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	r, statusCode, _ := ApiDelete(apiUrl, z, nil)
 	if statusCode == 204 {
 		// Also remove from local cache using Cache.Delete
-		cache, err := GetCache(t, z)
+		cache, err := GetCache(mazType, z)
 		if err == nil {
 			if err := cache.Delete(id); err != nil {
-				return fmt.Errorf("failed to delete %s from local cache ", MazObjName[t])
+				return fmt.Errorf("failed to delete %s from local cache ", mazTypeName)
 			}
 		} else {
 			return fmt.Errorf("failed to load cache: %s", err)
@@ -344,54 +352,53 @@ func DeleteDirObjectInAzure(t, id string, z *Config) error {
 		if errDetails, ok := r["error"].(map[string]interface{}); ok {
 			return fmt.Errorf("error: %s", errDetails["message"].(string))
 		}
-		return fmt.Errorf("failed to delete %s", MazObjName[t])
+		return fmt.Errorf("failed to delete %s", mazTypeName)
 	}
 }
 
 // Deletes directory object of given type in Azure, with a confirmation prompt.
-func DeleteDirObject(opts *Options, z *Config) error {
-	force, _ := opts.GetBool("force")
-	id, _ := opts.GetString("id") // Note that id may be a UUID or a displayName
-	t, _ := opts.GetString("t")
+func DeleteDirObject(force bool, id, mazType string, z *Config) error {
+	// Note that 'id' may be a UUID or a displayName
 
-	x := PreFetchAzureObject(t, id, z)
-	if x == nil {
-		return fmt.Errorf("no such %s", MazObjName[t])
+	mazTypeName := MazTypeNames[mazType]
+	obj := PreFetchAzureObject(mazType, id, z)
+	if obj == nil {
+		return fmt.Errorf("no %s with identifier '%s'", mazTypeName, id)
 	}
 
 	// Confirmation prompt
-	PrintObject(t, x, z)
+	PrintObject(mazType, obj, z)
 	if !force {
-		msg := utl.Yel("Delete " + MazObjName[t] + "? y/n ")
+		msg := utl.Yel("Delete " + mazTypeName + "? y/n ")
 		if utl.PromptMsg(msg) != 'y' {
 			return fmt.Errorf("operation aborted by user")
 		}
 	}
 
 	// Delete object in Azure
-	id = x["id"].(string)
-	if err := DeleteDirObjectInAzure(t, id, z); err != nil {
+	id = utl.Str(obj["id"])
+	if err := DeleteDirObjectInAzure(mazType, id, z); err != nil {
 		return fmt.Errorf("%s", err.Error())
 	}
 	return nil
 }
 
 // Creates directory object of given type in Azure, and updates local cache.
-func CreateDirObjectInAzure(t string, obj AzureObject, z *Config) (AzureObject, error) {
+func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureObject, error) {
 	// Creates object in Azure using obj as payload
-	apiUrl := ConstMgUrl + ApiEndpoint[t]
-	r, statusCode, _ := ApiPost(apiUrl, z, jsonT(obj), nil)
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
+	r, statusCode, _ := ApiPost(apiUrl, z, JsonObject(obj), nil)
 	if statusCode == 201 {
 		azObj := AzureObject(r) // Newly created object
 
 		// Add object to local cache
-		cache, err := GetCache(t, z)
+		cache, err := GetCache(mazType, z)
 		if err != nil {
 			fmt.Printf("Warning: Failed to load cache: %v\n", err)
 			// TODO: Should we panic here instead of warn?
 		}
 		if cache != nil {
-			cache.Upsert(azObj.TrimForCache(t))
+			cache.Upsert(azObj.TrimForCache(mazType))
 			if err := cache.Save(); err != nil {
 				fmt.Printf("Warning: Failed to save updated cache: %v\n", err)
 				// TODO: Should we panic here instead of warn?
@@ -402,17 +409,18 @@ func CreateDirObjectInAzure(t string, obj AzureObject, z *Config) (AzureObject, 
 		if errDetails, ok := r["error"].(map[string]interface{}); ok {
 			return nil, fmt.Errorf("error: %s", errDetails["message"].(string))
 		}
-		return nil, fmt.Errorf("error: failed to create %s", MazObjName[t])
+		return nil, fmt.Errorf("error: failed to create %s", MazTypeNames[mazType])
 	}
 }
 
 // Creates directory object of given type in Azure, with a confirmation prompt.
-func CreateDirObject(force bool, obj AzureObject, t string, z *Config) (AzureObject, error) {
+func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) (AzureObject, error) {
 	// Present confirmation prompt if force isn't set
-	fmt.Printf("%s\n", utl.Yel("Creating new "+MazObjName[t]+" with below attributes:"))
+	mazTypeName := MazTypeNames[mazType]
+	fmt.Printf("%s\n", utl.Yel("Creating new "+mazTypeName+" with below attributes:"))
 	utl.PrintYamlColor(obj)
 	if !force {
-		msg := utl.Yel("Create " + MazObjName[t] + "? y/n ")
+		msg := utl.Yel("Create " + mazTypeName + "? y/n ")
 		if utl.PromptMsg(msg) != 'y' {
 			return nil, fmt.Errorf("operation aborted by user")
 		}
@@ -421,7 +429,7 @@ func CreateDirObject(force bool, obj AzureObject, t string, z *Config) (AzureObj
 	// Create the object in Azure
 	var azObj AzureObject
 	var err error
-	if azObj, err = CreateDirObjectInAzure(t, obj, z); err != nil {
+	if azObj, err = CreateDirObjectInAzure(mazType, obj, z); err != nil {
 		return nil, fmt.Errorf("%s", err.Error())
 	}
 
@@ -429,30 +437,31 @@ func CreateDirObject(force bool, obj AzureObject, t string, z *Config) (AzureObj
 }
 
 // Updates directory object of given type in Azure, and updates local cache.
-func UpdateDirObjectInAzure(t, id string, obj AzureObject, z *Config) error {
-	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/" + id
-	r, statusCode, _ := ApiPatch(apiUrl, z, jsonT(obj), nil)
+func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) error {
+	mazTypeName := MazTypeNames[mazType]
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
+	r, statusCode, _ := ApiPatch(apiUrl, z, JsonObject(obj), nil)
 	if statusCode != 204 {
 		if err, ok := r["error"].(map[string]interface{}); ok {
 			return fmt.Errorf("error: %s", err["message"].(string))
 		}
-		return fmt.Errorf("error: failed to update %s %s in Azure", MazObjName[t], id)
+		return fmt.Errorf("error: failed to update %s %s in Azure", mazTypeName, id)
 	}
 
 	// Retrieve recently updated object
 	r, statusCode, err := ApiGet(apiUrl, z, nil)
 	if r == nil || r["id"] == nil {
 		return fmt.Errorf("http %d error: failed to retrieve newly created %s %s from Azure: %s",
-			statusCode, MazObjName[t], id, err.Error())
+			statusCode, mazTypeName, id, err.Error())
 	}
 
 	// Also update the local cache
 	azObj := AzureObject(r) // Cast into standard AzureObject type
-	cache, err := GetCache(t, z)
+	cache, err := GetCache(mazType, z)
 	if err != nil {
 		fmt.Printf("Warning: Failed to load cache: %v\n", err) // TODO: Panic instead of warn here?
 	}
-	if err := cache.Upsert(azObj.TrimForCache(t)); err != nil {
+	if err := cache.Upsert(azObj.TrimForCache(mazType)); err != nil {
 		fmt.Printf("Warning: Failed to upsert object in cache: %v\n", err) // TODO: Panic instead of warn here?
 	}
 
@@ -460,19 +469,21 @@ func UpdateDirObjectInAzure(t, id string, obj AzureObject, z *Config) error {
 }
 
 // Updates directory object of given type in Azure, with a confirmation prompt.
-func UpdateDirObject(force bool, id string, obj AzureObject, t string, z *Config) {
+func UpdateDirObject(force bool, id string, obj AzureObject, mazType string, z *Config) {
+	mazTypeName := MazTypeNames[mazType]
+
 	// Present confirmation prompt if force isn't set
-	fmt.Printf("%s\n", utl.Yel("Update "+MazObjName[t]+" with below attributes:"))
+	fmt.Printf("%s\n", utl.Yel("Update "+mazTypeName+" with below attributes:"))
 	utl.PrintYamlColor(obj)
 	if !force {
-		msg := utl.Yel("Update " + MazObjName[t] + "? y/n ")
+		msg := utl.Yel("Update " + mazTypeName + "? y/n ")
 		if utl.PromptMsg(msg) != 'y' {
 			utl.Die("Aborted.\n")
 		}
 	}
 
 	// Update the object in Azure
-	if err := UpdateDirObjectInAzure(t, id, obj, z); err != nil {
+	if err := UpdateDirObjectInAzure(mazType, id, obj, z); err != nil {
 		utl.Die("%s", err.Error())
 	}
 }
@@ -482,11 +493,13 @@ func RenameDirObject(opts *Options, z *Config) {
 	force, _ := opts.GetBool("force")
 	from, _ := opts.GetString("from") // Can be ID or displayName
 	newName, _ := opts.GetString("newName")
-	t, _ := opts.GetString("t")
+	mazType, _ := opts.GetString("t")
 
-	x := PreFetchAzureObject(t, from, z)
+	mazTypeName := MazTypeNames[mazType]
+
+	x := PreFetchAzureObject(mazType, from, z)
 	if x == nil {
-		utl.Die("No such %s\n", MazObjName[t])
+		utl.Die("No such %s\n", mazTypeName)
 	}
 
 	id := x["id"].(string)
@@ -494,7 +507,7 @@ func RenameDirObject(opts *Options, z *Config) {
 	// Confirmation prompt
 	if !force {
 		oldName := x["displayName"].(string)
-		msg := utl.Yel("Rename "+MazObjName[t]+" "+id+"\n  from \"") + utl.Blu(oldName) +
+		msg := utl.Yel("Rename "+mazTypeName+" "+id+"\n  from \"") + utl.Blu(oldName) +
 			utl.Yel("\"\n    to \"") + utl.Blu(newName) + utl.Yel("\"\n? y/n ")
 		if utl.PromptMsg(msg) != 'y' {
 			utl.Die("Aborted.\n")
@@ -504,24 +517,24 @@ func RenameDirObject(opts *Options, z *Config) {
 	// Update the object in Azure
 	obj := AzureObject{"displayName": newName}
 	// The obj payload only requires the displayName
-	if err := UpdateDirObjectInAzure(t, id, obj, z); err != nil {
+	if err := UpdateDirObjectInAzure(mazType, id, obj, z); err != nil {
 		utl.Die("%s", err.Error())
 	}
 }
 
 // Adds a new secret to the given App or SP
-func AddAppSpSecret(t, id, displayName, expiry string, z *Config) {
-	if t != "ap" && t != "sp" {
+func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
+	if mazType != Application && mazType != ServicePrincipal {
 		utl.Die("Error: Secrets can only be added to an App or SP object.\n")
 	}
-	x := GetObjectFromAzureById(t, id, z)
+	x := GetObjectFromAzureById(mazType, id, z)
 	if x == nil {
-		utl.Die("No %s with that ID.\n", MazObjName[t])
+		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
 	}
 
 	// Check if a password with the same displayName already exists
 	object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
-	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/" + object_id + "/passwordCredentials"
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/passwordCredentials"
 	r, statusCode, _ := ApiGet(apiUrl, z, nil)
 	if statusCode == 200 {
 		passwordCredentials := r["value"].([]interface{})
@@ -562,10 +575,10 @@ func AddAppSpSecret(t, id, displayName, expiry string, z *Config) {
 			"endDateTime": endDateTime,
 		},
 	}
-	apiUrl = ConstMgUrl + ApiEndpoint[t] + "/" + object_id + "/addPassword"
-	r, statusCode, _ = ApiPost(apiUrl, z, jsonT(payload), nil)
+	apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/addPassword"
+	r, statusCode, _ = ApiPost(apiUrl, z, JsonObject(payload), nil)
 	if statusCode == 200 {
-		if t == "ap" {
+		if mazType == Application {
 			fmt.Printf("%s: %s\n", utl.Blu("app_object_id"), utl.Gre(object_id))
 		} else {
 			fmt.Printf("%s: %s\n", utl.Blu("sp_object_id"), utl.Gre(object_id))
@@ -581,14 +594,14 @@ func AddAppSpSecret(t, id, displayName, expiry string, z *Config) {
 }
 
 // Removes a secret from the given App or SP object
-func RemoveAppSpSecret(t, id, keyId string, force bool, z *Config) {
+func RemoveAppSpSecret(mazType, id, keyId string, force bool, z *Config) {
 	// TODO: Needs a prompt/force option
-	if t != "ap" && t != "sp" {
+	if mazType != Application && mazType != ServicePrincipal {
 		utl.Die("Error: Secrets can only be removed from an App or SP object.\n")
 	}
-	x := GetObjectFromAzureById(t, id, z)
+	x := GetObjectFromAzureById(mazType, id, z)
 	if x == nil {
-		utl.Die("No %s with that ID.\n", MazObjName[t])
+		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
 	}
 	if !utl.ValidUuid(keyId) {
 		utl.Die("Secret ID is not a valid UUID.\n")
@@ -632,8 +645,8 @@ func RemoveAppSpSecret(t, id, keyId string, force bool, z *Config) {
 	if utl.PromptMsg(utl.Yel("DELETE above? y/n ")) == 'y' {
 		payload := AzureObject{"keyId": keyId}
 		object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
-		apiUrl := ConstMgUrl + ApiEndpoint[t] + "/" + object_id + "/removePassword"
-		r, statusCode, _ := ApiPost(apiUrl, z, jsonT(payload), nil)
+		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/removePassword"
+		r, statusCode, _ := ApiPost(apiUrl, z, JsonObject(payload), nil)
 		if statusCode == 204 {
 			utl.Die("Successfully deleted secret.\n")
 		} else {

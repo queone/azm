@@ -53,15 +53,16 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("s", z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureSubscriptions(z), c3Width)) + "\n"
 
-	builtinLocal, customLocal := RoleDefinitionCountLocal(z)
-	builtinAzure, customAzure := RoleDefinitionCountAzure(z)
-	status += utl.Blu(utl.PostSpc("Resource Role Definitions (built-in)", c1Width))
+	customLocal, builtinLocal := CountRbacDefinitions(false, z) // false = get from cache, not Azure
+	customAzure, builtinAzure := CountRbacDefinitions(true, z)  // true = get from Azure, not cache
+	status += utl.Blu(utl.PostSpc("Resource RBAC Definitions (built-in)", c1Width))
 	status += utl.Gre(utl.PreSpc(builtinLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(builtinAzure, c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Resource Role Definitions (custom)", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource RBAC Definitions (custom)", c1Width))
 	status += utl.Gre(utl.PreSpc(customLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(customAzure, c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Resource Role Assignments", c1Width))
+
+	status += utl.Blu(utl.PostSpc("Resource RBAC Assignments", c1Width))
 	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountLocal(z), c2Width))
 	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), c3Width)) + "\n"
 
@@ -85,13 +86,13 @@ func PrintCountStatusAppsAndSps(z *Config) {
 }
 
 // Prints this single object of type 't' tersely, with minimal attributes.
-func PrintTersely(t string, object interface{}) {
-	switch t {
-	case "d":
-		x := object.(map[string]interface{}) // Assert as JSON object
+func PrintTersely(mazType string, object interface{}) {
+	switch mazType {
+	case RbacDefinition:
+		x := object.(AzureObject)
 		xProp := x["properties"].(map[string]interface{})
 		fmt.Printf("%s  %-60s  %s\n", utl.Str(x["name"]), utl.Str(xProp["roleName"]), utl.Str(xProp["type"]))
-	case "a":
+	case RbacAssignment:
 		x := object.(map[string]interface{}) // Assert as JSON object
 		xProp := x["properties"].(map[string]interface{})
 		rdId := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/")
@@ -99,10 +100,10 @@ func PrintTersely(t string, object interface{}) {
 		principalType := utl.Str(xProp["principalType"])
 		scope := utl.Str(xProp["scope"])
 		fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(x["name"]), rdId, principalId, "("+principalType+")", scope)
-	case "s":
+	case Subscription:
 		x := object.(AzureObject)
 		fmt.Printf("%s  %-10s  %s\n", utl.Str(x["subscriptionId"]), utl.Str(x["state"]), utl.Str(x["displayName"]))
-	case "m":
+	case ManagementGroup:
 		x := object.(AzureObject)
 		displayName := utl.Str(x["displayName"])
 		// REVIEW
@@ -112,18 +113,18 @@ func PrintTersely(t string, object interface{}) {
 			displayName = utl.Str(xProp["displayName"])
 		}
 		fmt.Printf("%-38s  %s\n", utl.Str(x["name"]), displayName)
-	case "u":
+	case DirectoryUser:
 		x := object.(AzureObject)
 		upn := utl.Str(x["userPrincipalName"])
 		onPremName := utl.Str(x["onPremisesSamAccountName"])
 		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(x["id"]), upn, onPremName, utl.Str(x["displayName"]))
-	case "g":
+	case DirectoryGroup:
 		x := object.(AzureObject)
 		fmt.Printf("%s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]))
-	case "sp", "ap":
+	case Application, ServicePrincipal:
 		x := object.(AzureObject)
 		fmt.Printf("%s  %-66s %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), utl.Str(x["appId"]))
-	case "dr":
+	case DirRoleDefinition:
 		x := object.(AzureObject)
 		builtIn := "Custom"
 		if utl.Str(x["isBuiltIn"]) == "true" {
@@ -134,7 +135,7 @@ func PrintTersely(t string, object interface{}) {
 			enabled = "Enabled"
 		}
 		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), builtIn, enabled)
-	case "da":
+	case DirRoleAssignment:
 		x := object.(AzureObject)
 		scope := utl.Str(x["directoryScopeId"])
 		principalId := utl.Str(x["principalId"])
@@ -143,9 +144,12 @@ func PrintTersely(t string, object interface{}) {
 	}
 }
 
-// Prints object by given UUID
+// Prints object by given ID
 func PrintObjectById(id string, z *Config) {
-	list := FindAzureObjectsById(id, z) // Search for this UUID under all maz objects types
+	list, err := FindAzureObjectsById(id, z) // Search for this ID under all maz objects types
+	if err != nil {
+		utl.Die("Error: %v\n", err)
+	}
 
 	for _, azObj := range list {
 		mazType := utl.Str(azObj["maz_type"]) // Function FindAzureObjectsById() should have added this field
@@ -171,27 +175,27 @@ func PrintObjectById(id string, z *Config) {
 }
 
 // Generic print object function
-func PrintObject(t string, x AzureObject, z *Config) {
-	switch t {
-	case "d":
-		PrintRoleDefinition(x, z)
-	case "a":
-		PrintRoleAssignment(x, z)
-	case "s":
+func PrintObject(mazType string, x AzureObject, z *Config) {
+	switch mazType {
+	case RbacDefinition:
+		PrintRbacDefinition(x, z)
+	case RbacAssignment:
+		PrintRbacAssignment(x, z)
+	case Subscription:
 		PrintSubscription(x)
-	case "m":
+	case ManagementGroup:
 		PrintMgmtGroup(x)
-	case "u":
+	case DirectoryUser:
 		PrintUser(x, z)
-	case "g":
+	case DirectoryGroup:
 		PrintGroup(x, z)
-	case "sp":
-		PrintSp(x, z)
-	case "ap":
+	case Application:
 		PrintApp(x, z)
-	case "dr":
+	case ServicePrincipal:
+		PrintSp(x, z)
+	case DirRoleDefinition:
 		PrintDirRoleDefinition(x, z)
-	case "da":
+	case DirRoleAssignment:
 		PrintDirRoleAssignment(x, z)
 	}
 }
@@ -271,18 +275,19 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 }
 
 // Prints all memberOf entries
-func PrintMemberOfs(t string, memberOf []interface{}) {
+func PrintMemberOfs(memberOf []interface{}) {
 	if len(memberOf) < 1 {
 		return
 	}
 	fmt.Printf("%s :\n", utl.Blu("member_of"))
-	for _, i := range memberOf {
-		x := i.(map[string]interface{}) // Assert as JSON object type
-		Type := utl.LastElem(utl.Str(x["@odata.type"]), ".")
-		Type = utl.Gre(Type)
-		iId := utl.Gre(utl.Str(x["id"]))
-		name := utl.Gre(utl.Str(x["displayName"]))
-		fmt.Printf("  %-50s %s (%s)\n", name, iId, Type)
+	for _, item := range memberOf {
+		if obj, ok := item.(map[string]interface{}); ok {
+			Type := utl.LastElem(utl.Str(obj["@odata.type"]), ".")
+			Type = utl.Gre(Type)
+			id := utl.Gre(utl.Str(obj["id"]))
+			name := utl.Gre(utl.Str(obj["displayName"]))
+			fmt.Printf("  %-50s %s (%s)\n", name, id, Type)
+		}
 	}
 }
 
@@ -293,7 +298,11 @@ func PrintSecretList(secretsList []interface{}) {
 	}
 	fmt.Println(utl.Blu("secrets") + ":")
 	for _, i := range secretsList {
-		pw := i.(map[string]interface{})
+		pw, ok := i.(map[string]interface{})
+		if !ok {
+			fmt.Printf("%s\n", utl.Yel("Error asserting this pwd map"))
+			continue
+		}
 		cId := utl.Str(pw["keyId"])
 		cName := utl.Str(pw["displayName"])
 		cHint := utl.Str(pw["hint"]) + "********"
@@ -301,18 +310,18 @@ func PrintSecretList(secretsList []interface{}) {
 		// Reformat date strings for better readability
 		cStart, err := utl.ConvertDateFormat(utl.Str(pw["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting startDateTime format"))
 		}
 		cExpiry, err := utl.ConvertDateFormat(utl.Str(pw["endDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime format"))
 		}
 
 		// Check if expiring soon
 		now := time.Now().Unix()
 		expiry, err := utl.DateStringToEpocInt64(utl.Str(pw["endDateTime"]), time.RFC3339Nano)
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime epoc string"))
 		}
 		daysDiff := (expiry - now) / 86400
 		if daysDiff <= 0 {
@@ -341,17 +350,17 @@ func PrintCertificateList(certificates []interface{}) {
 		// Reformat date strings for better readability
 		cStart, err := utl.ConvertDateFormat(utl.Str(a["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting startDateTime format"))
 		}
 		cExpiry, err := utl.ConvertDateFormat(utl.Str(a["endDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime format"))
 		}
 		// Check if expiring soon
 		now := time.Now().Unix()
 		expiry, err := utl.DateStringToEpocInt64(utl.Str(a["endDateTime"]), time.RFC3339Nano)
 		if err != nil {
-			utl.Die("%s %s\n", utl.Trace(), err.Error())
+			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime epoc string"))
 		}
 		daysDiff := (expiry - now) / 86400
 		if daysDiff <= 0 {
@@ -371,28 +380,31 @@ func PrintCertificateList(certificates []interface{}) {
 	// https://learn.microsoft.com/en-us/graph/api/application-addkey
 }
 
-// Print owners stanza for Apps and Sps
+// Print owners stanza for applications and service principals
 func PrintOwners(owners []interface{}) {
 	if len(owners) < 1 {
 		return
 	}
 	fmt.Printf("%s :\n", utl.Blu("owners"))
-	for _, i := range owners {
-		o := i.(map[string]interface{})
-		Type, Name := "?UnknownType?", "?UnknownName?"
-		Type = utl.LastElem(utl.Str(o["@odata.type"]), ".")
+	for _, item := range owners {
+		owner, ok := item.(map[string]interface{})
+		if !ok {
+			continue // silently skip this owner?
+		}
+		Type, Name := "UnknownType", "UnknownName"
+		Type = utl.LastElem(utl.Str(owner["@odata.type"]), ".")
 		switch Type {
 		case "user":
-			Name = utl.Str(o["userPrincipalName"])
+			Name = utl.Str(owner["userPrincipalName"])
 		case "group":
-			Name = utl.Str(o["displayName"])
+			Name = utl.Str(owner["displayName"])
 		case "servicePrincipal":
-			Name = utl.Str(o["displayName"])
-			if utl.Str(o["servicePrincipalType"]) == "ManagedIdentity" {
+			Name = utl.Str(owner["displayName"])
+			if utl.Str(owner["servicePrincipalType"]) == "ManagedIdentity" {
 				Type = "ManagedIdentity"
 			}
 		}
-		fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name), utl.Gre(utl.Str(o["id"])), utl.Gre(Type))
+		fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name), utl.Gre(utl.Str(owner["id"])), utl.Gre(Type))
 	}
 }
 
@@ -410,41 +422,42 @@ func PrintStringMapColor(strMap map[string]string) {
 func PrintMatchingObjects(specifier, filter string, z *Config) {
 	// Range of possible specifiers: "d", "a", "s", "m", "u", "g", "ap", "sp", "dr",
 	// "da", "dj", "aj", "sj", "mj", "uj", "gj", "apj", "spj", "drj", "daj"
-	t := specifier
-	printJson := t[len(t)-1] == 'j' // If last char is 'j', then JSON output is required
+	mazType := specifier
+	printJson := mazType[len(mazType)-1] == 'j' // If last char is 'j', then JSON output is required
 	if printJson {
-		t = t[:len(t)-1] // Remove the 'j' from t
+		mazType = mazType[:len(mazType)-1] // Remove the 'j' from t
 	}
 
-	matchingObjects := GetMatchingObjects(t, filter, false, z) // false = get from cache, not Azure
+	matchingObjects := GetMatchingObjects(mazType, filter, false, z) // false = get from cache, not Azure
 	matchingCount := len(matchingObjects)
 	if matchingCount > 1 {
 		if printJson {
 			utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
 		} else {
 			for _, item := range matchingObjects { // Print matching set in terse format
-				PrintTersely(t, item)
+				PrintTersely(mazType, item)
 			}
 		}
 	} else if matchingCount == 1 {
 		singleObj := matchingObjects[0]
 		isFromCache := !utl.Bool(singleObj["maz_from_azure"])
 		if isFromCache {
-			//utl.PrintJsonColor(singleObj)
 			// If object is from cache, then get the full version from Azure
-			id := singleObj["id"].(string)
-			if t == "s" { // For subscriptions, use 'subscriptionId' (UUID) instead of the fully-qualified 'id'
-				id = singleObj["subscriptionId"].(string)
+			id := utl.Str(singleObj["id"])
+			if mazType == Subscription {
+				// Subscriptions use 'subscriptionId' instead of the fully-qualified 'id'
+				id = utl.Str(singleObj["subscriptionId"])
 			}
-			if t == "m" { // For mgmt groups, use 'name' (string) instead of the fully-qualified 'id'
-				id = singleObj["name"].(string)
+			if mazType == RbacDefinition || mazType == RbacAssignment || mazType == ManagementGroup {
+				// These 3 types use 'name' instead of the fully-qualified 'id'
+				id = utl.Str(singleObj["name"])
 			}
-			singleObj = GetAzureObjectById(t, id, z)
+			singleObj = GetAzureObjectById(mazType, id, z)
 		}
 		if printJson {
 			utl.PrintJsonColor(singleObj) // Print in JSON format
 		} else {
-			PrintObject(t, singleObj, z) // Print in regular format
+			PrintObject(mazType, singleObj, z) // Print in regular format
 		}
 	}
 }

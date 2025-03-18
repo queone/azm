@@ -1,5 +1,20 @@
 ## Releases
 
+### v0.3.0
+Release Date: 2025-mar-18
+
+- Major architectural renaming of objects, files, functions and so on. Shifting most references from Azure resource 'role' to 'rbac', e. g. 'resource role definition' is now 'resource RBAC definition', and so on. Another example: Instead of GetResRoleDefinitionById(), it is now GetAzureRbacDefinitionById()
+- Major rework of `res-rbac-defs.go`, renaming of functions, hopefully making code more clear
+- In res-subs.go, pdated all subscription API calls to use api-version=2024-11-01
+- In helper.go, renamed FindAzObjectsById() to FindAzureObjectsById()
+- In cmd/azm/main.go, simplified utility by moving code to and calling PrintMatchingObjects()
+- In dir-apps.go, in PrintApp(), rename federated_ids to federated_credentials, and also print 'aud' list in last column
+- Revamped api-calls.go functions to report errors instead of panicking, also added new GetApiErrorMessage() to prettify API error printing
+- Replacing all Object type codes magic strings such as 'd' for RBAC role definitions with constants like RbacDefinitionCode
+- Optimized many loops of large lists by memory-walking items with pointers which is more efficient
+
+---
+
 ### v0.2.0
 Release Date: 2025-mar-02
 
@@ -158,5 +173,5 @@ Release Date: 2025-feb-21
 ---
 
 ### TODO
-- Ensure all pkg/maz functions are properly commented and reflected at https://pkg.go.dev/github.com/queone/azm/pkg/maz
-- Move away from using `interface{}` and `map[string]interface{}` JSON objects in favor of dedicated object types
+- Ensure all pkg/maz functions are properly commented so they appear correctly at https://pkg.go.dev/github.com/queone/azm/pkg/maz
+- Move away from using `interface{}` and `map[string]interface{}` in function arguments for JSON objects, in favor of dedicated object types

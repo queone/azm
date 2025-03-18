@@ -2,6 +2,7 @@ package maz
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/queone/utl"
 )
@@ -74,9 +75,9 @@ func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjec
 	}
 
 	// Get current cache, or initialize a new cache for this type
-	cache, err := GetCache("m", z) // Get subscriptions type cache
+	cache, err := GetCache(ManagementGroup, z) // Get subscriptions type cache
 	if err != nil {
-		utl.Die("Error: %s\n", err.Error())
+		utl.Die("Error: %v\n", err)
 	}
 
 	// Return an empty list if cache is nil and internet is not available
@@ -97,14 +98,27 @@ func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjec
 	}
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
 	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
-	for _, obj := range cache.data {
-		id := obj["id"].(string)
-		if ids.Exists(id) {
-			continue // Skip repeated entries
+
+	for i := range cache.data {
+		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
+
+		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
+		id := ""
+		if idVal, ok := (*obj)["id"].(string); ok && idVal != "" {
+			id = path.Base(idVal) // Extract the last part of the path (UUID)
+		} else if nameVal, ok := (*obj)["name"].(string); ok && nameVal != "" {
+			id = nameVal // Fall back to the "name" field if "id" is empty
 		}
+
+		// Skip if the ID is empty or already seen
+		if id == "" || ids.Exists(id) {
+			continue
+		}
+
+		// Check if the object matches the filter
 		if obj.HasString(filter) {
-			matchingList.Add(obj) // Add matching object to the list
-			ids.Add(id)           // Mark this ID as seen
+			matchingList.Add(*obj) // Add matching object to the list
+			ids.Add(id)            // Mark this ID as seen
 		}
 	}
 

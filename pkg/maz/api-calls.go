@@ -15,69 +15,69 @@ import (
 	"github.com/queone/utl"
 )
 
-type jsonT map[string]interface{} // Local syntactic sugar, for easier reading
-type strMapT map[string]string
+type JsonObject map[string]interface{} // Local syntactic sugar, for easier reading
+type StringMap map[string]string
 
 // ApiCall alias to do a GET
-func ApiGet(apiUrl string, z *Config, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiGet(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
 	return ApiCall("GET", apiUrl, z, nil, params, false) // false = quiet
 }
 
 // ApiCall alias to do a GET with debugging on
-func ApiGetVerbose(apiUrl string, z *Config, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiGetVerbose(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
 	return ApiCall("GET", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a PATCH
-func ApiPatch(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPatch(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("PATCH", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a PATCH with debugging on
-func ApiPatchVerbose(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPatchVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("PATCH", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a POST
-func ApiPost(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPost(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("POST", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a POST with debugging on
-func ApiPostVerbose(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPostVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("POST", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a PUT
-func ApiPut(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPut(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("PUT", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a PUT with debugging on
-func ApiPutVerbose(apiUrl string, z *Config, payload jsonT, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiPutVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
 	return ApiCall("PUT", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a DELETE
-func ApiDelete(apiUrl string, z *Config, params strMapT) (result jsonT, statusCode int, err error) {
+func ApiDelete(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params, false) // false = quiet
 }
 
 // ApiCall alias to do a DELETE with debugging on
-func ApiDeleteVerbose(apiUrl string, z *Config, params strMapT) (jsonT, int, error) {
+func ApiDeleteVerbose(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
 // Makes an API call and returns the result object, statusCode, and error. For a more clear
 // explanation of how to interpret the JSON responses see https://eager.io/blog/go-and-json/
 // This function is the cornerstone of the maz package, extensively handling all API interactions.
-func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, verbose bool) (result jsonT, statusCode int, err error) {
+func ApiCall(method, apiUrl string, z *Config, payload JsonObject, params StringMap, verbose bool) (JsonObject, int, error) {
 	if !strings.HasPrefix(apiUrl, "http") {
-		utl.Die("%s Error: Bad URL, %s\n", utl.Trace(), apiUrl)
+		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
 	}
 
 	// Map headers to corresponding API endpoint
-	var headers strMapT = nil
+	var headers StringMap
 	if strings.HasPrefix(apiUrl, ConstMgUrl) {
 		headers = z.MgHeaders
 	} else if strings.HasPrefix(apiUrl, ConstAzUrl) {
@@ -86,35 +86,36 @@ func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, ve
 
 	// Set up new HTTP request client
 	client := &http.Client{Timeout: time.Second * 60} // One minute timeout
-	var req *http.Request = nil
+	var req *http.Request
+	var err error
 	switch strings.ToUpper(method) {
 	case "GET":
 		req, err = http.NewRequest("GET", apiUrl, nil)
 	case "PATCH":
-		jsonData, err := json.Marshal(payload)
-		if err != nil {
-			panic(err.Error())
+		jsonData, err2 := json.Marshal(payload)
+		if err2 != nil {
+			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
 		}
-		req, _ = http.NewRequest("PATCH", apiUrl, bytes.NewBuffer(jsonData))
+		req, err = http.NewRequest("PATCH", apiUrl, bytes.NewBuffer(jsonData))
 	case "POST":
-		jsonData, err := json.Marshal(payload)
-		if err != nil {
-			panic(err.Error())
+		jsonData, err2 := json.Marshal(payload)
+		if err2 != nil {
+			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
 		}
-		req, _ = http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonData))
+		req, err = http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonData))
 	case "PUT":
-		jsonData, err := json.Marshal(payload)
-		if err != nil {
-			panic(err.Error())
+		jsonData, err2 := json.Marshal(payload)
+		if err2 != nil {
+			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
 		}
-		req, _ = http.NewRequest("PUT", apiUrl, bytes.NewBuffer(jsonData))
+		req, err = http.NewRequest("PUT", apiUrl, bytes.NewBuffer(jsonData))
 	case "DELETE":
 		req, err = http.NewRequest("DELETE", apiUrl, nil)
 	default:
-		utl.Die("%s Error: Unsupported HTTP method\n", utl.Trace())
+		return nil, 0, fmt.Errorf("%s Error: Unsupported HTTP method", utl.Trace())
 	}
 	if err != nil {
-		panic(err.Error())
+		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	// Set up the headers
@@ -140,51 +141,66 @@ func ApiCall(method, apiUrl string, z *Config, payload jsonT, params strMapT, ve
 			utl.PrintJsonColor(payload)
 		}
 	}
-
 	// Make the call
-	r, err := client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		panic(err.Error())
+		return nil, 0, fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	defer r.Body.Close()
-	body, err := io.ReadAll(r.Body) // Read the response body
-	if err != nil {
-		panic(err.Error())
-	}
 	// This function caters to Microsoft Azure REST API calls. Note that variable 'body' is of type
 	// []uint8, which is essentially a long string that evidently can be either: 1) a single integer
 	// number, or 2) a JSON object string that needs unmarshalling. Below conditional is based on
 	// this interpretation, but may need confirmation and improved handling.
 
-	result = nil // JSON object to be returned
+	var result JsonObject // JSON object to be returned
 	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
 		// It's an integer, probably an API object count value
 		result = make(map[string]interface{})
 		result["value"] = intValue
 	} else {
 		// It's a regular JSON result, or null
-		if len(body) > 0 { // Make sure we have something to unmarshal, else panic
-			if err = json.Unmarshal([]byte(body), &result); err != nil {
-				panic(err.Error())
+		if len(body) > 0 { // Make sure we have something to unmarshal, else return nil
+			if err = json.Unmarshal(body, &result); err != nil {
+				return nil, 0, fmt.Errorf("failed to unmarshal response body: %w", err)
 			}
 		}
 		// If it's null, returning r.StatusCode below will let caller know
 	}
+
+	statCode := resp.StatusCode
 	if verbose {
 		fmt.Println(utl.Blu("==== RESPONSE ================================"))
-		fmt.Printf("%s: %d %s\n", utl.Blu("status"), r.StatusCode, http.StatusText(r.StatusCode))
+		fmt.Printf("%s: %d %s\n", utl.Blu("status"), statCode, http.StatusText(statCode))
 		fmt.Println(utl.Blu("result") + ":")
 		utl.PrintJsonColor(result)
-		resHeaders, err := httputil.DumpResponse(r, false)
+		resHeaders, err := httputil.DumpResponse(resp, false)
 		if err != nil {
-			panic(err.Error())
+			return nil, 0, fmt.Errorf("failed to dump response: %w", err)
 		}
 		fmt.Println(utl.Blu("headers") + ":")
 		fmt.Println(string(resHeaders))
 	}
 
-	return result, r.StatusCode, err
+	return result, statCode, nil
+}
+
+// Returns API error message string.
+func ApiErrorMsg(obj map[string]interface{}) string {
+	if err, ok := obj["error"].(map[string]interface{}); ok {
+		msg, msgOk := err["message"].(string)
+		if !msgOk {
+			msg = "Unknown message"
+		}
+		return msg
+	}
+	return ""
 }
 
 // Checks for errors in API results and prints them out.
