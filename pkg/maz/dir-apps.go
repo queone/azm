@@ -2,6 +2,7 @@ package maz
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/queone/utl"
 )
@@ -37,20 +38,33 @@ func PrintApp(x AzureObject, z *Config) {
 		PrintSecretList(x["passwordCredentials"].([]interface{}))
 	}
 
-	// Print federated IDs
+	// Print federated credentials
 	apiUrl := ConstMgUrl + "/v1.0/applications/" + id + "/federatedIdentityCredentials"
 	r, statusCode, _ := ApiGet(apiUrl, z, nil)
 	if statusCode == 200 && r != nil && r["value"] != nil {
 		fedCreds := r["value"].([]interface{})
 		if len(fedCreds) > 0 {
-			fmt.Println(utl.Blu("federated_ids") + ":")
-			for _, i := range fedCreds {
-				a := i.(map[string]interface{})
-				iId := utl.Gre(utl.Str(a["id"]))
-				name := utl.Gre(utl.Str(a["name"]))
-				subject := utl.Gre(utl.Str(a["subject"]))
-				issuer := utl.Gre(utl.Str(a["issuer"]))
-				fmt.Printf("  %-36s  %-30s  %-40s  %s\n", iId, name, subject, issuer)
+			fmt.Println(utl.Blu("federated_credentials") + ":")
+			for _, item := range fedCreds {
+				cred, ok := item.(map[string]interface{})
+				if !ok {
+					fmt.Printf("  %s\n", utl.Gre("(unable to read cred)"))
+					continue
+				}
+				iId := utl.Gre(utl.Str(cred["id"]))
+				name := utl.Gre(utl.Str(cred["name"]))
+				sub := utl.Gre(utl.Str(cred["subject"]))
+				iss := utl.Gre(utl.Str(cred["issuer"]))
+				var audiences []string
+				if audList, ok := cred["audiences"].([]interface{}); ok {
+					for _, audience := range audList {
+						audiences = append(audiences, utl.Str(audience)) // Convert and append to the slice
+					}
+				}
+				aud := utl.Gre(strings.Join(audiences, ", "))
+				// TODO: Fix the coloring padding
+				//fmt.Printf("  %-36s  %-40s  %-40s  %-40s  %s\n", iId, name, sub, iss, aud)
+				fmt.Printf("  %-36s  %-20s  %s  %s  %s\n", iId, name, sub, iss, aud)
 			}
 		}
 	}
@@ -499,4 +513,11 @@ func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
 	default:
 		utl.Die("Unexpected App/SP existence state.\n")
 	}
+}
+
+// Helper function to check if the object is an App Service Principal
+func IsAppSp(obj AzureObject) bool {
+	displayName := utl.Str(obj["displayName"])
+	signInAudience := utl.Str(obj["signInAudience"])
+	return displayName != "" && signInAudience != ""
 }

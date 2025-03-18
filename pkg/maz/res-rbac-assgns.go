@@ -10,8 +10,8 @@ import (
 )
 
 // Prints RBAC role definition object in YAML-like format
-func PrintRoleAssignment(x map[string]interface{}, z *Config) {
-	fmt.Printf("%s\n", utl.Gra("# RBAC Role Assignment"))
+func PrintRbacAssignment(x map[string]interface{}, z *Config) {
+	fmt.Printf("%s\n", utl.Gra("# Resource RBAC Assignment"))
 	if x == nil {
 		return
 	}
@@ -24,15 +24,15 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 		fmt.Println("  < Missing properties? What's going? >")
 	}
 
-	xProp := x["properties"].(map[string]interface{})
+	props := x["properties"].(map[string]interface{})
 
 	roleNameMap := GetIdMapRoleDefs(z) // Get all role definition id:name pairs
-	roleId := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/")
+	roleId := utl.LastElem(utl.Str(props["roleDefinitionId"]), "/")
 	comment := "# Role \"" + roleNameMap[roleId] + "\""
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("roleDefinitionId"), utl.Gre(roleId), utl.Gra(comment))
 
 	var principalNameMap map[string]string = nil
-	pType := utl.Str(xProp["principalType"])
+	pType := utl.Str(props["principalType"])
 	switch pType {
 	case "Group":
 		principalNameMap = GetDirObjectIdMap("g", z) // Get all group id:name pairs
@@ -43,7 +43,7 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 	default:
 		pType = "SomeObject"
 	}
-	principalId := utl.Str(xProp["principalId"])
+	principalId := utl.Str(props["principalId"])
 	pName := principalNameMap[principalId]
 	if pName == "" {
 		pName = "???"
@@ -52,9 +52,9 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("principalId"), utl.Gre(principalId), utl.Gra(comment))
 
 	subNameMap := GetAzureSubscriptionsIdMap(z) // Get all subscription id:name pairs
-	scope := utl.Str(xProp["scope"])
+	scope := utl.Str(props["scope"])
 	if scope == "" {
-		scope = utl.Str(xProp["Scope"])
+		scope = utl.Str(props["Scope"])
 	} // Account for possibly capitalized key
 	cScope := utl.Blu("scope")
 	if strings.HasPrefix(scope, "/subscriptions") {
@@ -70,21 +70,21 @@ func PrintRoleAssignment(x map[string]interface{}, z *Config) {
 	}
 }
 
-// Prints a human-readable report of all RBAC role assignments
-func PrintRoleAssignmentReport(z *Config) {
+// Prints a human-readable report of all Azure resource RBAC assignments in the tenant
+func PrintRbacAssignmentReport(z *Config) {
 	roleNameMap := GetIdMapRoleDefs(z)          // Get all role definition id:name pairs
 	subNameMap := GetAzureSubscriptionsIdMap(z) // Get all subscription id:name pairs
 	groupNameMap := GetDirObjectIdMap("g", z)   // Get all groups id:name pairs
 	userNameMap := GetDirObjectIdMap("u", z)    // Get all users id:name pairs
 	spNameMap := GetDirObjectIdMap("sp", z)     // Get all SPs id:name pairs
 
-	assignments := GetAzRoleAssignments(z, false)
+	assignments := GetRbacAssignments(z, false)
 	for _, i := range assignments {
 		x := i.(map[string]interface{})
-		xProp := x["properties"].(map[string]interface{})
-		Rid := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/")
-		principalId := utl.Str(xProp["principalId"])
-		Type := utl.Str(xProp["principalType"])
+		props := x["properties"].(map[string]interface{})
+		Rid := utl.LastElem(utl.Str(props["roleDefinitionId"]), "/")
+		principalId := utl.Str(props["principalId"])
+		Type := utl.Str(props["principalType"])
 		pName := "ID-Not-Found"
 		switch Type {
 		case "Group":
@@ -95,7 +95,7 @@ func PrintRoleAssignmentReport(z *Config) {
 			pName = spNameMap[principalId]
 		}
 
-		Scope := utl.Str(xProp["scope"])
+		Scope := utl.Str(props["scope"])
 		if strings.HasPrefix(Scope, "/subscriptions") {
 			// Replace sub ID to name
 			split := strings.Split(Scope, "/")
@@ -109,16 +109,16 @@ func PrintRoleAssignmentReport(z *Config) {
 }
 
 // Creates an RBAC role assignment as defined by give x object
-func CreateAzRoleAssignment(x map[string]interface{}, z *Config) {
+func CreateRbacAssignment(x map[string]interface{}, z *Config) {
 	if x == nil {
 		return
 	}
-	xProp := x["properties"].(map[string]interface{})
-	roleDefinitionId := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/") // Note we only care about the UUID
-	principalId := utl.Str(xProp["principalId"])
-	scope := utl.Str(xProp["scope"])
+	props := x["properties"].(map[string]interface{})
+	roleDefinitionId := utl.LastElem(utl.Str(props["roleDefinitionId"]), "/") // Note we only care about the UUID
+	principalId := utl.Str(props["principalId"])
+	scope := utl.Str(props["scope"])
 	if scope == "" {
-		scope = utl.Str(xProp["Scope"]) // Account for possibly capitalized key
+		scope = utl.Str(props["Scope"]) // Account for possibly capitalized key
 	}
 	if roleDefinitionId == "" || principalId == "" || scope == "" {
 		utl.Die("Specfile is missing required attributes. Need at least:\n\n" +
@@ -139,14 +139,17 @@ func CreateAzRoleAssignment(x map[string]interface{}, z *Config) {
 	}
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + newUuid
-	r, statusCode, _ := ApiPut(apiUrl, z, payload, params)
-	//ApiErrorCheck("PUT", apiUrl, utl.Trace(), r)
+	resp, statusCode, _ := ApiPut(apiUrl, z, payload, params)
 	if statusCode == 200 || statusCode == 201 {
-		utl.PrintYaml(r)
+		utl.PrintYaml(resp)
 	} else {
-		e := r["error"].(map[string]interface{})
+		e := resp["error"].(map[string]interface{})
 		fmt.Println(e["message"].(string))
 	}
+}
+
+// Deletes an Azure resource RBAC role assignment as defined by given object
+func DeleteRbacAssignment(force bool, obj AzureObject, z *Config) {
 }
 
 // Deletes an RBAC role assignment by its fully qualified object Id
@@ -154,16 +157,15 @@ func CreateAzRoleAssignment(x map[string]interface{}, z *Config) {
 //
 //	/providers/Microsoft.Management/managementGroups/33550b0b-2929-4b4b-adad-cccc66664444 \
 //	  /providers/Microsoft.Authorization/roleAssignments/5d586a7b-3f4b-4b5c-844a-3fa8efe49ab3
-func DeleteAzRoleAssignmentByFqid(fqid string, z *Config) map[string]interface{} {
+func DeleteRbacAssignmentByFqid(fqid string, z *Config) map[string]interface{} {
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	apiUrl := ConstAzUrl + fqid
-	r, statusCode, _ := ApiDelete(apiUrl, z, params)
-	//ApiErrorCheck("DELETE", apiUrl, utl.Trace(), r)
+	resp, statusCode, _ := ApiDelete(apiUrl, z, params)
 	if statusCode != 200 {
 		if statusCode == 204 {
 			fmt.Println("Role assignment already deleted or does not exist. Give Azure a minute to flush it out.")
 		} else {
-			e := r["error"].(map[string]interface{})
+			e := resp["error"].(map[string]interface{})
 			fmt.Println(e["message"].(string))
 		}
 	}
@@ -186,7 +188,7 @@ func RoleAssignmentsCountLocal(z *Config) int64 {
 
 // Calculates count of all role assignment objects in Azure
 func RoleAssignmentsCountAzure(z *Config) int64 {
-	list := GetAzRoleAssignments(z, false) // false = quiet
+	list := GetRbacAssignments(z, false) // false = quiet
 	return int64(len(list))
 }
 
@@ -198,7 +200,7 @@ func GetMatchingRoleAssignments(filter string, force bool, z *Config) (list []in
 		// If Internet is available AND (force was requested OR cacheFileAge is zero (meaning does not exist)
 		// OR it is older than ConstAzCacheFileAgePeriod) then query Azure directly to get all objects
 		// and show progress while doing so (true = verbose below)
-		list = GetAzRoleAssignments(z, true)
+		list = GetRbacAssignments(z, true)
 	} else {
 		// Use local cache for all other conditions
 		list = GetCachedObjects(cacheFile)
@@ -212,8 +214,8 @@ func GetMatchingRoleAssignments(filter string, force bool, z *Config) (list []in
 	for _, i := range list {           // Parse every object
 		x := i.(map[string]interface{})
 		// Match against relevant strings within roleAssigment JSON object (Note: Not all attributes are maintained)
-		xProp := x["properties"].(map[string]interface{})
-		roleId := utl.Str(xProp["roleDefinitionId"])
+		props := x["properties"].(map[string]interface{})
+		roleId := utl.Str(props["roleDefinitionId"])
 		roleName := roleNameMap[utl.LastElem(roleId, "/")]
 		if utl.SubString(roleName, filter) || utl.StringInJson(x, filter) {
 			matchingList = append(matchingList, x)
@@ -228,7 +230,7 @@ func GetMatchingRoleAssignments(filter string, force bool, z *Config) (list []in
 //
 //	https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
 //	https://learn.microsoft.com/en-us/rest/api/authorization/role-assignments/list-for-subscription
-func GetAzRoleAssignments(z *Config, verbose bool) (list []interface{}) {
+func GetRbacAssignments(z *Config, verbose bool) (list []interface{}) {
 	list = nil                      // We have to zero it out
 	uniqueIds := utl.NewStringSet() // Unique resourceIds (API SPs)
 	k := 1                          // Track number of API calls to provide progress
@@ -239,13 +241,13 @@ func GetAzRoleAssignments(z *Config, verbose bool) (list []interface{}) {
 		subNameMap = GetAzureSubscriptionsIdMap(z)
 	}
 
-	scopes := GetAzRbacScopes(z)                             // Get all scopes
+	scopes := GetAzureRbacScopes(z)                          // Get all scopes
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
-		r, _, _ := ApiGet(apiUrl, z, params)
-		if r != nil && r["value"] != nil {
-			objectsUnderThisScope := r["value"].([]interface{})
+		resp, _, _ := ApiGet(apiUrl, z, params)
+		if resp != nil && resp["value"] != nil {
+			objectsUnderThisScope := resp["value"].([]interface{})
 			count := 0
 
 			for _, i := range objectsUnderThisScope {
@@ -285,22 +287,22 @@ func GetAzRoleAssignments(z *Config, verbose bool) (list []interface{}) {
 
 // Gets Azure resource RBAC role assignment object by matching given objects: roleId, principalId,
 // and scope (the 3 parameters which make a role assignment unique)
-func GetAzRoleAssignmentByObject(x map[string]interface{}, z *Config) (y map[string]interface{}) {
+func GetRbacAssignmentByObject(x map[string]interface{}, z *Config) (y map[string]interface{}) {
 	// First, make sure x is a searchable role assignment object
 	if x == nil {
 		return nil
 	}
 
-	xProp := x["properties"].(map[string]interface{})
-	if xProp == nil {
+	props := x["properties"].(map[string]interface{})
+	if props == nil {
 		return nil
 	}
 
-	xRoleDefinitionId := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/")
-	xPrincipalId := utl.Str(xProp["principalId"])
-	xScope := utl.Str(xProp["scope"])
+	xRoleDefinitionId := utl.LastElem(utl.Str(props["roleDefinitionId"]), "/")
+	xPrincipalId := utl.Str(props["principalId"])
+	xScope := utl.Str(props["scope"])
 	if xScope == "" {
-		xScope = utl.Str(xProp["Scope"]) // Account for possibly capitalized key
+		xScope = utl.Str(props["Scope"]) // Account for possibly capitalized key
 	}
 	if xScope == "" || xPrincipalId == "" || xRoleDefinitionId == "" {
 		return nil
@@ -312,10 +314,9 @@ func GetAzRoleAssignmentByObject(x map[string]interface{}, z *Config) (y map[str
 		"$filter":     "principalId eq '" + xPrincipalId + "'",
 	}
 	apiUrl := ConstAzUrl + xScope + "/providers/Microsoft.Authorization/roleAssignments"
-	r, _, _ := ApiGet(apiUrl, z, params)
-	//ApiErrorCheck("GET", apiUrl, utl.Trace(), r)
-	if r != nil && r["value"] != nil {
-		results := r["value"].([]interface{})
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	if resp != nil && resp["value"] != nil {
+		results := resp["value"].([]interface{})
 		//fmt.Println(len(results))
 		for _, i := range results {
 			y = i.(map[string]interface{})
@@ -330,16 +331,16 @@ func GetAzRoleAssignmentByObject(x map[string]interface{}, z *Config) (y map[str
 	return nil // If we get here, we didn't fine it, so return nil
 }
 
-// Gets RBAC role assignment by its Object UUID. Unfortunately we have to iterate
-// through the entire tenant scope hierarchy, which can take time.
-func GetAzRoleAssignmentById(id string, z *Config) map[string]interface{} {
-	scopes := GetAzRbacScopes(z)
+// Gets an Azure resource RBAC assignment by its object Id. Unfortunately we have to
+// iterate through the entire tenant scope hierarchy, which can be slow.
+func GetRbacAssignmentById(id string, z *Config) map[string]interface{} {
+	scopes := GetAzureRbacScopes(z)
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
-		r, _, _ := ApiGet(apiUrl, z, params)
-		if r != nil && r["value"] != nil {
-			assignmentsUnderThisScope := r["value"].([]interface{})
+		resp, _, _ := ApiGet(apiUrl, z, params)
+		if resp != nil && resp["value"] != nil {
+			assignmentsUnderThisScope := resp["value"].([]interface{})
 			for _, i := range assignmentsUnderThisScope {
 				x := i.(map[string]interface{})
 				if utl.Str(x["name"]) == id {

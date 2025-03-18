@@ -9,15 +9,15 @@ import (
 )
 
 // Creates specfile skeleton/scaffold files
-func CreateSkeletonFile(t string) {
+func CreateSkeletonFile(mazType string) {
 	pwd, err := os.Getwd()
 	if err != nil {
 		utl.Die("%s Error getting current working directory.\n", utl.Trace())
 	}
 	fileName, fileContent := "init-file-name.extension", []byte("init-file-content\n")
-	switch t {
-	case "d":
-		fileName = "resource-role-definition.yaml"
+	switch mazType {
+	case RbacDefinition:
+		fileName = "rbac-definition.yaml"
 		fileContent = []byte("properties:\n" +
 			"  roleName: My RBAC Role\n" +
 			"  description: Description of what this role does.\n" +
@@ -34,14 +34,14 @@ func CreateSkeletonFile(t string) {
 			"        - Microsoft.KeyVault/vaults/secrets/*\n" +
 			"      notDataActions:\n" +
 			"        - Microsoft.CognitiveServices/accounts/LUIS/apps/delete\n")
-	case "a":
-		fileName = "resource-role-assignment.yaml"
+	case RbacAssignment:
+		fileName = "rbac-assignment.yaml"
 		fileContent = []byte("properties:\n" +
 			"  principalId: 65c6427a-1111-5555-7777-274d26531314  # Group = \"My Special Group\"\n" +
 			"  roleDefinitionId: 2489dfa4-3333-4444-9999-b04b7a1e4ea6  # Role = \"My Special Role\"\n" +
 			"  scope: /providers/Microsoft.Management/managementGroups/3f550b9f-8888-7777-ad61-111199992222\n")
-	case "g":
-		fileName = "directory-group.yaml"
+	case DirectoryGroup:
+		fileName = "dirgroup.yaml"
 		fileContent = []byte("# Minimal specfile to create an Azure directory group\n" +
 			"displayName: My Group\n" +
 			"mailEnabled: false\n" +
@@ -51,7 +51,7 @@ func CreateSkeletonFile(t string) {
 			"# See https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0#properties\n" +
 			"description: My Group description\n" +
 			"isAssignableToRole: false\n")
-	case "ap":
+	case Application:
 		fileName = "appsp.yaml"
 		fileContent = []byte("# Azure AppSP Pair SpecFile\n" +
 			"#\n" +

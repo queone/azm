@@ -32,45 +32,69 @@ const (
 	ConstCacheFileExtension   = "gz"
 	ConstMgCacheFileAgePeriod = 1800  // Half hour
 	ConstAzCacheFileAgePeriod = 86400 // One day
+
+	// Maz object type strings
+	RbacDefinition    = "d"  // Azure resource RBAC role definition
+	RbacAssignment    = "a"  // Azure resource RBAC role assignment
+	Subscription      = "s"  // Azure resource subscription
+	ManagementGroup   = "m"  // Azure resource management group
+	DirectoryUser     = "u"  // Azure directory user
+	DirectoryGroup    = "g"  // Azure directory group
+	Application       = "ap" // Azure directory application
+	ServicePrincipal  = "sp" // Azure directory service principal
+	DirRoleDefinition = "dr" // Azure directory role definition
+	DirRoleAssignment = "da" // Azure directory role assignment
+	UnknownObject     = ""
 )
 
 var (
-	mazTypes    = []string{"d", "a", "s", "m", "u", "g", "ap", "sp", "dr", "da"}
+	MazTypes = []string{
+		RbacDefinition,
+		RbacAssignment,
+		Subscription,
+		ManagementGroup,
+		DirectoryUser,
+		DirectoryGroup,
+		Application,
+		ServicePrincipal,
+		DirRoleDefinition,
+		DirRoleAssignment,
+	}
+	MazTypeNames = map[string]string{
+		RbacDefinition:    "resource RBAC definition",
+		RbacAssignment:    "resource RBAC assignment",
+		Subscription:      "resource subscription",
+		ManagementGroup:   "resource management group",
+		DirectoryUser:     "directory user",
+		DirectoryGroup:    "directory group",
+		Application:       "directory application",
+		ServicePrincipal:  "directory service principal",
+		DirRoleDefinition: "directory role definition",
+		DirRoleAssignment: "directory role assignment",
+	}
 	CacheSuffix = map[string]string{
-		"d":  "_res-role-defs",   // Resource RBAC role definition objects
-		"a":  "_res-role-assgns", // Resource RBAC role assignment objects
-		"s":  "_res-subs",        // Resource subscriptions objects
-		"m":  "_res-mgmt-groups", // Resource management groups objects
-		"u":  "_dir-users",       // Directory users objects
-		"g":  "_dir-groups",      // Directory group objects
-		"ap": "_dir-apps",        // Directory application objects
-		"sp": "_dir-sps",         // Directory service principal objects
-		"dr": "_dir-role-defs",   // Directory role definition objects
-		"da": "_dir-role-assgns", // Directory role assignment objects
+		RbacDefinition:    "_res-rbac-defs",
+		RbacAssignment:    "_res-rbac-assgns",
+		Subscription:      "_res-subs",
+		ManagementGroup:   "_res-mgmt-groups",
+		DirectoryUser:     "_dir-users",
+		DirectoryGroup:    "_dir-groups",
+		Application:       "_dir-apps",
+		ServicePrincipal:  "_dir-sps",
+		DirRoleDefinition: "_dir-role-defs",
+		DirRoleAssignment: "_dir-role-assgns",
 	}
 	ApiEndpoint = map[string]string{
-		"d":  "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
-		"a":  "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
-		"s":  "/subscriptions",
-		"m":  "/providers/Microsoft.Management/managementGroups",
-		"u":  "/v1.0/users",
-		"g":  "/v1.0/groups",
-		"ap": "/v1.0/applications",
-		"sp": "/v1.0/servicePrincipals",
-		"dr": "/v1.0/roleManagement/directory/roleDefinitions",
-		"da": "/v1.0/roleManagement/directory/roleAssignments",
-	}
-	MazObjName = map[string]string{
-		"d":  "resource RBAC role definition",
-		"a":  "resource RBAC role assignment",
-		"s":  "resource subscription",
-		"m":  "resource management group",
-		"u":  "directory user",
-		"g":  "directory group",
-		"ap": "directory application",
-		"sp": "directory service principal",
-		"dr": "directory role definition",
-		"da": "directory role assignment",
+		RbacDefinition:    "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
+		RbacAssignment:    "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
+		Subscription:      "/subscriptions",
+		ManagementGroup:   "/providers/Microsoft.Management/managementGroups",
+		DirectoryUser:     "/v1.0/users",
+		DirectoryGroup:    "/v1.0/groups",
+		Application:       "/v1.0/applications",
+		ServicePrincipal:  "/v1.0/servicePrincipals",
+		DirRoleDefinition: "/v1.0/roleManagement/directory/roleDefinitions",
+		DirRoleAssignment: "/v1.0/roleManagement/directory/roleAssignments",
 	}
 	eVars = map[string]string{
 		"MAZ_TENANT_ID":     "",
@@ -299,7 +323,7 @@ func SetupCredentials(z *Config) {
 	} else {
 		// Getting from credentials file
 		filePath := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
-		if utl.FileNotExist(filePath) && utl.FileSize(filePath) < 1 {
+		if !utl.FileUsable(filePath) {
 			utl.Die("Missing credentials file: %s\n"+
 				"Re-run program to set up the appropriate login credentials.\n", filePath)
 		}

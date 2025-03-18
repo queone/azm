@@ -78,8 +78,9 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
 	r, statusCode, _ = ApiGet(apiUrl, z, nil)
 	if statusCode == 200 && r != nil && r["value"] != nil {
-		memberOf := r["value"].([]interface{})
-		PrintMemberOfs("g", memberOf)
+		if memberOf, ok := r["value"].([]interface{}); ok {
+			PrintMemberOfs(memberOf)
+		}
 	}
 
 	// Print API permissions that have been granted admin consent

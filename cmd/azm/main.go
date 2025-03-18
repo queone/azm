@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.2.0"
+	program_version = "0.3.0"
 )
 
 func printUsage(extended bool) {
@@ -27,7 +27,7 @@ func printUsage(extended bool) {
 		"  This utility simplifies the querying and management of various Azure IAM-related objects.\n"+
 		"  In many options %s is a placeholder for a 1-2 character code that specifies the type of\n"+
 		"  Azure object to act on. The available codes are:\n\n"+
-		"    %s = Resource Role Definitions     %s = Resource Role Assignments\n"+
+		"    %s = Resource RBAC Definitions     %s = Resource RBAC Assignments\n"+
 		"    %s = Resource Subscriptions        %s = Resource Management Groups\n"+
 		"    %s = Directory Users               %s = Directory Groups\n"+
 		"    %s = Directory Applications        %s = Directory Service Principals\n"+
@@ -39,9 +39,9 @@ func printUsage(extended bool) {
 		"  %s -id                                      To display the currently configured login values\n"+
 		"  %s -ap                                      To list all directory applications registered in\n"+
 		"                                               current tenant\n"+
-		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC role definition with this\n"+
+		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC definition with this\n"+
 		"                                               given UUID\n"+
-		"  %s -d Reader                                To show all resource RBAC role definitions with\n"+
+		"  %s -d Reader                                To show all resource RBAC definitions with\n"+
 		"                                               'Reader' in their names\n"+
 		"  %s -g MyGroup                               To show any directory group with the filter\n"+
 		"                                               'MyGroup' in its attributes\n"+
@@ -57,7 +57,7 @@ func printUsage(extended bool) {
 		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
 		"                                   If the result is a single object, it is printed in more detail.\n"+
 		"  -vs SPECFILE                     Compare YAML specfile to what's in Azure. Only for certain objects.\n"+
-		"  -ar                              List all RBAC role assignments with resolved names\n"+
+		"  -ar                              RBAC assignment report with resolved attribute names\n"+
 		"  -mt                              List Management Group and subscriptions tree\n"+
 		"  -pags                            List all Azure AD Privileged Access Groups\n"+
 		"  -st                              Show count of all objects in local cache and Azure tenant\n"+
@@ -68,13 +68,14 @@ func printUsage(extended bool) {
 		"%s (allow creating and managing Azure objects)\n"+
 		"  -k%s                              Generate a YAML skeleton file for object type %s. Only\n"+
 		"                                   certain objects are currently supported.\n"+
-		"  -up[f] SPECFILE|NAME             Create or update object from given SPECFILE (only for certain\n"+
+		"  -up[f] SPECFILE|NAME             Create or update object by given SPECFILE (only for certain\n"+
 		"                                   objects); create with given name (again, only some objects); use\n"+
 		"                                   the 'f' option to suppress the confirmation prompt\n"+
+		"  -rm[f] SPECFILE|ID|NAME          Delete object by given SPECFILE (only for certain objects);\n"+
+		"                                   delete by given NAME or ID (by name is only supported on some\n"+
+		"                                   objects); use 'f' to suppress confirmation\n"+
 		"  -rn[f] NAME|ID NEWNAME           Rename object with given NAME or ID to NEWNAME (not all objects\n"+
 		"                                   are supported); use 'f' to suppress confirmation\n"+
-		"  -rm[f] NAME|ID                   Delete object with given NAME or ID (by name is only supported\n"+
-		"                                   on some objects); use 'f' to suppress confirmation\n"+
 		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
 		"                                   date (YYYY-MM-DD) or in X number of days\n"+
 		"  -aprs[f] ID SECRET_ID            Remove a secret from an App with the given ID\n"+
@@ -133,30 +134,30 @@ func main() {
 			maz.RemoveCacheFile("t", z)
 			maz.RemoveCacheFile("id", z)
 		case "-xx":
-			// Loop through each type in CacheSuffix.
-			for t := range maz.CacheSuffix {
-				if err := maz.RemoveCacheFiles(t, z); err != nil {
-					fmt.Printf("Error removing cache files for type '%s': %v\n", t, err)
+			// Loop through each maz type in CacheSuffix
+			for mazType := range maz.CacheSuffix {
+				if err := maz.RemoveCacheFiles(mazType, z); err != nil {
+					fmt.Printf("Error removing %s cache files for type: %v\n", utl.Red(mazType), err)
 				}
 			}
 
 		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
 		case "-ax":
-			t := arg1[1:] // Single out the object type
-			maz.RemoveCacheFile(t, z)
+			mazType := arg1[1:] // Single out the maz type
+			maz.RemoveCacheFile(mazType, z)
 		case "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
-			t := arg1[1 : len(arg1)-1]
-			maz.RemoveCacheFiles(t, z)
+			mazType := arg1[1 : len(arg1)-1]
+			maz.RemoveCacheFiles(mazType, z)
 
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove arg1 leading '-'
 			maz.PrintMatchingObjects(specifier, "", z)
 		case "-kd", "-ka", "-kg", "-kap":
-			t := arg1[2:]
-			maz.CreateSkeletonFile(t)
+			mazType := arg1[2:]
+			maz.CreateSkeletonFile(mazType)
 		case "-ar":
-			maz.PrintRoleAssignmentReport(z)
+			maz.PrintRbacAssignmentReport(z)
 		case "-mt":
 			maz.PrintAzureMgmtGroupTree(z)
 		case "-pags":
@@ -186,21 +187,31 @@ func main() {
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove the leading '-'
 			maz.PrintMatchingObjects(specifier, arg2, z)
+
 		case "-rm", "-rmf":
 			force := false
 			if arg1 == "-rmf" {
 				force = true
 			}
-			maz.DeleteAppSpByIdentifier(force, arg2, z)
+			if utl.FileUsable(arg2) {
+				// Delete by given specfile
+				maz.DeleteObjectBySpecfile(force, arg2, z)
+			} else if utl.ValidUuid(arg2) {
+				maz.DeleteObjectById(force, arg2, z)
+			} else {
+				utl.Die("Delete by given NAME\n")
+				//maz.DeleteObjectByName(force, arg2, z)
+			}
+
 		case "-up", "-upf":
 			force := false
 			if arg1 == "-upf" {
 				force = true
 			}
 			if utl.FileUsable(arg2) {
-				maz.UpsertAppSpFromFile(force, arg2, z) // Create/update from arg2 as specfile
+				maz.ApplyObjectBySpecfile(force, arg2, z)
 			} else {
-				maz.CreateAppSpByName(force, arg2, z)
+				utl.Die("Specfile %s is missing or empty\n", utl.Yel(arg2))
 			}
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)

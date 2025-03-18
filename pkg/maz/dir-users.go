@@ -31,7 +31,8 @@ func PrintUser(x map[string]interface{}, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/users/" + id + "/transitiveMemberOf"
 	r, statusCode, _ := ApiGet(apiUrl, z, nil)
 	if statusCode == 200 && r != nil && r["value"] != nil {
-		memberOf := r["value"].([]interface{})
-		PrintMemberOfs("g", memberOf)
+		if memberOf, ok := r["value"].([]interface{}); ok {
+			PrintMemberOfs(memberOf)
+		}
 	}
 }

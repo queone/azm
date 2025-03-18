@@ -24,6 +24,7 @@ func init() {
 // Checks if the filter string is found anywhere within the AzureObject.
 // This method performs a recursive search.
 func (obj AzureObject) HasString(filter string) bool {
+	// TODO: Consider optimizing further
 	for _, value := range obj {
 		switch v := value.(type) {
 		case string:
@@ -56,31 +57,59 @@ func (obj AzureObject) HasString(filter string) bool {
 }
 
 // Trims the AzureObject to retain only the fields needed for caching based on the type code.
-func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
+func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 	// We restrict caching to only certain fields to make this library more performant.
-	switch t {
-	case "d": // Resource Role Definitions
-		trimmed = AzureObject{
-			"id":                 obj["id"],
-			"displayName":        obj["displayName"],
-			"description":        obj["description"],
-			"isAssignableToRole": obj["isAssignableToRole"],
+	switch mazType {
+	case RbacDefinition:
+		// Trim the AzureObject to retain only specific fields for role definitions.
+		if properties, ok := obj["properties"].(map[string]interface{}); ok {
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+				"properties": map[string]interface{}{
+					"assignableScopes": properties["assignableScopes"],
+					"description":      properties["description"],
+					"permissions":      properties["permissions"],
+					"roleName":         properties["roleName"],
+					"type":             properties["type"],
+				},
+			}
+		} else {
+			// Fallback: if properties is missing or not a map, just include the top-level fields.
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+			}
 		}
-	case "a": // Resource Role Assignments
-		trimmed = AzureObject{
-			"id":               obj["id"],
-			"principalId":      obj["principalId"],
-			"roleDefinitionId": obj["roleDefinitionId"],
-			"scope":            obj["scope"],
+	case RbacAssignment:
+		// Trim the AzureObject to retain only specific fields for role definitions.
+		if properties, ok := obj["properties"].(map[string]interface{}); ok {
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+				"properties": map[string]interface{}{
+					"roleDefinitionId": properties["roleDefinitionId"],
+					"description":      properties["description"],
+					"principalId":      properties["principalId"],
+					"principalType":    properties["principalType"],
+					"scope":            properties["scope"],
+				},
+			}
+		} else {
+			// Fallback: if properties is missing or not a map, just include the top-level fields.
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+			}
 		}
-	case "s": // Resource Subscriptions
+	case Subscription:
 		trimmed = AzureObject{
 			"id":             obj["id"],
 			"subscriptionId": obj["subscriptionId"],
 			"displayName":    obj["displayName"],
 			"state":          obj["state"],
 		}
-	case "m": // Resource Management Groups
+	case ManagementGroup:
 		trimmed = AzureObject{
 			"id":   obj["id"],
 			"name": obj["name"],
@@ -89,7 +118,7 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 		if properties, ok := obj["properties"].(map[string]interface{}); ok {
 			trimmed["displayName"] = properties["displayName"]
 			trimmed["tenantId"] = properties["tenantId"]
-			// // OPTIONAL: Keep the same struct as Azure does
+			// OPTIONAL: Keep the same struct as Azure does
 			// trimmed["properties"] = map[string]interface{}{
 			// 	"displayName": properties["displayName"],
 			// 	"tenantId":    properties["tenantId"],
@@ -98,16 +127,16 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 			// Fallback if "properties" is missing or not a map
 			trimmed["displayName"] = nil
 			trimmed["tenantId"] = nil
-			// // OPTIONAL: Keep the same struct as Azure does
+			// OPTIONAL: Keep the same struct as Azure does
 			// trimmed["properties"] = map[string]interface{}{}
 		}
-	case "u": // Directory Users
+	case DirectoryUser:
 		trimmed = AzureObject{
 			"id":                obj["id"],
 			"displayName":       obj["displayName"],
 			"userPrincipalName": obj["userPrincipalName"],
 		}
-	case "g": // Directory Groups
+	case DirectoryGroup:
 		trimmed = AzureObject{
 			"id":                 obj["id"],
 			"displayName":        obj["displayName"],
@@ -115,20 +144,20 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 			"createdDateTime":    obj["createdDateTime"],
 			"isAssignableToRole": obj["isAssignableToRole"],
 		}
-	case "ap": // Directory Applications
+	case Application:
 		trimmed = AzureObject{
 			"id":          obj["id"],
 			"displayName": obj["displayName"],
 			"appId":       obj["appId"],
 		}
-	case "sp": // Directory Service Principals
+	case ServicePrincipal:
 		trimmed = AzureObject{
 			"id":                     obj["id"],
 			"displayName":            obj["displayName"],
 			"appId":                  obj["appId"],
 			"appOwnerOrganizationId": obj["appOwnerOrganizationId"],
 		}
-	case "dr": // Directory Role Definitions
+	case DirRoleDefinition:
 		trimmed = AzureObject{
 			"id":          obj["id"],
 			"displayName": obj["displayName"],
@@ -138,7 +167,7 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 			"templateId":  obj["templateId"],
 			//"rolePermissions": obj["rolePermissions"],
 		}
-	case "da": // Directory Role Assignments
+	case DirRoleAssignment:
 		trimmed = AzureObject{
 			"id":               obj["id"],
 			"directoryScopeId": obj["directoryScopeId"],
@@ -146,7 +175,7 @@ func (obj AzureObject) TrimForCache(t string) (trimmed AzureObject) {
 			"roleDefinitionId": obj["roleDefinitionId"],
 		}
 	default:
-		// If type is unknown, just include the ID field.
+		// For unknown type just include the ID field.
 		trimmed = AzureObject{
 			"id": obj["id"],
 		}
@@ -166,28 +195,54 @@ func (list *AzureObjectList) Add(obj AzureObject) {
 	*list = append(*list, obj) // Append the new object to the list
 }
 
-// Replaces an object in an AzureObjectList list by matching on id.
+// EFFICIENCY NOTE: Below functions use 'for i := range list' and access each
+// element via '&list[i]' to avoid copying each item in the list. This is more
+// efficient than 'for _, obj := range list', which creates a copy of each
+// element during iteration. This is especially beneficial for large lists or
+// large objects, as it reduces memory overhead and improves performance.
+
+// Replaces an object in an AzureObjectList by matching on id, name, or subscriptionId.
 func (list *AzureObjectList) Replace(newObj AzureObject) bool {
 	id, idOk := newObj["id"].(string)
-	if !idOk {
-		return false // The new object must have an id field
+	name, nameOk := newObj["name"].(string)
+	subscriptionId, subscriptionIdOk := newObj["subscriptionId"].(string)
+
+	// The new object must have at least one of the unique keys
+	if !idOk && !nameOk && !subscriptionIdOk {
+		return false
 	}
 
-	// Iterate through the list to find an object with a matching id
-	for j, obj := range *list {
-		existingId, idOk := obj["id"].(string)
-		if idOk && existingId == id {
+	// Iterate through the list to find an object with a matching key
+	for j := range *list {
+		obj := &(*list)[j] // Access the element directly via pointer
+		// Most objects use 'id' for their unique key, but RBAC role definitions
+		// and assignments, and Subscriptions use different keys.
+		if (idOk && (*obj)["id"] == id) ||
+			(nameOk && (*obj)["name"] == name) ||
+			(subscriptionIdOk && (*obj)["subscriptionId"] == subscriptionId) {
 			(*list)[j] = newObj // Replace the existing object with the new one
 			return true         // Return true if the replacement was successful
 		}
 	}
-	return false // Return false if no object with the matching id was found
+	return false // Return false if no object with a matching key was found
 }
 
 // Deletes an object from the list by matching on its ID.
 func (list *AzureObjectList) DeleteById(targetId string) bool {
-	// Use Delete with ID criteria for deletion
-	return list.Delete(AzureObject{"id": targetId})
+	if targetId == "" {
+		return false
+	}
+	for j := range *list {
+		obj := &(*list)[j] // Access the element directly via pointer
+		// Most objects use 'id' for their unique key, but RBAC role definitions
+		// and assignments, and Subscriptions use different keys.
+		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
+			// Modify the slice in-place by removing the matched element
+			*list = append((*list)[:j], (*list)[j+1:]...)
+			return true // Return true after successful deletion
+		}
+	}
+	return false // Return false if no match is found
 }
 
 // Deletes an object from the list by matching on its displayName.
@@ -195,17 +250,27 @@ func (list *AzureObjectList) DeleteByName(targetName string) bool {
 	if targetName == "" {
 		return false
 	}
-	// Use Delete with displayName criteria for deletion
-	return list.Delete(AzureObject{"displayName": targetName})
+	// See EFFICIENCY NOTE above
+	for j := range *list {
+		obj := &(*list)[j] // Access the element directly via pointer
+		if (*obj)["displayName"] == targetName {
+			// Modify the slice in-place by removing the matched element
+			*list = append((*list)[:j], (*list)[j+1:]...)
+			return true // Return true after successful deletion
+		}
+	}
+	return false // Return false if no match is found
 }
 
 // Deletes an object from the list based on one or more field matches.
-func (list *AzureObjectList) Delete(criteria AzureObject) bool {
-	for j, obj := range *list {
+func (list *AzureObjectList) Delete(targetObj AzureObject) bool {
+	// See EFFICIENCY NOTE above
+	for j := range *list {
+		obj := &(*list)[j] // Access the element directly via pointer
 		matches := true
 		// Check if the current object matches all criteria
-		for key, targetValue := range criteria {
-			if value, ok := obj[key]; !ok || value != targetValue {
+		for key, targetValue := range targetObj {
+			if value, ok := (*obj)[key]; !ok || value != targetValue {
 				matches = false
 				break
 			}
@@ -221,7 +286,19 @@ func (list *AzureObjectList) Delete(criteria AzureObject) bool {
 
 // Finds an object in the list by its ID and returns a pointer to it.
 func (list AzureObjectList) FindById(targetId string) *AzureObject {
-	return list.Find(AzureObject{"id": targetId})
+	if targetId == "" {
+		return nil
+	}
+	// See EFFICIENCY NOTE above
+	for i := range list {
+		obj := &list[i] // Access the element directly via pointer
+		// Most objects use 'id' for their unique key, but RBAC role definitions
+		// and assignments, and Subscriptions use different keys.
+		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
+			return obj // Return pointer to the matching object
+		}
+	}
+	return nil // Return nil if no match is found
 }
 
 // Finds an object in the list by its displayName and returns a pointer to it.
@@ -229,15 +306,23 @@ func (list AzureObjectList) FindByName(targetName string) *AzureObject {
 	if targetName == "" {
 		return nil
 	}
-	return list.Find(AzureObject{"displayName": targetName})
+	// See EFFICIENCY NOTE above
+	for i := range list {
+		obj := &list[i] // Access the element directly via pointer
+		if (*obj)["displayName"] == targetName {
+			return obj // Return pointer to the matching object
+		}
+	}
+	return nil // Return nil if no match is found
 }
 
 // Finds an object in the list based on one or more field matches and returns a pointer to it.
-func (list AzureObjectList) Find(criteria AzureObject) *AzureObject {
+func (list AzureObjectList) Find(targetObj AzureObject) *AzureObject {
+	// See EFFICIENCY NOTE above
 	for i := range list {
-		obj := &list[i] // Get a pointer to the current object
+		obj := &list[i] // Access the element directly via pointer
 		matches := true
-		for key, targetValue := range criteria {
+		for key, targetValue := range targetObj {
 			if value, ok := (*obj)[key]; !ok || value != targetValue {
 				matches = false
 				break
@@ -252,7 +337,19 @@ func (list AzureObjectList) Find(criteria AzureObject) *AzureObject {
 
 // Checks if an object exists in the list by its ID.
 func (list AzureObjectList) ExistsById(targetId string) bool {
-	return list.Exists(AzureObject{"id": targetId})
+	if targetId == "" {
+		return false
+	}
+	// See EFFICIENCY NOTE above
+	for i := range list {
+		obj := &list[i] // Access the element directly via pointer
+		// Most objects use 'id' for their unique key, but RBAC role definitions
+		// and assignments, and Subscriptions use different keys.
+		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
+			return true
+		}
+	}
+	return false
 }
 
 // Checks if an object exists in the list by its displayName.
@@ -260,15 +357,24 @@ func (list AzureObjectList) ExistsByName(targetName string) bool {
 	if targetName == "" {
 		return false
 	}
-	return list.Exists(AzureObject{"displayName": targetName})
+	// See EFFICIENCY NOTE above
+	for i := range list {
+		obj := &list[i] // Access the element directly via pointer
+		if (*obj)["displayName"] == targetName {
+			return true
+		}
+	}
+	return false
 }
 
 // Checks if an object exists in the list based on one or more field matches.
-func (list AzureObjectList) Exists(criteria AzureObject) bool {
-	for _, obj := range list {
+func (list AzureObjectList) Exists(targetObj AzureObject) bool {
+	// See EFFICIENCY NOTE above
+	for i := range list {
+		obj := &list[i] // Access the element directly via pointer
 		matches := true
-		for key, targetValue := range criteria {
-			if value, ok := obj[key]; !ok || value != targetValue {
+		for key, targetValue := range targetObj {
+			if value, ok := (*obj)[key]; !ok || value != targetValue {
 				matches = false
 				break
 			}

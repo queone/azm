@@ -17,11 +17,11 @@ type Cache struct {
 
 // Initializes a Cache instance for a given type.
 // If the cache file exists, it loads the existing cache; otherwise, it creates a new one.
-func GetCache(t string, z *Config) (*Cache, error) {
+func GetCache(mazType string, z *Config) (*Cache, error) {
 	// Ensure the type is valid
-	suffix, ok := CacheSuffix[t]
+	suffix, ok := CacheSuffix[mazType]
 	if !ok {
-		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(t))
+		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
 	}
 
 	// Construct both file paths
@@ -150,8 +150,13 @@ func (c *Cache) Delete(id string) error {
 func (c *Cache) Upsert(obj AzureObject) error {
 	id := utl.Str(obj["id"])
 	if id == "" {
-		utl.PrintJsonColor(obj)
-		return fmt.Errorf("object with blank ID not added to cache")
+		id = utl.Str(obj["name"]) // Some objects use 'name' for ID
+		if id == "" {
+			id = utl.Str(obj["subscriptionId"]) // Subscriptions use this for ID
+			if id == "" {
+				return fmt.Errorf("object with blank ID not added to cache")
+			}
+		}
 	}
 
 	// Check if the object already exists in the cache
@@ -192,18 +197,23 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 }
 
 // Merges the deltaSet with the current cache data.
-func (c *Cache) Normalize(t string, deltaSet AzureObjectList) {
+func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 	deletedIds := utl.NewStringSet() // Track IDs to delete
 	uniqueIds := utl.NewStringSet()  // Track unique IDs in the deltaSet
 	mergeSet := AzureObjectList{}    // List for new/updated objects in deltaSet
 
 	// 1. Process deltaSet to build mergeSet and track deleted IDs
-	for _, item := range deltaSet {
-		id := item["id"].(string) // Access "id" field directly
-		if item["@removed"] == nil && item["members@delta"] == nil {
+	for i := range deltaSet {
+		item := &deltaSet[i] // Access the element directly via pointer
+		id, idOk := (*item)["id"].(string)
+		if !idOk {
+			continue // Skip items without a valid "id"
+		}
+
+		if (*item)["@removed"] == nil && (*item)["members@delta"] == nil {
 			// New or updated object
 			if !uniqueIds.Exists(id) {
-				mergeSet.Add(item) // Add to mergeSet
+				mergeSet.Add(*item) // Add to mergeSet
 				uniqueIds.Add(id)
 			}
 		} else {
@@ -218,9 +228,10 @@ func (c *Cache) Normalize(t string, deltaSet AzureObjectList) {
 	}
 
 	// 3. Add new entries from mergeSet to the cache
-	for _, item := range mergeSet {
-		if err := c.Upsert(item); err != nil {
-			fmt.Printf("WARNING: Failed to upsert cache object with ID '%s': %v\n", item["id"], err)
+	for i := range mergeSet {
+		item := &mergeSet[i] // Access the element directly via pointer
+		if err := c.Upsert(*item); err != nil {
+			fmt.Printf("WARNING: Failed to upsert cache object with ID '%s': %v\n", (*item)["id"], err)
 		}
 	}
 }
