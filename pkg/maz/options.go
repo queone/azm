@@ -1,6 +1,10 @@
 package maz
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/queone/utl"
+)
 
 // Options map type to facilitate calling functions with many variables.
 type Options struct {
@@ -32,7 +36,7 @@ func (a *Options) GetString(key string) (string, bool) {
 	if !ok {
 		return "", false // If not set, return empty string
 	}
-	strValue, ok := value.(string)
+	strValue := utl.Str(value)
 	return strValue, ok
 }
 

@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.3.0"
+	program_version = "0.3.1"
 )
 
 func printUsage(extended bool) {
@@ -182,27 +182,22 @@ func main() {
 		switch arg1 {
 		case "-tc":
 			maz.DecodeJwtToken(arg2)
-
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove the leading '-'
 			maz.PrintMatchingObjects(specifier, arg2, z)
-
 		case "-rm", "-rmf":
 			force := false
 			if arg1 == "-rmf" {
 				force = true
 			}
 			if utl.FileUsable(arg2) {
-				// Delete by given specfile
 				maz.DeleteObjectBySpecfile(force, arg2, z)
 			} else if utl.ValidUuid(arg2) {
 				maz.DeleteObjectById(force, arg2, z)
 			} else {
-				utl.Die("Delete by given NAME\n")
-				//maz.DeleteObjectByName(force, arg2, z)
+				maz.DeleteObjectByName(force, arg2, z)
 			}
-
 		case "-up", "-upf":
 			force := false
 			if arg1 == "-upf" {

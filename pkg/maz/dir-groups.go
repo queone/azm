@@ -16,9 +16,9 @@ func PrintGroup(x AzureObject, z *Config) {
 	// Print the most important attributes first
 	fmt.Printf("%s\n", utl.Gra("# Directory Group"))
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(x["displayName"].(string)))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
 	if x["description"] != nil {
-		fmt.Printf("%s: %s\n", utl.Blu("description"), utl.Gre(x["description"].(string)))
+		fmt.Printf("%s: %s\n", utl.Blu("description"), utl.Gre(utl.Str(x["description"])))
 	}
 	if x["isAssignableToRole"] != nil {
 		fmt.Printf("%s: %s\n", utl.Blu("isAssignableToRole"), utl.Mag(x["isAssignableToRole"].(bool)))
@@ -26,15 +26,16 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print owners of this group
 	apiUrl := ConstMgUrl + "/v1.0/groups/" + id + "/owners"
-	r, statusCode, _ := ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		owners := r["value"].([]interface{}) // Assert as JSON array type
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil {
+		owners := resp["value"].([]interface{}) // Assert as JSON array type
 		if len(owners) > 0 {
 			fmt.Printf("%s:\n", utl.Blu("owners"))
 			for _, i := range owners {
 				if mapObj, ok := i.(map[string]interface{}); ok {
 					o := AzureObject(mapObj) // Convert map[string]interface{} to AzureObject
-					fmt.Printf("  %-50s %s\n", utl.Gre(o["userPrincipalName"].(string)), utl.Gre(o["id"].(string)))
+					fmt.Printf("  %-50s %s\n", utl.Gre(utl.Str(o["userPrincipalName"])),
+						utl.Gre(utl.Str(o["id"])))
 				}
 			}
 		}
@@ -47,32 +48,33 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/transitiveMemberOf"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		if memberOf, ok := r["value"].([]interface{}); ok {
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil {
+		if memberOf, ok := resp["value"].([]interface{}); ok {
 			PrintMemberOfs(memberOf)
 		}
 	}
 
 	// Print members of this group
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members" // beta works
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		members := r["value"].([]interface{})
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil {
+		members := resp["value"].([]interface{})
 		if len(members) > 0 {
 			fmt.Printf("%s:\n", utl.Blu("members"))
-			for _, i := range members {
-				if mapObj, ok := i.(map[string]interface{}); ok {
-					m := AzureObject(mapObj) // Convert map[string]interface{} to AzureObject
+			for _, item := range members {
+				if member := utl.Map(item); member != nil {
+					azObj := AzureObject(member) // Cast map[string]interface{}
 					Type, Name := "-", "-"
-					Type = utl.LastElem(m["@odata.type"].(string), ".")
+					Type = utl.LastElem(utl.Str(azObj["@odata.type"]), ".")
 					switch Type {
 					case "group", "servicePrincipal":
-						Name = m["displayName"].(string)
+						Name = utl.Str(azObj["displayName"])
 					default:
-						Name = m["userPrincipalName"].(string)
+						Name = utl.Str(azObj["userPrincipalName"])
 					}
-					fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name), utl.Gre(m["id"].(string)), utl.Gre(Type))
+					fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name),
+						utl.Gre(utl.Str(azObj["id"])), utl.Gre(Type))
 				}
 			}
 		}
@@ -105,26 +107,19 @@ func PrintCountStatusGroups(z *Config) {
 }
 
 // Creates or updates an Azure directory group from given command-line arguments.
-func UpsertGroupFromArgs(opts *Options, z *Config) {
-	force, _ := opts.GetBool("force")
-	id, _ := opts.GetString("id") // Note that id may be a UUID or a displayName
-	description, descriptionSet := opts.GetString("description")
-	isAssignableToRole, isAssignableToRoleSet := opts.GetBool("isAssignableToRole")
+func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string, z *Config) {
+	// Note that id may be a UUID or a displayName
 
 	// Initialize the obj, and add any user-supplied attributes
 	obj := make(AzureObject)
-	if descriptionSet {
-		obj["description"] = description
-	}
-	if isAssignableToRoleSet {
-		obj["isAssignableToRole"] = isAssignableToRole
-	}
+	obj["description"] = description
+	obj["isAssignableToRole"] = isAssignableToRole
 
-	x := PreFetchAzureObject("g", id, z)
+	x := PreFetchAzureObject(DirectoryGroup, id, z)
 	if x != nil {
 		// It exists, let's update
 		// Note: At the moment, via CLI args, the *only* UPDATEable field is 'description'
-		UpdateDirObject(force, x["id"].(string), obj, "g", z)
+		UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z)
 	} else {
 		// Doesn't exist, let's create
 		// Initialize the object with the minimum required attributes for creation.
@@ -132,26 +127,23 @@ func UpsertGroupFromArgs(opts *Options, z *Config) {
 		obj["mailEnabled"] = false
 		obj["mailNickname"] = "NotSet"
 		obj["securityEnabled"] = true
-		CreateDirObject(force, obj, "g", z)
+		CreateDirObject(force, obj, DirectoryGroup, z)
 	}
 }
 
 // Creates or updates an Azure directory group from given specfile.
-func UpsertGroupFromFile(opts *Options, z *Config) {
-	force, _ := opts.GetBool("force")
-	filePath, _ := opts.GetString("filePath")
-
+func UpsertGroupFromFile(force bool, specfile string, z *Config) {
 	// Abort if specfile is not YAML
-	formatType, t, mapObj := GetObjectFromFile(filePath)
+	formatType, mazType, mapObj := GetObjectFromFile(specfile)
 	obj := AzureObject(mapObj)
-	if formatType != "YAML" {
+	if formatType != YamlFormat {
 		utl.Die("File is not YAML\n")
 	}
 	// Abort if specfile object isn't valid
 	if obj == nil {
 		utl.Die("Specfile does not contain a valid directory group definition.\n")
 	}
-	if t != "g" {
+	if mazType != DirectoryGroup {
 		utl.Die("Object defined in specfile is not a directory group.\n")
 	}
 
@@ -162,10 +154,12 @@ func UpsertGroupFromFile(opts *Options, z *Config) {
 		utl.Die("%s %s\n", msg, utl.Red("displayName"))
 	}
 
-	x := PreFetchAzureObject("g", displayName, z)
-	if x == nil {
+	x := PreFetchAzureObject(DirectoryGroup, displayName, z)
+	if x != nil {
+		// Update if group exists
+		UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z)
+	} else {
 		// Create if group does not exist
-
 		// Set up obj with the minimally required attributes to create a group
 		if obj["mailEnabled"] == nil {
 			utl.Die("%s %s\n", msg, utl.Red("mailEnabled"))
@@ -176,12 +170,7 @@ func UpsertGroupFromFile(opts *Options, z *Config) {
 		if obj["securityEnabled"] == nil {
 			utl.Die("%s %s\n", msg, utl.Red("securityEnabled"))
 		}
-
-		CreateDirObject(force, obj, "g", z)
-	} else {
-		// Update if group exists
-		id := utl.Str(x["id"])
-		UpdateDirObject(force, id, obj, "g", z)
+		CreateDirObject(force, obj, DirectoryGroup, z)
 	}
 }
 

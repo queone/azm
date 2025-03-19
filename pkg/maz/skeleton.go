@@ -75,11 +75,11 @@ func CreateSkeletonFile(mazType string) {
 			"# identifierUri: The URI used to identify the application\n" +
 			"# replyUrls: A list of URLs that the application can redirect to after authentication\n")
 	}
-	filePath := filepath.Join(pwd, fileName)
-	if utl.FileExist(filePath) {
+	specfile := filepath.Join(pwd, fileName)
+	if utl.FileExist(specfile) {
 		utl.Die("Error: File %s already exists.\n", fileName)
 	}
-	f, err := os.Create(filePath) // Create the file
+	f, err := os.Create(specfile) // Create the file
 	if err != nil {
 		fmt.Println(err)
 	}

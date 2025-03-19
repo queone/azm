@@ -15,12 +15,18 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 	switch mazType {
 	case RbacDefinition:
 		UpsertRbacDefinition(force, obj, z)
+
 	case RbacAssignment:
 		CreateRbacAssignment(obj, z)
+
+	// Refocus below target functions, renaming 'FromFile' to simply
+	// 'UpsertOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
+	// object extraction
 	case Application, ServicePrincipal:
-		//UpsertAppSpFromFile(force, obj, z)            // TODO: Change func *FromFile to obj, just 'UpsertAppSp()'?
+		//UpsertAppSpFromFile(force bool, specfile string, z *Config)
 	case DirectoryGroup:
-		//UpsertGroupFromFile(opts *Options, z *Config) // TODO: Change from *FromFile to obj, just 'UpsertDirGroup()'?
+		//UpsertGroupFromFile(force bool, specfile string, z *Config)
+
 	default:
 		utl.Die("Unsupported specfile type. Only RBAC role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
 	}
@@ -36,13 +42,17 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 
 	case RbacAssignment:
 		DeleteRbacAssignment(force, obj, z)
+
+	// Refocus below target functions, renaming 'ByIdentifier' & 'FromFile' to simply
+	// 'DeleteOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
+	// object extraction
 	case Application, ServicePrincipal:
-		//DeleteAppSpByIdentifier(force, arg2, z) ??
-		//UpsertAppSpFromFile(force, obj, z)            // TODO: Change func *FromFile to obj, just 'UpsertAppSp()'?
+		//DeleteAppSpByIdentifier(force bool, identifier string, z *Config) -- THIS MAY BE FINE
 	case DirectoryGroup:
-		//UpsertGroupFromFile(opts *Options, z *Config) // TODO: Change from *FromFile to obj, just 'UpsertDirGroup()'?
+		//DeleteDirObject
 	default:
-		utl.Die("Unsupported specfile type. Only RBAC role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
+		utl.Die("Unsupported specfile type. Only RBAC role definitions and assignment;" +
+			" groups; and AppSP specfiles are allowed.\n")
 	}
 	os.Exit(0)
 }
@@ -59,11 +69,11 @@ func DeleteObjectById(force bool, targetId string, z *Config) {
 			mazType := utl.Str(item["maz_type"])
 			fmt.Printf("  %-30s  %s\n", MazTypeNames[mazType], id)
 		}
-		utl.Die("%s\n", utl.Red("Cannot delete. Try deleting by name or specfile instead."))
+		utl.Die("%s\n", utl.Red("Cannot delete by ID. Try deleting by name or specfile instead."))
 	}
 
 	if len(list) < 1 {
-		utl.Die("%s\n", utl.Red("Could not find object with this ID."))
+		utl.Die("%s\n", utl.Red("Cannot find an object with this ID"))
 	}
 
 	// Single out the object
@@ -84,95 +94,83 @@ func DeleteObjectById(force bool, targetId string, z *Config) {
 		msg := fmt.Sprintf("%v", err)
 		utl.Die("%s\n", utl.Red(msg))
 	default:
-		msg := fmt.Sprintf("Utility does not support deleting %s objects.", MazTypeNames[mazType])
+		msg := fmt.Sprintf("Utility does not support deleting %s objects.",
+			MazTypeNames[mazType])
 		utl.Die("%s\n", utl.Red(msg))
 	}
 }
 
-// Deletes an object based on specifier, which can be an Id, a name, or a specfile,
-// but that depends on the mazType.
-func DeleteObject(force bool, specifier string, z *Config) {
-	if utl.ValidUuid(specifier) {
-		// Get all objects that may match this ID, hopefully just one
-		list, _ := FindAzureObjectsById(specifier, z)
-		if len(list) > 1 {
-			utl.Die("%s\n", utl.Red("UUID collision? Run utility with UUID argument to see the list."))
+// Deletes an Azure object by name. Only 4 types of objects are supported: resource
+// role definitions, App & SP pairs, directory groups and role definitions.
+func DeleteObjectByName(force bool, name string, z *Config) {
+	idMap := FindAzureObjectsByName(name, z)
+
+	// Handle the case of multiple objects sharing the same name
+	if len(idMap) > 1 {
+		fmt.Printf("Found multiple objects named %s:\n", utl.Yel(name))
+		for id, mazType := range idMap {
+			fmt.Printf("  %-38s  %s\n", id, MazTypeNames[mazType])
 		}
-		if len(list) < 1 {
-			utl.Die("Object does not exist.\n")
-		}
-		y := AzureObject(list[0]) // Cast single object
-		if y != nil && y["maz_type"] != nil {
-			mazType := utl.Str(y["maz_type"])
-			fqid := utl.Str(y["id"]) // Grab fully qualified object Id
-			PrintObject(mazType, y, z)
-			if !force {
-				if utl.PromptMsg("DELETE above? y/n ") != 'y' {
-					utl.Die("Aborted.\n")
-				}
-			}
-			switch mazType {
-			case RbacDefinition:
-				DeleteRbacDefinitionById(fqid, z)
-			case RbacAssignment:
-				DeleteRbacAssignmentByFqid(fqid, z)
-			}
-		}
-	} else if utl.FileExist(specifier) {
-		// Delete object defined in specfile
-		format, mazType, x := GetObjectFromFile(specifier) // x is for the object in Specfile
-		if format != "JSON" && format != "YAML" {
-			utl.Die("File is not in JSON nor YAML format\n")
-		}
-		var y map[string]interface{} = nil
+		utl.Die("%s\n", utl.Red("Cannot delete by name. Try deleting by ID or specfile instead."))
+	}
+
+	if len(idMap) < 1 {
+		utl.Die("Could not find an object named %s\n", utl.Red(name))
+	}
+
+	// Process for the single object with this name
+	for targetId, mazType := range idMap {
 		switch mazType {
 		case RbacDefinition:
-			y, _ = GetRbacDefinitionByObject(x, z) // y is for the object from Azure
-			fqid := utl.Str(y["id"])               // Grab fully qualified object Id
-			if y == nil {
-				utl.Die("Role definition does not exist.\n")
-			} else {
-				PrintRbacDefinition(y, z) // Use specific role def print function
-				if !force {
-					if utl.PromptMsg("DELETE above? y/n ") != 'y' {
-						utl.Die("Aborted.\n")
-					}
-				}
-				DeleteRbacDefinitionById(fqid, z)
-			}
-		case RbacAssignment:
-			y = GetRbacAssignmentByObject(x, z)
-			fqid := utl.Str(y["id"]) // Grab fully qualified object Id
-			if y == nil {
-				utl.Die("Role assignment does not exist.\n")
-			} else {
-				PrintRbacAssignment(y, z) // Use specific role assgmnt print function
-				if !force {
-					if utl.PromptMsg("DELETE above? y/n ") != 'y' {
-						utl.Die("Aborted.\n")
-					}
-				}
-				DeleteRbacAssignmentByFqid(fqid, z)
-			}
+			targetObj := GetAzureRbacDefinitionById(targetId, z)
+			DeleteRbacDefinition(force, targetObj, z)
+		case Application, ServicePrincipal:
+			DeleteAppSpByIdentifier(force, targetId, z)
+		case DirectoryGroup, DirRoleDefinition:
+			err := DeleteDirObject(force, targetId, mazType, z)
+			msg := fmt.Sprintf("%v", err)
+			utl.Die("%s\n", utl.Red(msg))
 		default:
-			utl.Die("%s specfile is neither an RBAC role definition or assignment.\n", format)
+			msg := fmt.Sprintf("Utility does not support deleting %s objects by name.",
+				MazTypeNames[mazType])
+			utl.Die("%s\n", utl.Red(msg))
 		}
-	} else {
-		// Delete role definition by its displayName, if it exists. This only applies to definitions
-		// since assignments do not have a displayName attribute. Also, other objects are not supported.
-		y := GetAzureRbacDefinitionByName(specifier, z)
-		if y == nil {
-			utl.Die("Role definition does not exist.\n")
-		}
-		fqid := utl.Str(y["id"]) // Grab fully qualified object Id
-		PrintRbacDefinition(y, z)
-		if !force {
-			if utl.PromptMsg("DELETE above? y/n ") != 'y' {
-				utl.Die("Aborted.\n")
+	}
+}
+
+// Returns a map of id:mazType objects sharing given name. Only 4 types of
+// objects are supported: resource role definitions, App & SP pairs, directory
+// groups and role definitions.
+func FindAzureObjectsByName(name string, z *Config) map[string]string {
+	// Set up the map to collect the set id:mazType objects that share this name
+	idMap := make(map[string]string)
+
+	// Get any RBAC role definitions with that name and add them to our growing list
+	rbacDefinitions := GetAzureRbacDefinitionsByName(name, z)
+	if len(rbacDefinitions) > 0 {
+		for i := range rbacDefinitions {
+			// Optimized: Access the element directly via pointer (memory walk) instead of copying
+			obj := &rbacDefinitions[i]
+			id := utl.Str((*obj)["name"])
+			if id != "" {
+				idMap[id] = RbacDefinition
 			}
 		}
-		DeleteRbacDefinitionById(fqid, z)
 	}
+	// Get any other supported object with that name and add them to our growing list
+	for _, mazType := range []string{Application, ServicePrincipal, DirectoryGroup, DirRoleDefinition} {
+		matchingSet := GetObjectFromAzureByName(mazType, name, z)
+		if len(matchingSet) > 0 {
+			for i := range matchingSet {
+				obj := &matchingSet[i]
+				id := utl.Str((*obj)["id"])
+				if id != "" {
+					idMap[id] = mazType
+				}
+			}
+		}
+	}
+	return idMap
 }
 
 // Returns a list of Azure objects that match the given ID. Only object types that are
@@ -231,36 +229,22 @@ func GetAzureObjectById(mazType, id string, z *Config) (x AzureObject) {
 // Gets all Azure RBAC scopes in the tenant's resource hierarchy, starting with the
 // Tenant Root Group, then all management groups, and finally all subscription scopes.
 func GetAzureRbacScopes(z *Config) (scopes []string) {
-	// Collect all managementGroups and subscription RBAC scopes
+	// Collect all resource management groups and subscription RBAC scopes
 	scopes = nil
 	mgmtGroupIds := GetAzureMgmtGroupsIds(z) // Includes the Tenant Root Group
 	scopes = append(scopes, mgmtGroupIds...)
 	subIds := GetAzureSubscriptionsIds(z)
 	scopes = append(scopes, subIds...)
 
-	// SCOPES below subscriptions do not appear to be REALLY NEEDED. Most list
-	// search functions pull all objects in lower scopes. If there is a future
-	// need to keep drilling down, next level being Resource Group scopes, then
-	// they can be acquired with something like below:
-
-	// params := map[string]string{"api-version": "2021-04-01"} // resourceGroups
-	// for subId := range subIds {
-	// 	apiUrl := ConstAzUrl + subId + "/resourcegroups"
-	// 	r, _, _ := ApiGet(apiUrl, z, params)
-	// 	if r != nil && r["value"] != nil {
-	// 		resourceGroups := r["value"].([]interface{})
-	// 		for _, j := range resourceGroups {
-	// 			y := j.(map[string]interface{})
-	// 			rgId := utl.Str(y["id"])
-	// 			scopes = append(scopes, rgId)
-	// 		}
-	// 	}
-	// }
-	// // Then repeat for next leval scope ...
+	// Retrieving scopes that are each subscription do not appear neccessary. Most
+	// API list search functions appear to be pulling all objects in lower scopes
+	// also. If in the future we discover that we drilling down further into those
+	// other scopes, then we will need to add that here.
 
 	return scopes
 }
 
+// TO BE DELETED
 // Retrieves locally cached list of objects in given cache file
 func GetCachedObjects(cacheFile string) (cachedList []interface{}) {
 	cachedList = nil
@@ -273,7 +257,7 @@ func GetCachedObjects(cacheFile string) (cachedList []interface{}) {
 	return cachedList
 }
 
-// Generic querying function to get Azure objects of any type t, whose attributes
+// Generic querying function to get Azure objects of any mazType, whose attributes
 // match on filter. If the filter is the "" empty string, return ALL of the objects
 // of this particular type. Works accross MS Graph and ARM objects.
 func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObjectList {
@@ -297,21 +281,21 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 // Returns all Azure pages for given API URL call
 func GetAzAllPages(apiUrl string, z *Config) (list []interface{}) {
 	list = nil
-	r, _, _ := ApiGet(apiUrl, z, nil)
+	resp, _, _ := ApiGet(apiUrl, z, nil)
 	for {
 		// Forever loop until there are no more pages
 		var thisBatch []interface{} = nil // Assume zero entries in this batch
-		if r["value"] != nil {
-			thisBatch = r["value"].([]interface{})
+		if resp["value"] != nil {
+			thisBatch = resp["value"].([]interface{})
 			if len(thisBatch) > 0 {
 				list = append(list, thisBatch...) // Continue growing list
 			}
 		}
-		nextLink := utl.Str(r["@odata.nextLink"])
+		nextLink := utl.Str(resp["@odata.nextLink"])
 		if nextLink == "" {
 			break // Break once there is no more pages
 		}
-		r, _, _ = ApiGet(nextLink, z, nil) // Get next batch
+		resp, _, _ = ApiGet(nextLink, z, nil) // Get next batch
 	}
 	return list
 }
@@ -319,13 +303,13 @@ func GetAzAllPages(apiUrl string, z *Config) (list []interface{}) {
 func GetAzObjects(apiUrl string, z *Config, verbose bool) (deltaSet []interface{}, deltaLinkMap map[string]interface{}) {
 	// To be replaced by FetchAzureObjectsDelta()
 	k := 1 // Track number of API calls
-	r, _, _ := ApiGet(apiUrl, z, nil)
+	resp, _, _ := ApiGet(apiUrl, z, nil)
 	for {
 		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
 		var thisBatch []interface{} = nil // Assume zero entries in this batch
 		var objCount int = 0
-		if r["value"] != nil {
-			thisBatch = r["value"].([]interface{})
+		if resp["value"] != nil {
+			thisBatch = resp["value"].([]interface{})
 			objCount = len(thisBatch)
 			if objCount > 0 {
 				deltaSet = append(deltaSet, thisBatch...) // Continue growing deltaSet
@@ -335,16 +319,16 @@ func GetAzObjects(apiUrl string, z *Config, verbose bool) (deltaSet []interface{
 			// Progress count indicator. Using global var rUp to overwrite last line. Defer newline until done
 			fmt.Printf("%sCall %05d : count %05d", rUp, k, objCount)
 		}
-		if r["@odata.deltaLink"] != nil {
+		if resp["@odata.deltaLink"] != nil {
 			deltaLinkMap := map[string]interface{}{
-				"@odata.deltaLink": utl.Str(r["@odata.deltaLink"]),
+				"@odata.deltaLink": utl.Str(resp["@odata.deltaLink"]),
 			}
 			if verbose {
 				fmt.Print(rUp) // Go up to overwrite progress line
 			}
 			return deltaSet, deltaLinkMap // Return immediately after deltaLink appears
 		}
-		r, _, _ = ApiGet(utl.Str(r["@odata.nextLink"]), z, nil) // Get next batch
+		resp, _, _ = ApiGet(utl.Str(resp["@odata.nextLink"]), z, nil) // Get next batch
 		k++
 	}
 }
@@ -384,7 +368,7 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	if err != nil {
 		utl.Die("Error loading specfile %s: %v\n", utl.Yel(specfile), err)
 	}
-	if format != "yaml" {
+	if format != YamlFormat {
 		utl.Die("Error. File %s is not in YAML format\n", utl.Yel(specfile))
 	}
 
@@ -422,13 +406,13 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	return format, UnknownObject, obj
 }
 
-// Compares object in specfile to what is in Azure
-func CompareSpecfileToAzure(filePath string, z *Config) {
-	if !utl.FileUsable(filePath) {
+// Compares object in specfile to what is in Azure. This is only for certain mazType objects.
+func CompareSpecfileToAzure(specfile string, z *Config) {
+	if !utl.FileUsable(specfile) {
 		utl.Die("File does not exist, or is zero size\n")
 	}
-	format, mazType, obj := GetObjectFromFile(filePath)
-	if format != "JSON" && format != "YAML" {
+	format, mazType, obj := GetObjectFromFile(specfile)
+	if format != JsonFormat && format != YamlFormat {
 		utl.Die("File is neither JSON nor YAML\n")
 	}
 	if obj == nil {
@@ -437,11 +421,10 @@ func CompareSpecfileToAzure(filePath string, z *Config) {
 
 	switch mazType {
 	case RbacDefinition:
-		azureObj, _ := GetRbacDefinitionByObject(obj, z)
+		roleName, firstScope := ValidateRbacDefinition(obj, z)
+		_, azureObj, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
 		if azureObj == nil {
-			fileProp := obj["properties"].(map[string]interface{})
-			fileRoleName := utl.Str(fileProp["roleName"])
-			fmt.Printf("Role '%s', as defined in specfile, does %s exist in Azure.\n", utl.Mag(fileRoleName), utl.Red("not"))
+			fmt.Printf("Role %s, as defined in specfile, does %s exist in Azure.\n", utl.Mag(roleName), utl.Red("not"))
 		} else {
 			fmt.Printf("Role definition in specfile %s exists in Azure:\n", utl.Gre("already"))
 			DiffRoleDefinitionSpecfileVsAzure(obj, azureObj, z)

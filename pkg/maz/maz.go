@@ -33,6 +33,9 @@ const (
 	ConstMgCacheFileAgePeriod = 1800  // Half hour
 	ConstAzCacheFileAgePeriod = 86400 // One day
 
+	YamlFormat = "yaml"
+	JsonFormat = "json"
+
 	// Maz object type strings
 	RbacDefinition    = "d"  // Azure resource RBAC role definition
 	RbacAssignment    = "a"  // Azure resource RBAC role assignment
@@ -231,9 +234,9 @@ func DumpLoginValues(z *Config) {
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_MG_TOKEN"), utl.Gre(os.Getenv("MAZ_MG_TOKEN")))
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_AZ_TOKEN"), utl.Gre(os.Getenv("MAZ_AZ_TOKEN")))
 	fmt.Printf("%s:\n", utl.Blu("config_creds_file"))
-	filePath := filepath.Join(z.ConfDir, z.CredsFile)
-	fmt.Printf("  %s: %s\n", utl.Blu("file_path"), utl.Gre(filePath))
-	credsRaw, err := utl.LoadFileYaml(filePath)
+	credsFile := filepath.Join(z.ConfDir, z.CredsFile)
+	fmt.Printf("  %s: %s\n", utl.Blu("file_path"), utl.Gre(credsFile))
+	credsRaw, err := utl.LoadFileYaml(credsFile)
 	if err != nil {
 		utl.Die("  %s\n", utl.Red("Credentials file does not exists yet."))
 	}
@@ -251,21 +254,21 @@ func DumpLoginValues(z *Config) {
 
 // Sets up credentials file for interactive login
 func SetupInterativeLogin(z *Config) {
-	filePath := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
+	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
 	}
 	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId, "username:", z.Username, "interactive:", "true")
-	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil { // Write string to file
+	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
-	fmt.Printf("Updated %s file\n", utl.Gre(filePath))
+	fmt.Printf("Updated %s file\n", utl.Gre(credsFile))
 	os.Exit(0)
 }
 
 // Sets up credentials file for client_id + secret login
 func SetupAutomatedLogin(z *Config) {
-	filePath := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
+	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
 	}
@@ -273,10 +276,10 @@ func SetupAutomatedLogin(z *Config) {
 		utl.Die("Error. CLIENT_ID is an invalid UUID.\n")
 	}
 	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId, "client_id:", z.ClientId, "client_secret:", z.ClientSecret)
-	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil { // Write string to file
+	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
-	fmt.Printf("Updated %s file\n", utl.Gre(filePath))
+	fmt.Printf("Updated %s file\n", utl.Gre(credsFile))
 	os.Exit(0)
 }
 
@@ -322,19 +325,19 @@ func SetupCredentials(z *Config) {
 		} // ... else it gets the Tenant Id from the valid tokens
 	} else {
 		// Getting from credentials file
-		filePath := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
-		if !utl.FileUsable(filePath) {
+		credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
+		if !utl.FileUsable(credsFile) {
 			utl.Die("Missing credentials file: %s\n"+
-				"Re-run program to set up the appropriate login credentials.\n", filePath)
+				"Re-run program to set up the appropriate login credentials.\n", credsFile)
 		}
-		credsRaw, err := utl.LoadFileYaml(filePath)
+		credsRaw, err := utl.LoadFileYaml(credsFile)
 		if err != nil {
-			utl.Die("[%s] %s\n", filePath, err)
+			utl.Die("[%s] %s\n", credsFile, err)
 		}
 		creds := credsRaw.(map[string]interface{})
 		z.TenantId = utl.Str(creds["tenant_id"])
 		if !utl.ValidUuid(z.TenantId) {
-			utl.Die("[%s] tenant_id '%s' is not a valid UUID\n", filePath, z.TenantId)
+			utl.Die("[%s] tenant_id '%s' is not a valid UUID\n", credsFile, z.TenantId)
 		}
 		z.Interactive, _ = strconv.ParseBool(utl.Str(creds["interactive"]))
 		if z.Interactive {
@@ -342,11 +345,11 @@ func SetupCredentials(z *Config) {
 		} else {
 			z.ClientId = utl.Str(creds["client_id"])
 			if !utl.ValidUuid(z.ClientId) {
-				utl.Die("[%s] client_id '%s' is not a valid UUID\n", filePath, z.ClientId)
+				utl.Die("[%s] client_id '%s' is not a valid UUID\n", credsFile, z.ClientId)
 			}
 			z.ClientSecret = utl.Str(creds["client_secret"])
 			if z.ClientSecret == "" {
-				utl.Die("[%s] client_secret is blank\n", filePath)
+				utl.Die("[%s] client_secret is blank\n", credsFile)
 			}
 		}
 	}

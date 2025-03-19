@@ -240,18 +240,17 @@ func DecodeJwtToken(tokenString string) {
 	sortedKeys = utl.SortObjStringKeys(token.Claims.(jwt.MapClaims))
 	for _, k := range sortedKeys {
 		v := token.Claims.(jwt.MapClaims)[k]
-		vType := utl.GetType(v)
-		switch vType {
-		case "string":
+
+		switch v := v.(type) {
+		case string:
 			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(v))
-		case "float64":
-			vFlt64 := v.(float64)
-			t := time.Unix(int64(vFlt64), 0)
+		case float64:
+			t := time.Unix(int64(v), 0)
 			vStr := utl.Gre(t.Format("2006-01-02 15:04:05"))
-			vStr += fmt.Sprintf("  # %d", int64(vFlt64))
+			vStr += fmt.Sprintf("  # %d", int64(v))
 			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
-		case "[]interface {}":
-			vList := v.([]interface{})
+		case []interface{}:
+			vList := v
 			vStr := ""
 			for _, i := range vList {
 				vStr += utl.Str(i) + " "
@@ -264,7 +263,8 @@ func DecodeJwtToken(tokenString string) {
 	if string(token.Signature) != "" {
 		k := "signature"
 		// Display the base64 encoded signature
-		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(base64.StdEncoding.EncodeToString([]byte(token.Signature))))
+		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)),
+			utl.Gre(base64.StdEncoding.EncodeToString([]byte(token.Signature))))
 	}
 
 	fmt.Println(utl.Blu("status") + ":")
