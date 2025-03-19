@@ -139,12 +139,12 @@ func CreateRbacAssignment(x map[string]interface{}, z *Config) {
 	}
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + newUuid
-	resp, statusCode, _ := ApiPut(apiUrl, z, payload, params)
-	if statusCode == 200 || statusCode == 201 {
+	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
+	if statCode == 200 || statCode == 201 {
 		utl.PrintYaml(resp)
 	} else {
-		e := resp["error"].(map[string]interface{})
-		fmt.Println(e["message"].(string))
+		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+		fmt.Printf("%s\n", utl.Red(msg))
 	}
 }
 
@@ -160,13 +160,13 @@ func DeleteRbacAssignment(force bool, obj AzureObject, z *Config) {
 func DeleteRbacAssignmentByFqid(fqid string, z *Config) map[string]interface{} {
 	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
 	apiUrl := ConstAzUrl + fqid
-	resp, statusCode, _ := ApiDelete(apiUrl, z, params)
-	if statusCode != 200 {
-		if statusCode == 204 {
+	resp, statCode, _ := ApiDelete(apiUrl, z, params)
+	if statCode != 200 {
+		if statCode == 204 {
 			fmt.Println("Role assignment already deleted or does not exist. Give Azure a minute to flush it out.")
 		} else {
-			e := resp["error"].(map[string]interface{})
-			fmt.Println(e["message"].(string))
+			msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+			fmt.Printf("%s\n", utl.Red(msg))
 		}
 	}
 	return nil
@@ -231,9 +231,9 @@ func GetMatchingRoleAssignments(filter string, force bool, z *Config) (list []in
 //	https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
 //	https://learn.microsoft.com/en-us/rest/api/authorization/role-assignments/list-for-subscription
 func GetRbacAssignments(z *Config, verbose bool) (list []interface{}) {
-	list = nil                      // We have to zero it out
-	uniqueIds := utl.NewStringSet() // Unique resourceIds (API SPs)
-	k := 1                          // Track number of API calls to provide progress
+	list = nil                   // We have to zero it out
+	uniqueIds := utl.StringSet{} // Unique resourceIds (API SPs)
+	k := 1                       // Track number of API calls to provide progress
 
 	var mgGroupNameMap, subNameMap map[string]string
 	if verbose {

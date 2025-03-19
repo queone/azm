@@ -43,9 +43,9 @@ func GetAzureSubscriptionsIdMap(z *Config) map[string]string {
 	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
 	for _, item := range subscriptions {
 		// Safely extract "subscriptionId" and "displayName" with type assertions
-		subscriptionId, okID := item["subscriptionId"].(string)
-		displayName, okName := item["displayName"].(string)
-		if okID && okName {
+		subscriptionId := utl.Str(item["subscriptionId"])
+		displayName := utl.Str(item["displayName"])
+		if subscriptionId != "" && displayName != "" {
 			nameMap[subscriptionId] = displayName
 		} else {
 			// Log or handle entries with missing or invalid fields
@@ -92,16 +92,16 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 	}
 
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
-	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 
 	for i := range cache.data {
 		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
 
 		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
 		id := ""
-		if idVal, ok := (*obj)["id"].(string); ok && idVal != "" {
+		if idVal := utl.Str((*obj)["id"]); idVal != "" {
 			id = path.Base(idVal) // Extract the last part of the path (UUID)
-		} else if subscriptionIdVal, ok := (*obj)["subscriptionId"].(string); ok && subscriptionIdVal != "" {
+		} else if subscriptionIdVal := utl.Str((*obj)["subscriptionId"]); subscriptionIdVal != "" {
 			id = subscriptionIdVal // Fall back to the "subscriptionId" field if "id" is empty
 		}
 

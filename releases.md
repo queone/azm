@@ -1,7 +1,15 @@
 ## Releases
 
+### v0.3.1
+Release Date: 2025-mar-19
+- Moving away from syntactic sugar types like JsonType in api-calls.go because it causes too many issues.
+- Function DeleteObjectByName() allows deleting objects by name, but only some objects are supported
+- Utility -rm "a name" option works for resource RABC role definitions
+
+---
+
 ### v0.3.0
-Release Date: 2025-mar-18
+Release Date: 2025-mar-17
 
 - Major architectural renaming of objects, files, functions and so on. Shifting most references from Azure resource 'role' to 'rbac', e. g. 'resource role definition' is now 'resource RBAC definition', and so on. Another example: Instead of GetResRoleDefinitionById(), it is now GetAzureRbacDefinitionById()
 - Major rework of `res-rbac-defs.go`, renaming of functions, hopefully making code more clear

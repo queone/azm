@@ -234,7 +234,7 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 	}
 
 	fmt.Printf("%s:\n", utl.Blu("app_role_assignments"))
-	uniqueIds := utl.NewStringSet() // Keep track of assignments
+	uniqueIds := utl.StringSet{} // Keep track of assignments
 	for _, i := range appRoleAssignments {
 		ara := i.(map[string]interface{}) // JSON object
 		appRoleId := utl.Str(ara["appRoleId"])
@@ -425,7 +425,7 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 	mazType := specifier
 	printJson := mazType[len(mazType)-1] == 'j' // If last char is 'j', then JSON output is required
 	if printJson {
-		mazType = mazType[:len(mazType)-1] // Remove the 'j' from t
+		mazType = mazType[:len(mazType)-1] // Remove the 'j' from mazType
 	}
 
 	matchingObjects := GetMatchingObjects(mazType, filter, false, z) // false = get from cache, not Azure

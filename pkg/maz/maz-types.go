@@ -33,17 +33,28 @@ func (obj AzureObject) HasString(filter string) bool {
 			}
 		case []interface{}:
 			for _, item := range v {
-				if nestedMap, ok := item.(map[string]interface{}); ok {
+				if nestedMap := utl.Map(item); nestedMap != nil {
 					nestedObj := AzureObject(nestedMap) // Convert to AzureObject
 					if nestedObj.HasString(filter) {
 						return true
 					}
-				} else if itemStr, ok := item.(string); ok {
+					// if nestedMap, ok := item.(map[string]interface{}); ok {
+					// 	nestedObj := AzureObject(nestedMap) // Convert to AzureObject
+					// 	if nestedObj.HasString(filter) {
+					// 		return true
+					// 	}
+				} else if itemStr := utl.Str(item); itemStr != "" {
 					// Check string elements in the slice
 					if utl.SubString(itemStr, filter) {
 						return true
 					}
 				}
+				// } else if itemStr, ok := item.(string); ok {
+				// 	// Check string elements in the slice
+				// 	if utl.SubString(itemStr, filter) {
+				// 		return true
+				// 	}
+				// }
 			}
 		case map[string]interface{}:
 			// Recursively call HasString on nested maps
@@ -185,11 +196,6 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 
 // ==== AzureObjectList methods and functions
 
-// Initializes a new list of objects.
-func NewList() AzureObjectList {
-	return make(AzureObjectList, 0)
-}
-
 // Add appends an AzureObject to the AzureObjectList.
 func (list *AzureObjectList) Add(obj AzureObject) {
 	*list = append(*list, obj) // Append the new object to the list
@@ -203,12 +209,12 @@ func (list *AzureObjectList) Add(obj AzureObject) {
 
 // Replaces an object in an AzureObjectList by matching on id, name, or subscriptionId.
 func (list *AzureObjectList) Replace(newObj AzureObject) bool {
-	id, idOk := newObj["id"].(string)
-	name, nameOk := newObj["name"].(string)
-	subscriptionId, subscriptionIdOk := newObj["subscriptionId"].(string)
+	id := utl.Str(newObj["id"])
+	name := utl.Str(newObj["name"])
+	subscriptionId := utl.Str(newObj["subscriptionId"])
 
 	// The new object must have at least one of the unique keys
-	if !idOk && !nameOk && !subscriptionIdOk {
+	if id == "" && name == "" && subscriptionId == "" {
 		return false
 	}
 
@@ -217,9 +223,9 @@ func (list *AzureObjectList) Replace(newObj AzureObject) bool {
 		obj := &(*list)[j] // Access the element directly via pointer
 		// Most objects use 'id' for their unique key, but RBAC role definitions
 		// and assignments, and Subscriptions use different keys.
-		if (idOk && (*obj)["id"] == id) ||
-			(nameOk && (*obj)["name"] == name) ||
-			(subscriptionIdOk && (*obj)["subscriptionId"] == subscriptionId) {
+		if (id != "" && (*obj)["id"] == id) ||
+			(name != "" && (*obj)["name"] == name) ||
+			(subscriptionId != "" && (*obj)["subscriptionId"] == subscriptionId) {
 			(*list)[j] = newObj // Replace the existing object with the new one
 			return true         // Return true if the replacement was successful
 		}

@@ -23,9 +23,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print certificates keys
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
-	r, statusCode, _ := ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil && len(r["value"].([]interface{})) > 0 {
-		keyCredentials := r["value"].([]interface{}) // Assert as JSON array
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
+		keyCredentials := resp["value"].([]interface{}) // Assert as JSON array
 		if keyCredentials != nil {
 			PrintCertificateList(keyCredentials)
 		}
@@ -33,9 +33,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print secret expiry and other details. Not actual secretText, which cannot be retrieve anyway!
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil && len(r["value"].([]interface{})) > 0 {
-		passwordCredentials := r["value"].([]interface{}) // Assert as JSON array
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
+		passwordCredentials := resp["value"].([]interface{}) // Assert as JSON array
 		if passwordCredentials != nil {
 			PrintSecretList(passwordCredentials)
 		}
@@ -43,9 +43,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print owners
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/owners"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		PrintOwners(r["value"].([]interface{}))
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil {
+		PrintOwners(resp["value"].([]interface{}))
 	}
 
 	// Below loop does 2 things:
@@ -76,9 +76,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		if memberOf, ok := r["value"].([]interface{}); ok {
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["value"] != nil {
+		if memberOf, ok := resp["value"].([]interface{}); ok {
 			PrintMemberOfs(memberOf)
 		}
 	}
@@ -94,7 +94,7 @@ func PrintSp(x AzureObject, z *Config) {
 	// 1st, let us gather any 'Delegated' type permission admin grants
 	params := map[string]string{"$filter": "clientId eq '" + id + "'"}
 	apiUrl = ConstMgUrl + "/v1.0/oauth2PermissionGrants"
-	r, statusCode, _ = ApiGet(apiUrl, z, params)
+	resp, statCode, _ = ApiGet(apiUrl, z, params)
 
 	// IMPORTANT: Please read this carefully -- not as obvious as it seems -- if no admin grants
 	// have been done for any assigned 'Delegated' type permission for this clientId, then above
@@ -102,8 +102,8 @@ func PrintSp(x AzureObject, z *Config) {
 	// that 'clientId' refers to the 'Object ID' of the SP in question. Moreover, the call is
 	// for ALL Delegated permissions in the ENTIRE tenant.
 
-	if statusCode == 200 && r != nil && r["value"] != nil && len(r["value"].([]interface{})) > 0 {
-		oauth2_perms_admin_grants := r["value"].([]interface{}) // Assert as JSON array
+	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
+		oauth2_perms_admin_grants := resp["value"].([]interface{}) // Assert as JSON array
 		// Collate OAuth 2.0 scope permission admin grants
 		for _, i := range oauth2_perms_admin_grants {
 			api := i.(map[string]interface{}) // Assert as JSON object
@@ -129,18 +129,18 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// 2nd, let us gather any 'Application' type permission admin grants
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/appRoleAssignments"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
 
 	// IMPORTANT: Again, read this carefully -- not as obvious as it seems -- if no admin grants
 	// have been done for any assigned 'Application' type permission for this SP, then above API
 	// call will return nothing. And again, above is looking *only* for APPLICATION type grants.
 
-	if statusCode == 200 && r != nil && r["value"] != nil && len(r["value"].([]interface{})) > 0 {
-		apiAssignments := r["value"].([]interface{}) // Assert as JSON array
+	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
+		apiAssignments := resp["value"].([]interface{}) // Assert as JSON array
 
 		// Create temporary map of role Ids to role values
 		roleIdValueMap := make(map[string]string)
-		uniqueResourceIds := utl.NewStringSet() // Unique resourceIds (API SPs)
+		uniqueResourceIds := utl.StringSet{} // Unique resourceIds (API SPs)
 		for _, i := range apiAssignments {
 			api := i.(map[string]interface{})        // Assert as JSON object
 			resourceId := utl.Str(api["resourceId"]) // Get API's SP, to then fetch the role's claim value
@@ -152,10 +152,10 @@ func PrintSp(x AzureObject, z *Config) {
 
 			// Map each role ID to its claim value
 			apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-			r2, _, _ := ApiGet(apiUrl2, z, nil)
+			resp2, _, _ := ApiGet(apiUrl2, z, nil)
 
-			if r2["appRoles"] != nil {
-				for _, i := range r2["appRoles"].([]interface{}) {
+			if resp2["appRoles"] != nil {
+				for _, i := range resp2["appRoles"].([]interface{}) {
 					role := i.(map[string]interface{}) // Assert as JSON object
 					roleId := utl.Str(role["id"])
 					claim := utl.Str(role["value"])
@@ -228,45 +228,63 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print all Custom Security Attributes for this SP
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "?$select=customSecurityAttributes"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["customSecurityAttributes"] != nil && len(r["customSecurityAttributes"].(map[string]interface{})) > 0 {
-		csas := r["customSecurityAttributes"].(map[string]interface{}) // Assert as JSON object
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode == 200 && resp != nil && resp["customSecurityAttributes"] != nil && len(resp["customSecurityAttributes"].(map[string]interface{})) > 0 {
+		csas := resp["customSecurityAttributes"].(map[string]interface{}) // Assert as JSON object
 		fmt.Printf("%s:\n", utl.Blu("custom_security_attributes"))
 		var csa_list []map[string]string = nil
 		//utl.PrintJsonColor(attr_map)
+
 		for attr_set, v := range csas {
 			attr_map := v.(map[string]interface{})
 			for attr_name, v2 := range attr_map {
-				attr_type := utl.GetType(v2)
-				attr_value := utl.Str(v2)
+				// Skip '*@odata.type' entries. Hey Microsoft, this is a terrible design!
+				// The value of each of these CSAs should have been a list insted of a map.
+				// Adding an additional type entry, for example 'Project@odata.type' for
+				// the 'Project' entry is ugly programming.
 				if strings.HasSuffix(attr_name, "@odata.type") {
 					continue
-					// Ignore '*@odata.type' entries. Microsoft, this is a terrible design.
-					// The value of each of these CSAs should have been a list insted of a map!
-					// Adding an additional type entry, for example 'Project@odata.type' for
-					// the 'Project' entry is terrible programming.
-				} else if attr_type == "[]interface {}" {
-					collection := v2.([]interface{})
-					if len(collection) > 0 {
-						attr_type = utl.GetType(collection[0])
-						if attr_type == "string" {
+				}
+
+				var attr_type string
+				var attr_value string
+
+				// Use type assertion to determine the type of v2
+				switch val := v2.(type) {
+				case []interface{}:
+					if len(val) > 0 {
+						switch val[0].(type) {
+						case string:
 							attr_type = "[]string"
 							attr_value = ""
-							for _, i := range collection {
-								attr_value += " " + "'" + utl.Str(i) + "'"
+							for _, i := range val {
+								attr_value += " '" + i.(string) + "'"
 							}
-						} else {
+						case float64:
 							attr_type = "[]int"
 							attr_value = ""
-							for _, i := range collection {
-								attr_value += " " + "'" + fmt.Sprintf("%d", int(i.(float64))) + "'"
+							for _, i := range val {
+								attr_value += " '" + fmt.Sprintf("%d", int(i.(float64))) + "'"
 							}
+						default:
+							attr_type = "[]unknown"
+							attr_value = "unsupported type"
 						}
 					} else {
-						attr_value = "empty"
 						attr_type = "[]int or []string, unclear"
+						attr_value = "empty"
 					}
+				case string:
+					attr_type = "string"
+					attr_value = val
+				case float64:
+					attr_type = "int"
+					attr_value = fmt.Sprintf("%d", int(val))
+				default:
+					attr_type = "unknown"
+					attr_value = "unsupported type"
 				}
+
 				attr_value = strings.TrimSpace(attr_value)
 				csa_list = append(csa_list, map[string]string{
 					"attr_set":   attr_set,
@@ -314,8 +332,8 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	var all int64 = 0
 	z.AddMgHeader("ConsistencyLevel", "eventual")
 	apiUrl := ConstMgUrl + ApiEndpoint["sp"] + "/$count"
-	r, _, _ := ApiGet(apiUrl, z, nil)
-	if value, ok := r["value"]; ok {
+	resp, _, _ := ApiGet(apiUrl, z, nil)
+	if value, ok := resp["value"]; ok {
 		if count, valid := value.(int64); valid {
 			all = count
 		}
@@ -327,12 +345,12 @@ func SpsCountAzure(z *Config) (native, others int64) {
 		"$count":  "true",
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint["sp"]
-	r, _, _ = ApiGet(apiUrl, z, params)
-	if r["value"] == nil {
+	resp, _, _ = ApiGet(apiUrl, z, params)
+	if resp["value"] == nil {
 		return 0, all // Something went wrong with native count, retun all as others
 	}
 
-	native = int64(r["@odata.count"].(float64))
+	native = int64(resp["@odata.count"].(float64))
 	others = all - native
 
 	return native, others

@@ -22,11 +22,11 @@ func PrintApp(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	appDisplayName := x["displayName"].(string)
+	appDisplayName := utl.Str(x["displayName"])
 	fmt.Printf("%s\n", utl.Gra("# Application"))
 	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(appDisplayName))
 	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("client_id"), utl.Gre(x["appId"].(string)))
+	fmt.Printf("%s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(x["appId"])))
 
 	// Print certificates keys
 	if x["keyCredentials"] != nil {
@@ -442,7 +442,7 @@ func RenameAppSp(force bool, identifier, newName string, z *Config) {
 func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
 	// Abort if specfile is not YAML or does not have a valid AppSP defininition
 	formatType, t, mapObj := GetObjectFromFile(filePath)
-	if formatType != "YAML" {
+	if formatType != YamlFormat {
 		utl.Die("File is not YAML\n")
 	}
 

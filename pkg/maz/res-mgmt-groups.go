@@ -49,9 +49,9 @@ func GetAzureMgmtGroupsIdMap(z *Config) map[string]string {
 	mgmtGroups := GetMatchingAzureMgmtGroups("", false, z) // false = get from cache, not Azure
 	for _, item := range mgmtGroups {
 		// Safely extract "subscriptionId" and "displayName" with type assertions
-		mgmtGroupId, okID := item["id"].(string)
-		mgmtGroupName, okName := item["name"].(string)
-		if okID && okName {
+		mgmtGroupId := utl.Str(item["id"])
+		mgmtGroupName := utl.Str(item["name"])
+		if mgmtGroupId != "" && mgmtGroupName != "" {
 			nameMap[mgmtGroupId] = mgmtGroupName
 		} else {
 			// Log or handle entries with missing or invalid fields
@@ -97,17 +97,18 @@ func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjec
 		return cache.data // Return all data if no filter is specified
 	}
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
-	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 
 	for i := range cache.data {
 		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
 
 		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
-		id := ""
-		if idVal, ok := (*obj)["id"].(string); ok && idVal != "" {
-			id = path.Base(idVal) // Extract the last part of the path (UUID)
-		} else if nameVal, ok := (*obj)["name"].(string); ok && nameVal != "" {
-			id = nameVal // Fall back to the "name" field if "id" is empty
+		id := utl.Str((*obj)["id"])
+		name := utl.Str((*obj)["name"])
+		if id != "" {
+			id = path.Base(id) // Extract the last part of the path (UUID)
+		} else if name != "" {
+			id = name // Fall back to the "name" field if "id" is empty
 		}
 
 		// Skip if the ID is empty or already seen

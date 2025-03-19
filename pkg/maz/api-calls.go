@@ -15,69 +15,66 @@ import (
 	"github.com/queone/utl"
 )
 
-type JsonObject map[string]interface{} // Local syntactic sugar, for easier reading
-type StringMap map[string]string
-
 // ApiCall alias to do a GET
-func ApiGet(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
+func ApiGet(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("GET", apiUrl, z, nil, params, false) // false = quiet
 }
 
 // ApiCall alias to do a GET with debugging on
-func ApiGetVerbose(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
+func ApiGetVerbose(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("GET", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a PATCH
-func ApiPatch(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPatch(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("PATCH", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a PATCH with debugging on
-func ApiPatchVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPatchVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("PATCH", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a POST
-func ApiPost(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPost(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("POST", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a POST with debugging on
-func ApiPostVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPostVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("POST", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a PUT
-func ApiPut(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPut(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("PUT", apiUrl, z, payload, params, false) // false = quiet
 }
 
 // ApiCall alias to do a PUT with debugging on
-func ApiPutVerbose(apiUrl string, z *Config, payload JsonObject, params StringMap) (JsonObject, int, error) {
+func ApiPutVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("PUT", apiUrl, z, payload, params, true) // true = verbose, for debugging
 }
 
 // ApiCall alias to do a DELETE
-func ApiDelete(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
+func ApiDelete(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params, false) // false = quiet
 }
 
 // ApiCall alias to do a DELETE with debugging on
-func ApiDeleteVerbose(apiUrl string, z *Config, params StringMap) (JsonObject, int, error) {
+func ApiDeleteVerbose(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
 // Makes an API call and returns the result object, statusCode, and error. For a more clear
 // explanation of how to interpret the JSON responses see https://eager.io/blog/go-and-json/
 // This function is the cornerstone of the maz package, extensively handling all API interactions.
-func ApiCall(method, apiUrl string, z *Config, payload JsonObject, params StringMap, verbose bool) (JsonObject, int, error) {
+func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
 	if !strings.HasPrefix(apiUrl, "http") {
 		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
 	}
 
 	// Map headers to corresponding API endpoint
-	var headers StringMap
+	var headers map[string]string
 	if strings.HasPrefix(apiUrl, ConstMgUrl) {
 		headers = z.MgHeaders
 	} else if strings.HasPrefix(apiUrl, ConstAzUrl) {
@@ -157,9 +154,9 @@ func ApiCall(method, apiUrl string, z *Config, payload JsonObject, params String
 	// This function caters to Microsoft Azure REST API calls. Note that variable 'body' is of type
 	// []uint8, which is essentially a long string that evidently can be either: 1) a single integer
 	// number, or 2) a JSON object string that needs unmarshalling. Below conditional is based on
-	// this interpretation, but may need confirmation and improved handling.
+	// this interpretation, but may need further confirmation and improved handling.
 
-	var result JsonObject // JSON object to be returned
+	var result map[string]interface{} // JSON object to be returned
 	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
 		// It's an integer, probably an API object count value
 		result = make(map[string]interface{})
@@ -193,26 +190,10 @@ func ApiCall(method, apiUrl string, z *Config, payload JsonObject, params String
 
 // Returns API error message string.
 func ApiErrorMsg(obj map[string]interface{}) string {
-	if err, ok := obj["error"].(map[string]interface{}); ok {
-		msg, msgOk := err["message"].(string)
-		if !msgOk {
-			msg = "Unknown message"
-		}
-		return msg
+	if err := utl.Map(obj["error"]); err != nil {
+		return utl.Str(err["message"])
 	}
 	return ""
-}
-
-// Checks for errors in API results and prints them out.
-func CheckApiError(trace utl.TraceInfo, result map[string]interface{}, statusCode int, err error) {
-	caller := fmt.Sprintf("%s\n  %s:%d", trace.FuncName, trace.File, trace.Line)
-	apiError := result["error"] != nil || (300 <= statusCode && statusCode <= 599)
-	if apiError {
-		e := result["error"].(map[string]interface{})
-		eMsg := e["message"].(string)
-		msg := fmt.Sprintf("%s\n    HTTP %d : %s", caller, statusCode, eMsg)
-		fmt.Printf("%s\n", utl.Yel(msg))
-	}
 }
 
 // Prints API error messages in 2 parts separated by a newline: A header, then a JSON byte slice
@@ -272,3 +253,69 @@ func PrintParams(params url.Values) {
 		}
 	}
 }
+
+// ==========================================================================
+// TODO: Things to make these functions more readable
+//
+// 1. Use Structs for Complex Parameters
+//
+//	type ApiCallOptions struct {
+//		Method  string
+//		Url     string
+//		Config  *Config
+//		Payload map[string]interface{}
+//		Params  map[string]string
+//		Verbose bool
+//	}
+//
+//	func ApiCall(opts ApiCallOptions) (map[string]interface{}, int, error) {
+//		// Function implementation
+//	}
+//
+// // Caller
+//
+//	opts := ApiCallOptions{
+//	    Method:  "GET",
+//	    Url:     "https://api.example.com",
+//	    Config:  z,
+//	    Payload: nil,
+//	    Params:  map[string]string{"param1": "value1"},
+//	    Verbose: true,
+//	}
+//
+// result, statusCode, err := ApiCall(opts)
+//
+// 2. Use Type Definitions for Return Values
+//
+// type ApiResponse struct {
+// 	Result     map[string]interface{}
+// 	StatusCode int
+// 	Error      error
+// }
+// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) ApiResponse {
+// 	// Function implementation
+// }
+// response := ApiCall("GET", "https://api.example.com", z, nil, nil, true)
+// if response.Error != nil {
+//     fmt.Println("Error:", response.Error)
+// } else {
+//     fmt.Println("Result:", response.Result)
+// }
+//
+// 3. Break Down Large Functions
+//
+// func BuildRequest(method, apiUrl string, payload map[string]interface{}, params map[string]string) (*http.Request, error) {
+//     // Build and return the HTTP request
+// }
+
+// func SendRequest(req *http.Request, verbose bool) (map[string]interface{}, int, error) {
+//     // Send the HTTP request and return the response
+// }
+
+// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+//     req, err := BuildRequest(method, apiUrl, payload, params)
+//     if err != nil {
+//         return nil, 0, err
+//     }
+//     return SendRequest(req, verbose)
+// }

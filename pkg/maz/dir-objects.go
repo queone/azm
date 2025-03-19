@@ -40,9 +40,9 @@ func GetDirObjectIdMap(t string, z *Config) map[string]string {
 	objects := GetMatchingDirObjects(t, "", false, z) // false = get from cache, not Azure
 	for _, x := range objects {
 		// Safely extract "id" and "displayName" with type assertions
-		id, okID := x["id"].(string)
-		displayName, okName := x["displayName"].(string)
-		if okID && okName {
+		id := utl.Str(x["id"])
+		displayName := utl.Str(x["displayName"])
+		if id != "" && displayName != "" {
 			nameMap[id] = displayName
 		} else {
 			// Log or handle entries with missing or invalid fields
@@ -57,7 +57,6 @@ func GetObjectFromAzureById(mazType, id string, z *Config) AzureObject {
 	baseUrl := ConstMgUrl + ApiEndpoint[mazType]
 	apiUrl := baseUrl + "/" + id
 	obj, _, _ := ApiGet(apiUrl, z, nil)
-	//CheckApiError(utl.Trace2(1), obj, statusCode, err) // DEBUGGING
 	if obj == nil || obj["id"] == nil {
 		if mazType == Application || mazType == ServicePrincipal {
 			// If 1st search doesn't find the object, then for Apps and SPS,
@@ -106,21 +105,21 @@ func GetObjectFromAzureById(mazType, id string, z *Config) AzureObject {
 // Fetches objects of the given type from Azure by displayName. It returns a list of
 // matching objects, accounting for the possibility of multiple objects with the
 // same displayName.
-func GetObjectFromAzureByName(t, displayName string, z *Config) AzureObjectList {
-	apiUrl := ConstMgUrl + ApiEndpoint[t] + "?$filter=displayName eq '" + displayName + "'"
-	r, statusCode, err := ApiGet(apiUrl, z, nil)
+func GetObjectFromAzureByName(mazType, displayName string, z *Config) AzureObjectList {
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "?$filter=displayName eq '" + displayName + "'"
+	resp, statusCode, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
 		fmt.Printf("Error: Failed to fetch objects by name '%s' for type '%s': %v\n",
-			displayName, t, err)
+			displayName, mazType, err)
 		return nil
 	}
 
 	// Check for a successful response
-	if statusCode == 200 && r != nil && r["value"] != nil {
+	if statusCode == 200 && resp != nil && resp["value"] != nil {
 		result := AzureObjectList{} // Initialize the result list
 
 		// Safely iterate over the returned objects
-		if items, ok := r["value"].([]interface{}); ok {
+		if items, ok := resp["value"].([]interface{}); ok {
 			for _, item := range items {
 				if mapObj, mapOk := item.(map[string]interface{}); mapOk {
 					result.Add(AzureObject(mapObj))
@@ -135,7 +134,7 @@ func GetObjectFromAzureByName(t, displayName string, z *Config) AzureObjectList 
 
 	// Log a warning if the request was unsuccessful
 	fmt.Printf("Warning: Failed to fetch objects by name '%s' for type '%s'. Status code: %d\n",
-		displayName, t, statusCode)
+		displayName, mazType, statusCode)
 	return nil
 }
 
@@ -200,7 +199,7 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 	}
 
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
-	ids := utl.NewStringSet()         // Keep track of unique IDs to eliminate duplicates
+	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 
 	for i := range cache.data {
 		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
@@ -256,7 +255,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 	}
 	if deltaLinkMap != nil {
 		// Try using delta link for the API call
-		if deltaLink, ok := deltaLinkMap["@odata.deltaLink"].(string); ok {
+		if deltaLink := utl.Str(deltaLinkMap["@odata.deltaLink"]); deltaLink != "" {
 			apiUrl = deltaLink // Use delta link for the API call
 		}
 	}
@@ -284,13 +283,13 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 // described at https://docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet AzureObjectList, deltaLinkMap AzureObject) {
 	k := 1 // Track number of API calls
-	r, _, _ := ApiGet(apiUrl, z, nil)
+	resp, _, _ := ApiGet(apiUrl, z, nil)
 	for {
 		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
 		var thisBatch []interface{} = nil // Assume zero entries in this batch
 		var objCount int = 0
-		if r["value"] != nil {
-			thisBatch = r["value"].([]interface{})
+		if resp["value"] != nil {
+			thisBatch = resp["value"].([]interface{})
 			objCount = len(thisBatch)
 
 			// Convert thisBatch from []interface{} to []map[string]interface{} to AzureObject
@@ -308,25 +307,26 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 		}
 
 		// Return immediately when deltaLink appears
-		if r["@odata.deltaLink"] != nil {
+		if resp["@odata.deltaLink"] != nil {
 			deltaLinkMap := map[string]interface{}{
-				"@odata.deltaLink": r["@odata.deltaLink"].(string),
+				"@odata.deltaLink": utl.Str(resp["@odata.deltaLink"]),
 			}
 			if verbose {
 				fmt.Print(rUp) // Go up to overwrite progress line
 			}
 			return deltaSet, deltaLinkMap
 		}
-		// Check if nextLink is nil before attempting to use it
-		if r["@odata.nextLink"] != nil {
-			nextLink := r["@odata.nextLink"].(string) // Safe to assert as string now
-			r, _, _ = ApiGet(nextLink, z, nil)        // Get next batch
+
+		// Get nextLink value
+		nextLink := utl.Str(resp["@odata.nextLink"])
+		if nextLink != "" {
+			resp, _, _ = ApiGet(nextLink, z, nil) // Get next batch
 			k++
 		} else {
 			if verbose {
 				fmt.Print(rUp) // Go up to overwrite progress line
 			}
-			break // If nextLink is nil, we can break out of the loop
+			break // If nextLink is empty, we can break out of the loop
 		}
 	}
 	return deltaSet, deltaLinkMap
@@ -336,8 +336,8 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
-	r, statusCode, _ := ApiDelete(apiUrl, z, nil)
-	if statusCode == 204 {
+	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
+	if statCode == 204 {
 		// Also remove from local cache using Cache.Delete
 		cache, err := GetCache(mazType, z)
 		if err == nil {
@@ -349,8 +349,8 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 		}
 		return nil
 	} else {
-		if errDetails, ok := r["error"].(map[string]interface{}); ok {
-			return fmt.Errorf("error: %s", errDetails["message"].(string))
+		if errDetails := ApiErrorMsg(resp); errDetails != "" {
+			return fmt.Errorf("error: %s", errDetails)
 		}
 		return fmt.Errorf("failed to delete %s", mazTypeName)
 	}
@@ -387,9 +387,10 @@ func DeleteDirObject(force bool, id, mazType string, z *Config) error {
 func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureObject, error) {
 	// Creates object in Azure using obj as payload
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
-	r, statusCode, _ := ApiPost(apiUrl, z, JsonObject(obj), nil)
-	if statusCode == 201 {
-		azObj := AzureObject(r) // Newly created object
+	payload := obj
+	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+	if statCode == 201 {
+		azObj := AzureObject(resp) // Newly created object
 
 		// Add object to local cache
 		cache, err := GetCache(mazType, z)
@@ -406,8 +407,8 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureOb
 		}
 		return azObj, nil
 	} else {
-		if errDetails, ok := r["error"].(map[string]interface{}); ok {
-			return nil, fmt.Errorf("error: %s", errDetails["message"].(string))
+		if errDetails := ApiErrorMsg(resp); errDetails != "" {
+			return nil, fmt.Errorf("error: %s", errDetails)
 		}
 		return nil, fmt.Errorf("error: failed to create %s", MazTypeNames[mazType])
 	}
@@ -440,23 +441,24 @@ func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) (Az
 func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) error {
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
-	r, statusCode, _ := ApiPatch(apiUrl, z, JsonObject(obj), nil)
-	if statusCode != 204 {
-		if err, ok := r["error"].(map[string]interface{}); ok {
-			return fmt.Errorf("error: %s", err["message"].(string))
+	payload := obj
+	resp, statCode, _ := ApiPatch(apiUrl, z, payload, nil)
+	if statCode != 204 {
+		if errDetails := ApiErrorMsg(resp); errDetails != "" {
+			return fmt.Errorf("error: %s", errDetails)
 		}
 		return fmt.Errorf("error: failed to update %s %s in Azure", mazTypeName, id)
 	}
 
 	// Retrieve recently updated object
-	r, statusCode, err := ApiGet(apiUrl, z, nil)
-	if r == nil || r["id"] == nil {
+	resp, statCode, err := ApiGet(apiUrl, z, nil)
+	if resp == nil || resp["id"] == nil {
 		return fmt.Errorf("http %d error: failed to retrieve newly created %s %s from Azure: %s",
-			statusCode, mazTypeName, id, err.Error())
+			statCode, mazTypeName, id, err.Error())
 	}
 
 	// Also update the local cache
-	azObj := AzureObject(r) // Cast into standard AzureObject type
+	azObj := AzureObject(resp) // Cast into standard AzureObject type
 	cache, err := GetCache(mazType, z)
 	if err != nil {
 		fmt.Printf("Warning: Failed to load cache: %v\n", err) // TODO: Panic instead of warn here?
@@ -489,12 +491,8 @@ func UpdateDirObject(force bool, id string, obj AzureObject, mazType string, z *
 }
 
 // Renames directory object of given type in Azure.
-func RenameDirObject(opts *Options, z *Config) {
-	force, _ := opts.GetBool("force")
-	from, _ := opts.GetString("from") // Can be ID or displayName
-	newName, _ := opts.GetString("newName")
-	mazType, _ := opts.GetString("t")
-
+func RenameDirObject(force bool, from, newName, mazType string, z *Config) {
+	// Note that 'from' can be ID or displayName
 	mazTypeName := MazTypeNames[mazType]
 
 	x := PreFetchAzureObject(mazType, from, z)
@@ -502,11 +500,11 @@ func RenameDirObject(opts *Options, z *Config) {
 		utl.Die("No such %s\n", mazTypeName)
 	}
 
-	id := x["id"].(string)
+	id := utl.Str(x["id"])
 
 	// Confirmation prompt
 	if !force {
-		oldName := x["displayName"].(string)
+		oldName := utl.Str(x["displayName"])
 		msg := utl.Yel("Rename "+mazTypeName+" "+id+"\n  from \"") + utl.Blu(oldName) +
 			utl.Yel("\"\n    to \"") + utl.Blu(newName) + utl.Yel("\"\n? y/n ")
 		if utl.PromptMsg(msg) != 'y' {
@@ -535,12 +533,12 @@ func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
 	// Check if a password with the same displayName already exists
 	object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/passwordCredentials"
-	r, statusCode, _ := ApiGet(apiUrl, z, nil)
-	if statusCode == 200 {
+	r, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode == 200 {
 		passwordCredentials := r["value"].([]interface{})
 		for _, credential := range passwordCredentials {
 			credentialMap := credential.(map[string]interface{})
-			if credentialMap["displayName"].(string) == displayName {
+			if utl.Str(credentialMap["displayName"]) == displayName {
 				utl.Die("A password named %s already exists.\n", utl.Yel(displayName))
 			}
 		}
@@ -576,8 +574,8 @@ func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
 		},
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/addPassword"
-	r, statusCode, _ = ApiPost(apiUrl, z, JsonObject(payload), nil)
-	if statusCode == 200 {
+	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+	if statCode == 200 {
 		if mazType == Application {
 			fmt.Printf("%s: %s\n", utl.Blu("app_object_id"), utl.Gre(object_id))
 		} else {
@@ -588,8 +586,8 @@ func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
 		fmt.Printf("%s: %s\n", utl.Blu("new_secret_expiry"), utl.Gre(expiry))
 		fmt.Printf("%s: %s\n", utl.Blu("new_secret_text"), utl.Gre(utl.Str(r["secretText"])))
 	} else {
-		e := r["error"].(map[string]interface{})
-		utl.Die("%s\n", e["message"].(string))
+		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+		utl.Die("%s\n", utl.Red(msg))
 	}
 }
 
@@ -646,12 +644,12 @@ func RemoveAppSpSecret(mazType, id, keyId string, force bool, z *Config) {
 		payload := AzureObject{"keyId": keyId}
 		object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/removePassword"
-		r, statusCode, _ := ApiPost(apiUrl, z, JsonObject(payload), nil)
-		if statusCode == 204 {
+		resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+		if statCode == 204 {
 			utl.Die("Successfully deleted secret.\n")
 		} else {
-			e := r["error"].(map[string]interface{})
-			utl.Die("%s\n", e["message"].(string))
+			msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+			utl.Die("%s\n", utl.Red(msg))
 		}
 	} else {
 		utl.Die("Aborted.\n")
@@ -675,8 +673,8 @@ func NormalizeCache(baseSet, deltaSet []interface{}) (list []interface{}) {
 	// OLD: To gradually be replaced by NormalizeDirObjectCache()
 
 	// 1. Process deltaSet to build mergeSet and track deleted IDs
-	deletedIds := utl.NewStringSet()
-	uniqueIds := utl.NewStringSet()
+	deletedIds := utl.StringSet{}
+	uniqueIds := utl.StringSet{}
 	var mergeSet []interface{} = nil
 	for _, i := range deltaSet {
 		x := i.(map[string]interface{})
@@ -695,7 +693,7 @@ func NormalizeCache(baseSet, deltaSet []interface{}) (list []interface{}) {
 
 	// 2. Remove recently deleted entries (deletedIs) from baseSet
 	list = nil
-	baseIds := utl.NewStringSet() // Track all the IDs in the base cache set
+	baseIds := utl.StringSet{} // Track all the IDs in the base cache set
 	for _, i := range baseSet {
 		x := i.(map[string]interface{})
 		id := utl.Str(x["id"])
@@ -708,7 +706,7 @@ func NormalizeCache(baseSet, deltaSet []interface{}) (list []interface{}) {
 
 	// 3. Merge new entries in deltaSet into baseSet
 	var duplicates []interface{} = nil
-	duplicateIds := utl.NewStringSet()
+	duplicateIds := utl.StringSet{}
 	for _, obj := range mergeSet {
 		x := obj.(map[string]interface{})
 		id := utl.Str(x["id"])

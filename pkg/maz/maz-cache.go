@@ -198,15 +198,15 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
-	deletedIds := utl.NewStringSet() // Track IDs to delete
-	uniqueIds := utl.NewStringSet()  // Track unique IDs in the deltaSet
-	mergeSet := AzureObjectList{}    // List for new/updated objects in deltaSet
+	deletedIds := utl.StringSet{} // Track IDs to delete
+	uniqueIds := utl.StringSet{}  // Track unique IDs in the deltaSet
+	mergeSet := AzureObjectList{} // List for new/updated objects in deltaSet
 
 	// 1. Process deltaSet to build mergeSet and track deleted IDs
 	for i := range deltaSet {
 		item := &deltaSet[i] // Access the element directly via pointer
-		id, idOk := (*item)["id"].(string)
-		if !idOk {
+		id := utl.Str((*item)["id"])
+		if id == "" {
 			continue // Skip items without a valid "id"
 		}
 
