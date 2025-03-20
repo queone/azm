@@ -204,7 +204,7 @@ func GetAzureObjectById(mazType, id string, z *Config) (x AzureObject) {
 	case RbacDefinition:
 		return GetAzureRbacDefinitionById(id, z)
 	case RbacAssignment:
-		return GetRbacAssignmentById(id, z)
+		return GetAzureRbacAssignmentById(id, z)
 	case Subscription:
 		return GetAzureSubscriptionById(id, z)
 	case ManagementGroup:
@@ -258,15 +258,14 @@ func GetCachedObjects(cacheFile string) (cachedList []interface{}) {
 }
 
 // Generic querying function to get Azure objects of any mazType, whose attributes
-// match on filter. If the filter is the "" empty string, return ALL of the objects
-// of this particular type. Works accross MS Graph and ARM objects.
+// match on given filter string. If the filter is the "" empty string, return ALL
+// of the objects of this particular type. Works accross MS Graph and ARM objects.
 func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObjectList {
 	switch mazType {
 	case RbacDefinition:
 		return GetMatchingRbacDefinitions(filter, force, z)
 	case RbacAssignment:
-		fmt.Println("Being added...")
-		// return GetMatchingRoleAssignments(filter, force, z)
+		return GetMatchingRbacAssignments(filter, force, z)
 	case Subscription:
 		return GetMatchingAzureSubscriptions(filter, force, z)
 	case ManagementGroup:

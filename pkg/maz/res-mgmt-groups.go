@@ -41,23 +41,25 @@ func GetAzureMgmtGroupsIds(z *Config) (mgmtGroupIds []string) {
 }
 
 // Returns an id:name map of all Azure management groups
-// REVIEW
-// The 'id' is the fully-qualified name that always ends with the 'name' field. Maybe
-// what we want is the 'displayName', or properties['displayName']?
-func GetAzureMgmtGroupsIdMap(z *Config) map[string]string {
+func GetIdMapMgmtGroups(z *Config) map[string]string {
 	nameMap := make(map[string]string)
 	mgmtGroups := GetMatchingAzureMgmtGroups("", false, z) // false = get from cache, not Azure
-	for _, item := range mgmtGroups {
-		// Safely extract "subscriptionId" and "displayName" with type assertions
-		mgmtGroupId := utl.Str(item["id"])
-		mgmtGroupName := utl.Str(item["name"])
-		if mgmtGroupId != "" && mgmtGroupName != "" {
-			nameMap[mgmtGroupId] = mgmtGroupName
-		} else {
-			// Log or handle entries with missing or invalid fields
-			//fmt.Printf("Skipping object with invalid id or displayName: %+v\n", x) // DEBUG
+
+	// Memory-walk the slice to gather these values more efficiently
+	for i := range mgmtGroups {
+		groupPtr := &mgmtGroups[i]   // Use a pointer to avoid copying the element
+		group := *groupPtr           // Dereference the pointer for easier access
+		id := utl.Str(group["name"]) // Accessing the field directly
+		if id == "" {
+			continue // Skip if "name" is missing or not a string
 		}
+		name := utl.Str(group["displayName"])
+		if name == "" {
+			continue // Skip if "displayName" is missing or not a string
+		}
+		nameMap[id] = name
 	}
+
 	return nameMap
 }
 
@@ -224,9 +226,9 @@ func GetAzureMgmtGroupById(id string, z *Config) AzureObject {
 func CountAzureMgmtGroups(z *Config) int64 {
 	params := map[string]string{"api-version": "2023-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
-	r, _, _ := ApiGet(apiUrl, z, params)
-	if r["value"] != nil {
-		rawList, ok := r["value"].([]interface{})
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	if resp["value"] != nil {
+		rawList, ok := resp["value"].([]interface{})
 		if ok {
 			count := len(rawList)
 			return int64(count)

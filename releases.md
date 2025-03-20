@@ -1,16 +1,20 @@
 ## Releases
 
+### v0.3.2
+Release Date: 2025-mar-20
+- Optimized all functions that build id:name maps with pointer memory-walk, and also renamed them for consistency
+- Where appropriate switched to the standard path.Base() instead of utl.LastElem()
+- Also switched from generic utl.LastElem() to utl.LastElemByDot() for a bit more efficiency
+- In printing.go PrintTersely() is now fully migrated and using AzureObject for all mazType
+
 ### v0.3.1
 Release Date: 2025-mar-19
 - Moving away from syntactic sugar types like JsonType in api-calls.go because it causes too many issues.
 - Function DeleteObjectByName() allows deleting objects by name, but only some objects are supported
 - Utility -rm "a name" option works for resource RABC role definitions
 
----
-
 ### v0.3.0
 Release Date: 2025-mar-17
-
 - Major architectural renaming of objects, files, functions and so on. Shifting most references from Azure resource 'role' to 'rbac', e. g. 'resource role definition' is now 'resource RBAC definition', and so on. Another example: Instead of GetResRoleDefinitionById(), it is now GetAzureRbacDefinitionById()
 - Major rework of `res-rbac-defs.go`, renaming of functions, hopefully making code more clear
 - In res-subs.go, pdated all subscription API calls to use api-version=2024-11-01
@@ -21,11 +25,8 @@ Release Date: 2025-mar-17
 - Replacing all Object type codes magic strings such as 'd' for RBAC role definitions with constants like RbacDefinitionCode
 - Optimized many loops of large lists by memory-walking items with pointers which is more efficient
 
----
-
 ### v0.2.0
 Release Date: 2025-mar-02
-
 - **res-mgmt-groups.go**:
   - Migrated resource management groups -m option and object handling to new Cache type model
   - Updated all mgmt group API calls to use api-version=2023-04-01
@@ -37,31 +38,22 @@ Release Date: 2025-mar-02
 - **cmd/azm/main.go**:
   - Simplified utility by moving code to and calling PrintMatchingObjects()
                       
----
-
 ### v0.1.4
 Release Date: 2025-mar-02
-
 - **res-subs.go**: Migrated resource subscriptions -s option and object handling to new Cache type model
 - Renamed GetMatchingObjects() to GetMatchingDirObjects() to indicate it's only for Directory, MS Graph objects
 - Renamed GetObjects() to GetMatchingObjects() to be the generic object matching and querying function, to operate on **any** MS Graph and Azure ARM object supported by this library
 
----
-
 ### v0.1.3
 Release Date: 2025-mar-01
-
 - Improved `build` script
 - Renamed all Api*Debug() functions to Api*Verbose()
 - Rewrote CheckApiError(utl.Trace2(1), obj, statusCode, err) function for debugging
 - Fixed -xx option by improving RemoveCacheFiles(), which now also does not load cache first
 - Fixed issues with directory objects and cache, especially role asisgnments which do not use UUIDs
   
----
-
 ### v0.1.2
 Release Date: 2025-feb-28
-
 - Still incomplete and not fully working
 - Directory objects are mostly working but still many bugs with cache
 - Resource objects are still to be migrated
@@ -73,11 +65,8 @@ Release Date: 2025-feb-28
     - github.com/queone/utl v1.3.1
   - Dropped ApiErrorCheck() and embeded the error checking directly into ApiCall()
   
----
-
 ### v0.1.1
 Release Date: 2025-feb-23
-
 - cmd/azm:
   - Options migrated to shi new azm version: -uuid, -tmg, -taz, -tc, -st
   - Now with a basic default usage message, and an extended more detailed one
@@ -87,11 +76,8 @@ Release Date: 2025-feb-23
   - Also update maz.go calls to above
   - DecodeJwtToken() now displays base64 encoded signature instead of a byte array
 
----
-
 ### v0.1.0
 Release Date: 2025-feb-21
-
 - Initial commit for this new combined pkg/maz library and cmd/azm repository for easier maintenance
 - Updated `build` script to always 1st compile the pkg/maz, then build the cmd/azm binary
 - cmd/azm recent changes:
@@ -177,8 +163,6 @@ Release Date: 2025-feb-21
     - Added `LoadCacheDirGroups()` and `SaveCacheDirGroups()` for file caching of `maz.DirGroup` lists.
     - Introduced `UpsertGroupInCache()` to replace the older `AddGroupToCache()` function, providing improved functionality for updating or adding groups to the cache.
   - Updated go.mod to indicate new major version: `module github.com/queone/maz/v2`. (Botched tag v2.0.0-rc1)
-
----
 
 ### TODO
 - Ensure all pkg/maz functions are properly commented so they appear correctly at https://pkg.go.dev/github.com/queone/azm/pkg/maz

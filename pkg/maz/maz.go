@@ -37,8 +37,8 @@ const (
 	JsonFormat = "json"
 
 	// Maz object type strings
-	RbacDefinition    = "d"  // Azure resource RBAC role definition
-	RbacAssignment    = "a"  // Azure resource RBAC role assignment
+	RbacDefinition    = "d"  // Azure resource role role definition
+	RbacAssignment    = "a"  // Azure resource role role assignment
 	Subscription      = "s"  // Azure resource subscription
 	ManagementGroup   = "m"  // Azure resource management group
 	DirectoryUser     = "u"  // Azure directory user
@@ -64,8 +64,8 @@ var (
 		DirRoleAssignment,
 	}
 	MazTypeNames = map[string]string{
-		RbacDefinition:    "resource RBAC definition",
-		RbacAssignment:    "resource RBAC assignment",
+		RbacDefinition:    "resource role definition",
+		RbacAssignment:    "resource role assignment",
 		Subscription:      "resource subscription",
 		ManagementGroup:   "resource management group",
 		DirectoryUser:     "directory user",
@@ -76,8 +76,8 @@ var (
 		DirRoleAssignment: "directory role assignment",
 	}
 	CacheSuffix = map[string]string{
-		RbacDefinition:    "_res-rbac-defs",
-		RbacAssignment:    "_res-rbac-assgns",
+		RbacDefinition:    "_res-role-defs",
+		RbacAssignment:    "_res-role-asgns",
 		Subscription:      "_res-subs",
 		ManagementGroup:   "_res-mgmt-groups",
 		DirectoryUser:     "_dir-users",
@@ -85,7 +85,7 @@ var (
 		Application:       "_dir-apps",
 		ServicePrincipal:  "_dir-sps",
 		DirRoleDefinition: "_dir-role-defs",
-		DirRoleAssignment: "_dir-role-assgns",
+		DirRoleAssignment: "_dir-role-asgns",
 	}
 	ApiEndpoint = map[string]string{
 		RbacDefinition:    "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",

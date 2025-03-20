@@ -2,6 +2,7 @@ package maz
 
 import (
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/queone/utl"
@@ -63,7 +64,7 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(customAzure, c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource RBAC Assignments", c1Width))
-	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountLocal(z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal("a", z), c2Width))
 	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), c3Width)) + "\n"
 
 	fmt.Print(status)
@@ -85,62 +86,52 @@ func PrintCountStatusAppsAndSps(z *Config) {
 	fmt.Print(status)
 }
 
-// Prints this single object of type 't' tersely, with minimal attributes.
-func PrintTersely(mazType string, object interface{}) {
+// Prints this single object of type mazType tersely, with minimal attributes
+func PrintTersely(mazType string, obj AzureObject) {
 	switch mazType {
 	case RbacDefinition:
-		x := object.(AzureObject)
-		xProp := x["properties"].(map[string]interface{})
-		fmt.Printf("%s  %-60s  %s\n", utl.Str(x["name"]), utl.Str(xProp["roleName"]), utl.Str(xProp["type"]))
-	case RbacAssignment:
-		x := object.(map[string]interface{}) // Assert as JSON object
-		xProp := x["properties"].(map[string]interface{})
-		rdId := utl.LastElem(utl.Str(xProp["roleDefinitionId"]), "/")
-		principalId := utl.Str(xProp["principalId"])
-		principalType := utl.Str(xProp["principalType"])
-		scope := utl.Str(xProp["scope"])
-		fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(x["name"]), rdId, principalId, "("+principalType+")", scope)
-	case Subscription:
-		x := object.(AzureObject)
-		fmt.Printf("%s  %-10s  %s\n", utl.Str(x["subscriptionId"]), utl.Str(x["state"]), utl.Str(x["displayName"]))
-	case ManagementGroup:
-		x := object.(AzureObject)
-		displayName := utl.Str(x["displayName"])
-		// REVIEW
-		// Is below really needed? We are normalizing these properties values to root of object cache
-		if x["properties"] != nil {
-			xProp := x["properties"].(map[string]interface{})
-			displayName = utl.Str(xProp["displayName"])
+		if props := utl.Map(obj["properties"]); props != nil {
+			fmt.Printf("%s  %-60s  %s\n", utl.Str(obj["name"]), utl.Str(props["roleName"]), utl.Str(props["type"]))
 		}
-		fmt.Printf("%-38s  %s\n", utl.Str(x["name"]), displayName)
+	case RbacAssignment:
+		if props := utl.Map(obj["properties"]); props != nil {
+			rdId := path.Base(utl.Str(props["roleDefinitionId"]))
+			principalId := utl.Str(props["principalId"])
+			principalType := utl.Str(props["principalType"])
+			scope := utl.Str(props["scope"])
+			fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(obj["name"]), rdId, principalId, "("+principalType+")", scope)
+		}
+	case Subscription:
+		fmt.Printf("%s  %-10s  %s\n", utl.Str(obj["subscriptionId"]), utl.Str(obj["state"]), utl.Str(obj["displayName"]))
+	case ManagementGroup:
+		displayName := utl.Str(obj["name"])
+		if props := utl.Map(obj["properties"]); props != nil {
+			displayName = utl.Str(props["displayName"])
+		}
+		fmt.Printf("%-38s  %s\n", utl.Str(obj["name"]), displayName)
 	case DirectoryUser:
-		x := object.(AzureObject)
-		upn := utl.Str(x["userPrincipalName"])
-		onPremName := utl.Str(x["onPremisesSamAccountName"])
-		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(x["id"]), upn, onPremName, utl.Str(x["displayName"]))
+		upn := utl.Str(obj["userPrincipalName"])
+		onPremName := utl.Str(obj["onPremisesSamAccountName"])
+		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(obj["id"]), upn, onPremName, utl.Str(obj["displayName"]))
 	case DirectoryGroup:
-		x := object.(AzureObject)
-		fmt.Printf("%s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]))
+		fmt.Printf("%s  %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]))
 	case Application, ServicePrincipal:
-		x := object.(AzureObject)
-		fmt.Printf("%s  %-66s %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), utl.Str(x["appId"]))
+		fmt.Printf("%s  %-66s %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]), utl.Str(obj["appId"]))
 	case DirRoleDefinition:
-		x := object.(AzureObject)
 		builtIn := "Custom"
-		if utl.Str(x["isBuiltIn"]) == "true" {
+		if utl.Str(obj["isBuiltIn"]) == "true" {
 			builtIn = "BuiltIn"
 		}
 		enabled := "Disabled"
-		if utl.Str(x["isEnabled"]) == "true" {
+		if utl.Str(obj["isEnabled"]) == "true" {
 			enabled = "Enabled"
 		}
-		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(x["id"]), utl.Str(x["displayName"]), builtIn, enabled)
+		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]), builtIn, enabled)
 	case DirRoleAssignment:
-		x := object.(AzureObject)
-		scope := utl.Str(x["directoryScopeId"])
-		principalId := utl.Str(x["principalId"])
-		roleDefId := utl.Str(x["roleDefinitionId"])
-		fmt.Printf("%-66s  %-37s  %-36s  %s\n", utl.Str(x["id"]), scope, principalId, roleDefId)
+		scope := utl.Str(obj["directoryScopeId"])
+		principalId := utl.Str(obj["principalId"])
+		roleDefId := utl.Str(obj["roleDefinitionId"])
+		fmt.Printf("%-66s  %-37s  %-36s  %s\n", utl.Str(obj["id"]), scope, principalId, roleDefId)
 	}
 }
 
@@ -282,7 +273,7 @@ func PrintMemberOfs(memberOf []interface{}) {
 	fmt.Printf("%s :\n", utl.Blu("member_of"))
 	for _, item := range memberOf {
 		if obj, ok := item.(map[string]interface{}); ok {
-			Type := utl.LastElem(utl.Str(obj["@odata.type"]), ".")
+			Type := utl.LastElemByDot(utl.Str(obj["@odata.type"]))
 			Type = utl.Gre(Type)
 			id := utl.Gre(utl.Str(obj["id"]))
 			name := utl.Gre(utl.Str(obj["displayName"]))
@@ -392,7 +383,7 @@ func PrintOwners(owners []interface{}) {
 			continue // silently skip this owner?
 		}
 		Type, Name := "UnknownType", "UnknownName"
-		Type = utl.LastElem(utl.Str(owner["@odata.type"]), ".")
+		Type = utl.LastElemByDot(utl.Str(owner["@odata.type"]))
 		switch Type {
 		case "user":
 			Name = utl.Str(owner["userPrincipalName"])

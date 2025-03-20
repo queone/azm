@@ -38,20 +38,25 @@ func GetAzureSubscriptionsIds(z *Config) (ids []string) {
 }
 
 // Returns an id:name map of all Azure subscriptions
-func GetAzureSubscriptionsIdMap(z *Config) map[string]string {
+func GetIdMapSubscriptions(z *Config) map[string]string {
 	nameMap := make(map[string]string)
 	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
-	for _, item := range subscriptions {
-		// Safely extract "subscriptionId" and "displayName" with type assertions
-		subscriptionId := utl.Str(item["subscriptionId"])
-		displayName := utl.Str(item["displayName"])
-		if subscriptionId != "" && displayName != "" {
-			nameMap[subscriptionId] = displayName
-		} else {
-			// Log or handle entries with missing or invalid fields
-			//fmt.Printf("Skipping object with invalid id or displayName: %+v\n", x) // DEBUG
+
+	// Memory-walk the slice to gather these values more efficiently
+	for i := range subscriptions {
+		subPtr := &subscriptions[i]          // Use a pointer to avoid copying the element
+		sub := *subPtr                       // Dereference the pointer for easier access
+		id := utl.Str(sub["subscriptionId"]) // Accessing the field directly
+		if id == "" {
+			continue // Skip if "subscriptionId" is missing or not a string
 		}
+		name := utl.Str(sub["displayName"])
+		if name == "" {
+			continue // Skip if "displayName" is missing or not a string
+		}
+		nameMap[id] = name
 	}
+
 	return nameMap
 }
 
@@ -163,9 +168,9 @@ func GetAzureSubscriptionById(id string, z *Config) AzureObject {
 func CountAzureSubscriptions(z *Config) int64 {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	r, _, _ := ApiGet(apiUrl, z, params)
-	if r["count"] != nil {
-		rawCount, ok := r["count"].(map[string]interface{})
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	if resp["count"] != nil {
+		rawCount, ok := resp["count"].(map[string]interface{})
 		if ok {
 			count := utl.Int64(rawCount["value"]) // Get int64 value
 			return count

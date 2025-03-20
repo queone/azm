@@ -64,7 +64,7 @@ func PrintDirRoleDefinition(x AzureObject, z *Config) {
 				// TODO: Find out how to get/print the scope displayName?
 				mPrinc := m["principal"].(map[string]interface{})
 				pName := utl.Str(mPrinc["displayName"])
-				pType := utl.LastElem(utl.Str(mPrinc["@odata.type"]), ".")
+				pType := utl.LastElemByDot(utl.Str(mPrinc["@odata.type"]))
 				fmt.Printf("  %-36s  %-50s  %-36s (%s)\n", utl.Gre(scope), utl.Gre(pName),
 					utl.Gre(principalId), utl.Gre(pType))
 			}
