@@ -66,7 +66,7 @@ func PrintGroup(x AzureObject, z *Config) {
 				if member := utl.Map(item); member != nil {
 					azObj := AzureObject(member) // Cast map[string]interface{}
 					Type, Name := "-", "-"
-					Type = utl.LastElem(utl.Str(azObj["@odata.type"]), ".")
+					Type = utl.LastElemByDot(utl.Str(azObj["@odata.type"]))
 					switch Type {
 					case "group", "servicePrincipal":
 						Name = utl.Str(azObj["displayName"])

@@ -8,9 +8,12 @@ import (
 )
 
 // Returns the number of object entries in the local cache file for the given type.
-func ObjectCountLocal(t string, z *Config) int64 {
+func ObjectCountLocal(mazType string, z *Config) int64 {
+	// This function works for any mazType and should really be in helper.go, not here.
+	// But it's so closely tied to below ObjectCountAzure() that we are leaving here.
+
 	// Initialize cache
-	cache, err := GetCache(t, z)
+	cache, err := GetCache(mazType, z)
 	if err != nil {
 		return 0 // If the cache cannot be loaded, return 0
 	}
@@ -34,21 +37,26 @@ func ObjectCountAzure(t string, z *Config) int64 {
 }
 
 // Returns an id:name map of objects of the given type.
-func GetDirObjectIdMap(t string, z *Config) map[string]string {
+func GetIdMapDirObjects(mazType string, z *Config) map[string]string {
 	nameMap := make(map[string]string)
-	// Fetch objects of the given type, using the cache for speed
-	objects := GetMatchingDirObjects(t, "", false, z) // false = get from cache, not Azure
-	for _, x := range objects {
-		// Safely extract "id" and "displayName" with type assertions
-		id := utl.Str(x["id"])
-		displayName := utl.Str(x["displayName"])
-		if id != "" && displayName != "" {
-			nameMap[id] = displayName
-		} else {
-			// Log or handle entries with missing or invalid fields
-			//fmt.Printf("Skipping object with invalid id or displayName: %+v\n", x) // DEBUG
+	objects := GetMatchingDirObjects(mazType, "", false, z) // false = get from cache, not Azure
+	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
+
+	// Memory-walk the slice to gather these values more efficiently
+	for i := range objects {
+		objPtr := &objects[i]    // Use a pointer to avoid copying the element
+		obj := *objPtr           // Dereference the pointer for easier access
+		id := utl.Str(obj["id"]) // Accessing the field directly
+		if id == "" {
+			continue // Skip if "id" is missing or not a string
 		}
+		name := utl.Str(obj["displayName"])
+		if name == "" {
+			continue // Skip if "displayName" is missing or not a string
+		}
+		nameMap[id] = name
 	}
+
 	return nameMap
 }
 
