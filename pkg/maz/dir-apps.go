@@ -3,6 +3,7 @@ package maz
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/queone/utl"
 )
@@ -29,87 +30,85 @@ func PrintApp(x AzureObject, z *Config) {
 	fmt.Printf("%s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(x["appId"])))
 
 	// Print certificates keys
-	if x["keyCredentials"] != nil {
-		PrintCertificateList(x["keyCredentials"].([]interface{}))
-	}
+	keyCredentials := utl.Slice(x["keyCredentials"]) // Cast to a slice
+	PrintCertificateList(keyCredentials)
 
 	// Print secret list & expiry details, not actual secretText (which cannot be retrieve anyway)
-	if x["passwordCredentials"] != nil {
-		PrintSecretList(x["passwordCredentials"].([]interface{}))
-	}
+	passwordCredentials := utl.Slice(x["passwordCredentials"]) // Cast to a slice
+	PrintSecretList(passwordCredentials)
 
 	// Print federated credentials
 	apiUrl := ConstMgUrl + "/v1.0/applications/" + id + "/federatedIdentityCredentials"
-	r, statusCode, _ := ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		fedCreds := r["value"].([]interface{})
-		if len(fedCreds) > 0 {
-			fmt.Println(utl.Blu("federated_credentials") + ":")
-			for _, item := range fedCreds {
-				cred, ok := item.(map[string]interface{})
-				if !ok {
-					fmt.Printf("  %s\n", utl.Gre("(unable to read cred)"))
-					continue
-				}
-				iId := utl.Gre(utl.Str(cred["id"]))
-				name := utl.Gre(utl.Str(cred["name"]))
-				sub := utl.Gre(utl.Str(cred["subject"]))
-				iss := utl.Gre(utl.Str(cred["issuer"]))
-				var audiences []string
-				if audList, ok := cred["audiences"].([]interface{}); ok {
-					for _, audience := range audList {
-						audiences = append(audiences, utl.Str(audience)) // Convert and append to the slice
-					}
-				}
-				aud := utl.Gre(strings.Join(audiences, ", "))
-				// TODO: Fix the coloring padding
-				//fmt.Printf("  %-36s  %-40s  %-40s  %-40s  %s\n", iId, name, sub, iss, aud)
-				fmt.Printf("  %-36s  %-20s  %s  %s  %s\n", iId, name, sub, iss, aud)
+	resp, statusCode, _ := ApiGet(apiUrl, z, nil)
+	fedCreds := utl.Slice(resp["value"]) // Cast to a slice
+	if statusCode == 200 && len(fedCreds) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("federated_credentials"))
+		for _, item := range fedCreds {
+			cred := utl.Map(item) // Try casting to a map
+			if cred == nil {
+				fmt.Printf("  %s\n", utl.Gre("(unable to read cred)"))
+				continue
 			}
+			iId := utl.Gre(utl.Str(cred["id"]))
+			name := utl.Gre(utl.Str(cred["name"]))
+			sub := utl.Gre(utl.Str(cred["subject"]))
+			iss := utl.Gre(utl.Str(cred["issuer"]))
+			var audiences []string
+			audList := utl.Slice(cred["audiences"])
+			for _, audience := range audList {
+				audiences = append(audiences, utl.Str(audience)) // Convert and append to the string slice
+			}
+			aud := utl.Gre(strings.Join(audiences, ", "))
+			// TODO: Fix the coloring padding
+			//fmt.Printf("  %-36s  %-40s  %-40s  %-40s  %s\n", iId, name, sub, iss, aud)
+			fmt.Printf("  %-36s  %-20s  %s  %s  %s\n", iId, name, sub, iss, aud)
 		}
 	}
 
 	// Print any owners
 	apiUrl = ConstMgUrl + "/beta/applications/" + id + "/owners"
-	r, statusCode, _ = ApiGet(apiUrl, z, nil)
-	if statusCode == 200 && r != nil && r["value"] != nil {
-		PrintOwners(r["value"].([]interface{}))
+	resp, statusCode, _ = ApiGet(apiUrl, z, nil)
+	owners := utl.Slice(resp["value"]) // Cast to a slice
+	if statusCode == 200 {
+		PrintOwners(owners)
 	}
 
 	// Print any oAuth2 permission scopes
-	if x["api"] != nil {
-		api := x["api"].(map[string]interface{})
-		oauth2PermissionScopes := api["oauth2PermissionScopes"].([]interface{})
+	api := utl.Map(x["api"]) // Cast to a map
+	if api != nil {
+		oauth2PermissionScopes := utl.Slice(api["oauth2PermissionScopes"]) // Cast to a slice
 		scopeValueMap := make(map[string]string)
 		if len(oauth2PermissionScopes) > 0 {
 			fmt.Printf("%s:\n", utl.Blu("oauth2_permission_scopes"))
-			for _, i := range oauth2PermissionScopes {
-				a := i.(map[string]interface{})
-				scopeId := utl.Str(a["id"])
-				enabledStat := "Disabled"
-				if utl.Str(a["isEnabled"]) == "true" {
-					enabledStat = "Enabled"
+			for _, item := range oauth2PermissionScopes {
+				if scope := utl.Map(item); scope != nil {
+					// Process if casting to a map works
+					scopeId := utl.Str(scope["id"])
+					enabledStat := "Disabled"
+					if utl.Str(scope["isEnabled"]) == "true" {
+						enabledStat = "Enabled"
+					}
+					apiName := appDisplayName
+					scopeType := "Delegated"
+					scopeValue := utl.Str(scope["value"])
+					scopeValueMap[scopeId] = scopeValue // Keep building scopeValueMap (to be used for preAuthApp below)
+					fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",
+						utl.Gre(scopeId), utl.PadSpaces(38, len(scopeId)),
+						utl.Gre(enabledStat), utl.PadSpaces(10, len(enabledStat)),
+						utl.Gre(apiName), utl.PadSpaces(50, len(apiName)),
+						utl.Gre(scopeType), utl.PadSpaces(12, len(scopeType)),
+						utl.Gre(scopeValue))
 				}
-				apiName := appDisplayName
-				scopeType := "Delegated"
-				scopeValue := utl.Str(a["value"])
-				scopeValueMap[scopeId] = scopeValue // Keep building scopeValueMap (to be used for preAuthApp below)
-				fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",
-					utl.Gre(scopeId), utl.PadSpaces(38, len(scopeId)),
-					utl.Gre(enabledStat), utl.PadSpaces(10, len(enabledStat)),
-					utl.Gre(apiName), utl.PadSpaces(50, len(apiName)),
-					utl.Gre(scopeType), utl.PadSpaces(12, len(scopeType)),
-					utl.Gre(scopeValue))
 			}
 		}
-		// Also print any pre authorized applications
-		preAuthorizedApplications := api["preAuthorizedApplications"].([]interface{})
+		// Also print any pre-authorized applications
+		preAuthorizedApplications := utl.Slice(api["preAuthorizedApplications"]) // Cast to a slice
 		if len(preAuthorizedApplications) > 0 {
 			fmt.Printf("%s:\n", utl.Blu("  pre_authorized_applications"))
-			for _, i := range preAuthorizedApplications {
-				a := i.(map[string]interface{})
-				clientId := utl.Str(a["appId"])
-				permissionIds := a["permissionIds"].([]interface{})
+			for _, item := range preAuthorizedApplications {
+				app := utl.Map(item)
+				clientId := utl.Str(app["appId"])
+				permissionIds := utl.Slice(app["permissionIds"])
 				if len(permissionIds) > 0 {
 					for _, j := range permissionIds {
 						scopeId := utl.Str(j)
@@ -127,36 +126,29 @@ func PrintApp(x AzureObject, z *Config) {
 	// - https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
 	// - https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
 	// Just look under the object's 'requiredResourceAccess' attribute
-	if x["requiredResourceAccess"] != nil && len(x["requiredResourceAccess"].([]interface{})) > 0 {
+	APIs := utl.Slice(x["requiredResourceAccess"]) // Cast to a slice
+	if len(APIs) > 0 {
 		fmt.Printf("%s:\n", utl.Blu("api_permissions_assigned"))
-		APIs := x["requiredResourceAccess"].([]interface{}) // Assert to JSON array
-		for _, a := range APIs {
-			api := a.(map[string]interface{})
+		for _, item := range APIs {
+			api := utl.Map(item) // Try casting to a map
 			// Getting this API's name and permission value such as Directory.Read.All is a 2-step process:
 			// 1) Get all the roles for given API and put their id/value pairs in a map, then
 			// 2) Use that map to enumerate and print them
 
 			// Let's drill down into the permissions for this API
-			if api["resourceAppId"] == nil {
-				fmt.Printf("  %-50s %s\n", "Unknown API", "Missing resourceAppId")
-				continue // Skip this API, move on to next one
-			}
 			resAppId := utl.Str(api["resourceAppId"])
+			if resAppId == "" {
+				fmt.Printf("  %-50s %s\n", "Unknown API", "Missing resourceAppId")
+				continue // Skip this API, move to next one
+			}
 
 			// Get this API's SP object with all relevant attributes
 			params := map[string]string{"$filter": "appId eq '" + resAppId + "'"}
 			apiUrl := ConstMgUrl + "/beta/servicePrincipals"
-			r, _, _ := ApiGet(apiUrl, z, params)
-
-			// Result is a list because this could be a multi-tenant app, having multiple SPs
-			if r["value"] == nil {
-				fmt.Printf("  %-50s %s\n", resAppId, "Unable to get Resource App object. Skipping this API.")
-				continue
-			}
-
+			resp, _, _ := ApiGet(apiUrl, z, params)
+			SPs := utl.Slice(resp["value"]) // Cast to a slice
+			// It's a list because this could be a multi-tenant app, having multiple SPs
 			// TODO: Handle multiple SPs
-
-			SPs := r["value"].([]interface{})
 			if len(SPs) > 1 {
 				utl.Die("  %-50s %s\n", resAppId, "Error. Multiple SPs for this AppId. Aborting.")
 			} else if len(SPs) < 1 {
@@ -165,25 +157,29 @@ func PrintApp(x AzureObject, z *Config) {
 			}
 
 			// Currently only handling the expected single-tenant entry
-			sp := SPs[0].(map[string]interface{})
+			sp := utl.Map(SPs[0]) // Try casting to a map
 
 			// 1. Put all API role id:name pairs into roleMap list
 			roleMap := make(map[string]string)
-			if sp["appRoles"] != nil { // These are for Application types
-				for _, i := range sp["appRoles"].([]interface{}) { // Iterate through all roles
-					role := i.(map[string]interface{})
-					//utl.PrintJsonColor(role) // DEBUG
-					if role["id"] != nil && role["value"] != nil {
-						roleMap[utl.Str(role["id"])] = utl.Str(role["value"]) // Add entry to map
+			// These are for Application types
+			appRoles := utl.Slice(sp["appRoles"])
+			for _, item := range appRoles {
+				if role := utl.Map(item); role != nil {
+					id := utl.Str(role["id"])
+					value := utl.Str(role["value"])
+					if id != "" && value != "" {
+						roleMap[id] = value // Add entry to map
 					}
 				}
 			}
-			if sp["publishedPermissionScopes"] != nil { // These are for Delegated types
-				for _, i := range sp["publishedPermissionScopes"].([]interface{}) {
-					role := i.(map[string]interface{})
-					//utl.PrintJsonColor(role) // DEBUG
-					if role["id"] != nil && role["value"] != nil {
-						roleMap[utl.Str(role["id"])] = utl.Str(role["value"])
+			// These are for Delegated types
+			publishedPermissionScopes := utl.Slice(sp["publishedPermissionScopes"])
+			for _, item := range publishedPermissionScopes {
+				if role := utl.Map(item); role != nil {
+					id := utl.Str(role["id"])
+					value := utl.Str(role["value"])
+					if id != "" && value != "" {
+						roleMap[id] = value // Add entry to map
 					}
 				}
 			}
@@ -193,21 +189,21 @@ func PrintApp(x AzureObject, z *Config) {
 			}
 
 			// 2. Parse this app permissions, and use roleMap to display permission value
-			if api["resourceAccess"] != nil && len(api["resourceAccess"].([]interface{})) > 0 {
-				Perms := api["resourceAccess"].([]interface{})
-				//utl.PrintJsonColor(Perms)             // DEBUG
+			Perms := utl.Slice(api["resourceAccess"])
+			if len(Perms) > 0 {
 				apiName := utl.Str(sp["displayName"]) // This API's name
-				for _, i := range Perms {             // Iterate through perms
-					perm := i.(map[string]interface{})
-					pid := utl.Str(perm["id"]) // JSON string
-					var pType string = "?"
-					if utl.Str(perm["type"]) == "Role" {
-						pType = "Application"
-					} else {
-						pType = "Delegated"
+				for _, item := range Perms {          // Iterate through perms
+					if perm := utl.Map(item); perm != nil {
+						pid := utl.Str(perm["id"])
+						var pType string = "?"
+						if utl.Str(perm["type"]) == "Role" {
+							pType = "Application"
+						} else {
+							pType = "Delegated"
+						}
+						fmt.Printf("  %s%s  %s%s  %s\n", utl.Gre(apiName), utl.PadSpaces(40, len(apiName)),
+							utl.Gre(pType), utl.PadSpaces(14, len(pType)), utl.Gre(roleMap[pid]))
 					}
-					fmt.Printf("  %s%s  %s%s  %s\n", utl.Gre(apiName), utl.PadSpaces(40, len(apiName)),
-						utl.Gre(pType), utl.PadSpaces(14, len(pType)), utl.Gre(roleMap[pid]))
 				}
 			} else {
 				fmt.Printf("  %-50s %s\n", resAppId, "Error getting list of appRoles.")
@@ -520,4 +516,143 @@ func IsAppSp(obj AzureObject) bool {
 	displayName := utl.Str(obj["displayName"])
 	signInAudience := utl.Str(obj["signInAudience"])
 	return displayName != "" && signInAudience != ""
+}
+
+// Adds a new secret to the given App or SP
+func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
+	if mazType != Application && mazType != ServicePrincipal {
+		utl.Die("Error: Secrets can only be added to an App or SP object.\n")
+	}
+	x := GetObjectFromAzureById(mazType, id, z)
+	if x == nil {
+		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
+	}
+
+	// Check if a password with the same displayName already exists
+	object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/passwordCredentials"
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode == 200 {
+		passwordCredentials := utl.Slice(resp["value"])
+		for _, credential := range passwordCredentials {
+			credentialMap := utl.Map(credential)
+			if credentialMap != nil {
+				if utl.Str(credentialMap["displayName"]) == displayName {
+					utl.Die("A password named %s already exists.\n", utl.Yel(displayName))
+				}
+			}
+		}
+	}
+
+	// Setup expiry for endDateType payload variable
+	var endDateTime string
+	if expiry != "" {
+		if utl.ValidDate(expiry, "2006-01-02") {
+			// If user-supplied expiry is a valid date, reformat and use for our purpose
+			var err error
+			endDateTime, err = utl.ConvertDateFormat(expiry, "2006-01-02", time.RFC3339Nano)
+			if err != nil {
+				utl.Die("Error converting %s Expiry to RFC3339Nano/ISO8601 format.\n", utl.Yel(expiry))
+			}
+		} else if days, err := utl.StringToInt64(expiry); err == nil {
+			// If expiry not a valid date, see if it's a valid integer number
+			expiryTime := utl.GetDateInDays(utl.Int64ToString(days)) // Set expiryTime to 'days' from now
+			endDateTime = expiryTime.Format(time.RFC3339Nano)        // Convert to RFC3339Nano/ISO8601 format
+		} else {
+			utl.Die("Invalid expiry format. Please use YYYY-MM-DD or number of days.\n")
+		}
+	} else {
+		// If expiry is blank, default to 365 days from now
+		endDateTime = time.Now().AddDate(0, 0, 365).Format(time.RFC3339Nano)
+	}
+
+	// Call Azure to create the new secret
+	payload := AzureObject{
+		"passwordCredential": map[string]string{
+			"displayName": displayName,
+			"endDateTime": endDateTime,
+		},
+	}
+	apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/addPassword"
+	resp, statCode, _ = ApiPost(apiUrl, z, payload, nil)
+	if statCode == 200 {
+		if mazType == Application {
+			fmt.Printf("%s: %s\n", utl.Blu("app_object_id"), utl.Gre(object_id))
+		} else {
+			fmt.Printf("%s: %s\n", utl.Blu("sp_object_id"), utl.Gre(object_id))
+		}
+		fmt.Printf("%s: %s\n", utl.Blu("new_secret_id"), utl.Gre(utl.Str(resp["keyId"])))
+		fmt.Printf("%s: %s\n", utl.Blu("new_secret_name"), utl.Gre(displayName))
+		fmt.Printf("%s: %s\n", utl.Blu("new_secret_expiry"), utl.Gre(expiry))
+		fmt.Printf("%s: %s\n", utl.Blu("new_secret_text"), utl.Gre(utl.Str(resp["secretText"])))
+	} else {
+		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+		utl.Die("%s\n", utl.Red(msg))
+	}
+}
+
+// Removes a secret from the given App or SP object
+func RemoveAppSpSecret(mazType, id, keyId string, force bool, z *Config) {
+	// TODO: Needs a prompt/force option
+	if mazType != Application && mazType != ServicePrincipal {
+		utl.Die("Error: Secrets can only be removed from an App or SP object.\n")
+	}
+	x := GetObjectFromAzureById(mazType, id, z)
+	if x == nil {
+		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
+	}
+	if !utl.ValidUuid(keyId) {
+		utl.Die("Secret ID is not a valid UUID.\n")
+	}
+
+	// Display object secret details, and prompt for delete confirmation
+	pwdCreds := utl.Slice(x["passwordCredentials"]) // Try casting to a slice
+	if len(pwdCreds) < 1 {
+		utl.Die("App object has no secrets.\n")
+	}
+	var a AzureObject = nil // Target keyId, Secret ID to be deleted
+	for _, item := range pwdCreds {
+		if targetKeyId := utl.Map(item); targetKeyId != nil {
+			if utl.Str(targetKeyId["keyId"]) == keyId {
+				a = targetKeyId
+				break
+			}
+		}
+	}
+	if a == nil {
+		utl.Die("App object does not have this Secret ID.\n")
+	}
+	cId := utl.Str(a["keyId"])
+	cName := utl.Str(a["displayName"])
+	cHint := utl.Str(a["hint"]) + "********"
+	cStart, err := utl.ConvertDateFormat(utl.Str(a["startDateTime"]), time.RFC3339Nano, "2006-01-02")
+	if err != nil {
+		utl.Die("%s %s\n", utl.Trace(), err.Error())
+	}
+	cExpiry, err := utl.ConvertDateFormat(utl.Str(a["endDateTime"]), time.RFC3339Nano, "2006-01-02")
+	if err != nil {
+		utl.Die("%s %s\n", utl.Trace(), err.Error())
+	}
+
+	// Prompt
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(utl.Str(x["id"])))
+	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
+	fmt.Printf("%s:\n", utl.Yel("secret_to_be_deleted"))
+	fmt.Printf("  %-36s  %-30s  %-16s  %-16s  %s\n", utl.Yel(cId), utl.Yel(cName),
+		utl.Yel(cHint), utl.Yel(cStart), utl.Yel(cExpiry))
+	if utl.PromptMsg(utl.Yel("DELETE above? y/n ")) == 'y' {
+		payload := AzureObject{"keyId": keyId}
+		object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
+		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/removePassword"
+		resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+		if statCode == 204 {
+			utl.Die("Successfully deleted secret.\n")
+		} else {
+			msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+			utl.Die("%s\n", utl.Red(msg))
+		}
+	} else {
+		utl.Die("Aborted.\n")
+	}
 }

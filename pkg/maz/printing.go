@@ -14,75 +14,59 @@ func PrintCountStatus(z *Config) {
 	c2Width := 10 // Column 2 width
 	c3Width := 10 // Column 3 width
 	fmt.Printf("%s\n", utl.Gra("# Please note that enumerating some Azure resources can be slow"))
-	fmt.Print(utl.Whi2(utl.PostSpc("OBJECTS", c1Width)+
-		utl.PreSpc("LOCAL", c2Width)+
-		utl.PreSpc("AZURE", c3Width)) + "\n")
-	status := utl.Blu(utl.PostSpc("Directory Users", c1Width))
+	fmt.Print(utl.Whi2(utl.PostSpc("Objects", c1Width)+
+		utl.PreSpc("Local", c2Width)+
+		utl.PreSpc("Azure", c3Width)) + "\n")
+	status := utl.Blu(utl.PostSpc("Directory users", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("u", z), c2Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountAzure("u", z), c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Directory Groups", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory groups", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("g", z), c2Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountAzure("g", z), c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Directory Applications", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory applications", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("ap", z), c2Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountAzure("ap", z), c3Width)) + "\n"
 	nativeSpsLocal, msSpsLocal := SpsCountLocal(z)
 	nativeSpsAzure, msSpsAzure := SpsCountAzure(z)
-	status += utl.Blu(utl.PostSpc("Directory Service Principals (this tenant)", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory service principals (this tenant)", c1Width))
 	status += utl.Gre(utl.PreSpc(nativeSpsLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(nativeSpsAzure, c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Directory Service Principals (multi-tenant)", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory pervice principals (multi-tenant)", c1Width))
 	status += utl.Gre(utl.PreSpc(msSpsLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(msSpsAzure, c3Width)) + "\n"
 
 	// Note: ObjectCountAzure() doesn't support dr nor da objects so we just count
 	// the ones in the local cache and print them for local *and* Azure
-	status += utl.Blu(utl.PostSpc("Directory Role Definitions", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory role definitions", c1Width))
 	drCount := ObjectCountLocal("dr", z)
 	status += utl.Gre(utl.PreSpc(drCount, c2Width))
 	status += utl.Gre(utl.PreSpc(drCount, c3Width)) + "\n"
 	daCount := ObjectCountLocal("da", z)
-	status += utl.Blu(utl.PostSpc("Directory Role Assignments", c1Width))
+	status += utl.Blu(utl.PostSpc("Directory role assignments", c1Width))
 	status += utl.Gre(utl.PreSpc(daCount, c2Width))
 	status += utl.Gre(utl.PreSpc(daCount, c3Width)) + "\n"
 
-	status += utl.Blu(utl.PostSpc("Resource Management Groups", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource management groups", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("m", z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureMgmtGroups(z), c3Width)) + "\n"
 
-	status += utl.Blu(utl.PostSpc("Resource Subscriptions", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource subscriptions", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("s", z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureSubscriptions(z), c3Width)) + "\n"
 
 	customLocal, builtinLocal := CountRbacDefinitions(false, z) // false = get from cache, not Azure
 	customAzure, builtinAzure := CountRbacDefinitions(true, z)  // true = get from Azure, not cache
-	status += utl.Blu(utl.PostSpc("Resource RBAC Definitions (built-in)", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource role definitions (built-in)", c1Width))
 	status += utl.Gre(utl.PreSpc(builtinLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(builtinAzure, c3Width)) + "\n"
-	status += utl.Blu(utl.PostSpc("Resource RBAC Definitions (custom)", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource role definitions (custom)", c1Width))
 	status += utl.Gre(utl.PreSpc(customLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(customAzure, c3Width)) + "\n"
 
-	status += utl.Blu(utl.PostSpc("Resource RBAC Assignments", c1Width))
+	status += utl.Blu(utl.PostSpc("Resource role assignments", c1Width))
 	status += utl.Gre(utl.PreSpc(ObjectCountLocal("a", z), c2Width))
 	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), c3Width)) + "\n"
 
-	fmt.Print(status)
-}
-
-func PrintCountStatusAppsAndSps(z *Config) {
-	fmt.Printf("%-36s%16s%16s\n", "OBJECTS", "LOCAL", "AZURE")
-	status := utl.Blu(utl.PostSpc("Azure App Registrations", 36))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("ap", z), 16))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("ap", z), 16)) + "\n"
-	nativeSpsLocal, msSpsLocal := SpsCountLocal(z)
-	nativeSpsAzure, msSpsAzure := SpsCountAzure(z)
-	status += utl.Blu(utl.PostSpc("Azure SPs (native)", 36))
-	status += utl.Gre(utl.PreSpc(nativeSpsLocal, 16))
-	status += utl.Gre(utl.PreSpc(nativeSpsAzure, 16)) + "\n"
-	status += utl.Blu(utl.PostSpc("Azure SPs (others)", 36))
-	status += utl.Gre(utl.PreSpc(msSpsLocal, 16))
-	status += utl.Gre(utl.PreSpc(msSpsAzure, 16)) + "\n"
 	fmt.Print(status)
 }
 
@@ -91,7 +75,8 @@ func PrintTersely(mazType string, obj AzureObject) {
 	switch mazType {
 	case RbacDefinition:
 		if props := utl.Map(obj["properties"]); props != nil {
-			fmt.Printf("%s  %-60s  %s\n", utl.Str(obj["name"]), utl.Str(props["roleName"]), utl.Str(props["type"]))
+			fmt.Printf("%s  %-60s  %s\n", utl.Str(obj["name"]),
+				utl.Str(props["roleName"]), utl.Str(props["type"]))
 		}
 	case RbacAssignment:
 		if props := utl.Map(obj["properties"]); props != nil {
@@ -99,24 +84,28 @@ func PrintTersely(mazType string, obj AzureObject) {
 			principalId := utl.Str(props["principalId"])
 			principalType := utl.Str(props["principalType"])
 			scope := utl.Str(props["scope"])
-			fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(obj["name"]), rdId, principalId, "("+principalType+")", scope)
+			fmt.Printf("%s  %s  %s %-20s %s\n", utl.Str(obj["name"]),
+				rdId, principalId, "("+principalType+")", scope)
 		}
 	case Subscription:
-		fmt.Printf("%s  %-10s  %s\n", utl.Str(obj["subscriptionId"]), utl.Str(obj["state"]), utl.Str(obj["displayName"]))
+		fmt.Printf("%s  %-10s  %s\n", utl.Str(obj["subscriptionId"]),
+			utl.Str(obj["state"]), utl.Str(obj["displayName"]))
 	case ManagementGroup:
-		displayName := utl.Str(obj["name"])
+		id := utl.Str(obj["name"])
 		if props := utl.Map(obj["properties"]); props != nil {
-			displayName = utl.Str(props["displayName"])
+			displayName := utl.Str(props["displayName"])
+			fmt.Printf("%-38s  %s\n", id, displayName)
 		}
-		fmt.Printf("%-38s  %s\n", utl.Str(obj["name"]), displayName)
 	case DirectoryUser:
 		upn := utl.Str(obj["userPrincipalName"])
 		onPremName := utl.Str(obj["onPremisesSamAccountName"])
-		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(obj["id"]), upn, onPremName, utl.Str(obj["displayName"]))
+		fmt.Printf("%s  %-50s %-18s %s\n", utl.Str(obj["id"]), upn,
+			onPremName, utl.Str(obj["displayName"]))
 	case DirectoryGroup:
 		fmt.Printf("%s  %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]))
 	case Application, ServicePrincipal:
-		fmt.Printf("%s  %-66s %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]), utl.Str(obj["appId"]))
+		fmt.Printf("%s  %-66s %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]),
+			utl.Str(obj["appId"]))
 	case DirRoleDefinition:
 		builtIn := "Custom"
 		if utl.Str(obj["isBuiltIn"]) == "true" {
@@ -126,12 +115,14 @@ func PrintTersely(mazType string, obj AzureObject) {
 		if utl.Str(obj["isEnabled"]) == "true" {
 			enabled = "Enabled"
 		}
-		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(obj["id"]), utl.Str(obj["displayName"]), builtIn, enabled)
+		fmt.Printf("%s  %-60s  %-10s  %s\n", utl.Str(obj["id"]),
+			utl.Str(obj["displayName"]), builtIn, enabled)
 	case DirRoleAssignment:
 		scope := utl.Str(obj["directoryScopeId"])
 		principalId := utl.Str(obj["principalId"])
 		roleDefId := utl.Str(obj["roleDefinitionId"])
-		fmt.Printf("%-66s  %-37s  %-36s  %s\n", utl.Str(obj["id"]), scope, principalId, roleDefId)
+		fmt.Printf("%-66s  %-37s  %-36s  %s\n", utl.Str(obj["id"]), scope,
+			principalId, roleDefId)
 	}
 }
 
@@ -142,13 +133,13 @@ func PrintObjectById(id string, z *Config) {
 		utl.Die("Error: %v\n", err)
 	}
 
-	for _, azObj := range list {
-		mazType := utl.Str(azObj["maz_type"]) // Function FindAzureObjectsById() should have added this field
+	for _, obj := range list {
+		mazType := utl.Str(obj["maz_type"]) // Function FindAzureObjectsById() should have added this field
 		if mazType != "" {
-			PrintObject(mazType, azObj, z)
+			PrintObject(mazType, obj, z)
 		} else {
 			fmt.Println(utl.Gra("# Unknown object type, but dumping it anyway:"))
-			utl.PrintYamlColor(azObj)
+			utl.PrintYamlColor(obj)
 		}
 	}
 
@@ -196,25 +187,24 @@ func PrintAppRoleAssignmentsSp(roleNameMap map[string]string, appRoleAssignments
 	if len(appRoleAssignments) < 1 {
 		return
 	}
-
 	fmt.Printf("%s:\n", utl.Blu("app_role_assignments"))
-	for _, i := range appRoleAssignments {
-		ara := i.(map[string]interface{}) // JSON object
+	for _, item := range appRoleAssignments {
+		if ara := utl.Map(item); ara != nil {
+			principalId := utl.Str(ara["principalId"])
+			principalType := utl.Str(ara["principalType"])
+			principalName := utl.Str(ara["principalDisplayName"])
 
-		principalId := utl.Str(ara["principalId"])
-		principalType := utl.Str(ara["principalType"])
-		principalName := utl.Str(ara["principalDisplayName"])
+			roleName := roleNameMap[utl.Str(ara["appRoleId"])] // Reference roleNameMap now
+			if len(roleName) >= 40 {
+				roleName = roleName[:37] + "..." // Shorten roleName for nicer printout
+			}
 
-		roleName := roleNameMap[utl.Str(ara["appRoleId"])] // Reference roleNameMap now
-		if len(roleName) >= 40 {
-			roleName = utl.FirstN(roleName, 37) + "..."
+			principalName = utl.Gre(principalName)
+			roleName = utl.Gre(roleName)
+			principalId = utl.Gre(principalId)
+			principalType = utl.Gre(principalType)
+			fmt.Printf("  %-50s %-50s %s (%s)\n", roleName, principalName, principalId, principalType)
 		}
-
-		principalName = utl.Gre(principalName)
-		roleName = utl.Gre(roleName)
-		principalId = utl.Gre(principalId)
-		principalType = utl.Gre(principalType)
-		fmt.Printf("  %-50s %-50s %s (%s)\n", roleName, principalName, principalId, principalType)
 	}
 }
 
@@ -223,11 +213,13 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 	if len(appRoleAssignments) < 1 {
 		return
 	}
-
 	fmt.Printf("%s:\n", utl.Blu("app_role_assignments"))
 	uniqueIds := utl.StringSet{} // Keep track of assignments
-	for _, i := range appRoleAssignments {
-		ara := i.(map[string]interface{}) // JSON object
+	for _, item := range appRoleAssignments {
+		ara := utl.Map(item)
+		if ara == nil {
+			continue // Skip if not a map
+		}
 		appRoleId := utl.Str(ara["appRoleId"])
 		resourceDisplayName := utl.Str(ara["resourceDisplayName"])
 		resourceId := utl.Str(ara["resourceId"]) // SP where the appRole is defined
@@ -247,13 +239,14 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 		x := GetObjectFromAzureById("sp", resourceId, z)
 		roleNameMap["00000000-0000-0000-0000-000000000000"] = "Default" // Include default app permissions role
 		// But also get all other additional appRoles it may have defined
-		appRoles := x["appRoles"].([]interface{})
+		appRoles := utl.Slice(x["appRoles"])
 		if len(appRoles) > 0 {
-			for _, i := range appRoles {
-				a := i.(map[string]interface{})
-				rId := utl.Str(a["id"])
-				displayName := utl.Str(a["displayName"])
-				roleNameMap[rId] = displayName // Update growing list of roleNameMap
+			for _, item := range appRoles {
+				if a := utl.Map(item); a != nil {
+					rId := utl.Str(a["id"])
+					displayName := utl.Str(a["displayName"])
+					roleNameMap[rId] = displayName // Update growing list of roleNameMap
+				}
 			}
 		}
 		roleName := roleNameMap[appRoleId] // Reference roleNameMap now
@@ -271,12 +264,13 @@ func PrintMemberOfs(memberOf []interface{}) {
 		return
 	}
 	fmt.Printf("%s :\n", utl.Blu("member_of"))
-	for _, item := range memberOf {
-		if obj, ok := item.(map[string]interface{}); ok {
-			Type := utl.LastElemByDot(utl.Str(obj["@odata.type"]))
+	for i := range memberOf {
+		obj := memberOf[i]
+		if member := utl.Map(obj); member != nil {
+			Type := utl.LastElemByDot(utl.Str(member["@odata.type"]))
 			Type = utl.Gre(Type)
-			id := utl.Gre(utl.Str(obj["id"]))
-			name := utl.Gre(utl.Str(obj["displayName"]))
+			id := utl.Gre(utl.Str(member["id"]))
+			name := utl.Gre(utl.Str(member["displayName"]))
 			fmt.Printf("  %-50s %s (%s)\n", name, id, Type)
 		}
 	}
@@ -288,11 +282,10 @@ func PrintSecretList(secretsList []interface{}) {
 		return
 	}
 	fmt.Println(utl.Blu("secrets") + ":")
-	for _, i := range secretsList {
-		pw, ok := i.(map[string]interface{})
-		if !ok {
-			fmt.Printf("%s\n", utl.Yel("Error asserting this pwd map"))
-			continue
+	for _, item := range secretsList {
+		pw := utl.Map(item)
+		if pw == nil {
+			continue // Skip if not a map
 		}
 		cId := utl.Str(pw["keyId"])
 		cName := utl.Str(pw["displayName"])
@@ -333,8 +326,11 @@ func PrintCertificateList(certificates []interface{}) {
 		return
 	}
 	fmt.Println(utl.Blu("certificates") + ":")
-	for _, i := range certificates {
-		a := i.(map[string]interface{})
+	for _, item := range certificates {
+		a := utl.Map(item)
+		if a == nil {
+			continue // Skip if not a map
+		}
 		cId := utl.Str(a["keyId"])
 		cName := utl.Str(a["displayName"])
 		cType := utl.Str(a["type"])
@@ -378,24 +374,22 @@ func PrintOwners(owners []interface{}) {
 	}
 	fmt.Printf("%s :\n", utl.Blu("owners"))
 	for _, item := range owners {
-		owner, ok := item.(map[string]interface{})
-		if !ok {
-			continue // silently skip this owner?
-		}
-		Type, Name := "UnknownType", "UnknownName"
-		Type = utl.LastElemByDot(utl.Str(owner["@odata.type"]))
-		switch Type {
-		case "user":
-			Name = utl.Str(owner["userPrincipalName"])
-		case "group":
-			Name = utl.Str(owner["displayName"])
-		case "servicePrincipal":
-			Name = utl.Str(owner["displayName"])
-			if utl.Str(owner["servicePrincipalType"]) == "ManagedIdentity" {
-				Type = "ManagedIdentity"
+		if owner := utl.Map(item); owner != nil {
+			Type, Name := "UnknownType", "UnknownName"
+			Type = utl.LastElemByDot(utl.Str(owner["@odata.type"]))
+			switch Type {
+			case "user":
+				Name = utl.Str(owner["userPrincipalName"])
+			case "group":
+				Name = utl.Str(owner["displayName"])
+			case "servicePrincipal":
+				Name = utl.Str(owner["displayName"])
+				if utl.Str(owner["servicePrincipalType"]) == "ManagedIdentity" {
+					Type = "ManagedIdentity"
+				}
 			}
+			fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name), utl.Gre(utl.Str(owner["id"])), utl.Gre(Type))
 		}
-		fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name), utl.Gre(utl.Str(owner["id"])), utl.Gre(Type))
 	}
 }
 
@@ -425,8 +419,9 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 		if printJson {
 			utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
 		} else {
-			for _, item := range matchingObjects { // Print matching set in terse format
-				PrintTersely(mazType, item)
+			for i := range matchingObjects { // Print matching set in terse format
+				obj := matchingObjects[i]
+				PrintTersely(mazType, obj)
 			}
 		}
 	} else if matchingCount == 1 {

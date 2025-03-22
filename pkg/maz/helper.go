@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 
 	"github.com/queone/utl"
 )
@@ -28,7 +27,7 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 		//UpsertGroupFromFile(force bool, specfile string, z *Config)
 
 	default:
-		utl.Die("Unsupported specfile type. Only RBAC role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
+		utl.Die("Unsupported specfile type. Only resource role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
 	}
 	os.Exit(0)
 }
@@ -149,9 +148,8 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 	rbacDefinitions := GetAzureRbacDefinitionsByName(name, z)
 	if len(rbacDefinitions) > 0 {
 		for i := range rbacDefinitions {
-			// Optimized: Access the element directly via pointer (memory walk) instead of copying
-			obj := &rbacDefinitions[i]
-			id := utl.Str((*obj)["name"])
+			obj := rbacDefinitions[i]
+			id := utl.Str(obj["name"])
 			if id != "" {
 				idMap[id] = RbacDefinition
 			}
@@ -162,8 +160,8 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 		matchingSet := GetObjectFromAzureByName(mazType, name, z)
 		if len(matchingSet) > 0 {
 			for i := range matchingSet {
-				obj := &matchingSet[i]
-				id := utl.Str((*obj)["id"])
+				obj := matchingSet[i]
+				id := utl.Str(obj["id"])
 				if id != "" {
 					idMap[id] = mazType
 				}
@@ -175,7 +173,7 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 
 // Returns a list of Azure objects that match the given ID. Only object types that are
 // supported by this maz package are searched.
-func FindAzureObjectsById(id string, z *Config) (list AzureObjectList, err error) {
+func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 	// Note that multiple objects may be returned because: 1) A single appId can be shared by
 	// both an App and an SP, 2) Although unlikely, UUID collisions can occur, resulting in
 	// multiple objects with the same UUID.
@@ -186,7 +184,7 @@ func FindAzureObjectsById(id string, z *Config) (list AzureObjectList, err error
 		return nil, fmt.Errorf("invalid id %s", id)
 	}
 
-	list = nil
+	list := AzureObjectList{}
 	for _, mazType := range MazTypes {
 		obj := GetAzureObjectById(mazType, id, z)
 		if obj != nil && obj["id"] != nil { // Valid objects have an 'id' attribute
@@ -195,11 +193,12 @@ func FindAzureObjectsById(id string, z *Config) (list AzureObjectList, err error
 			list = append(list, obj)
 		}
 	}
+
 	return list, nil
 }
 
-// Retrieves Azure object by object ID
-func GetAzureObjectById(mazType, id string, z *Config) (x AzureObject) {
+// Retrieves Azure object by mazType and object ID
+func GetAzureObjectById(mazType, id string, z *Config) AzureObject {
 	switch mazType {
 	case RbacDefinition:
 		return GetAzureRbacDefinitionById(id, z)
@@ -209,21 +208,13 @@ func GetAzureObjectById(mazType, id string, z *Config) (x AzureObject) {
 		return GetAzureSubscriptionById(id, z)
 	case ManagementGroup:
 		return GetAzureMgmtGroupById(id, z)
-	case DirectoryUser:
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal,
+		DirRoleDefinition, DirRoleAssignment:
 		return GetObjectFromAzureById(mazType, id, z)
-	case DirectoryGroup:
-		return GetObjectFromAzureById(mazType, id, z)
-	case Application:
-		return GetObjectFromAzureById(mazType, id, z)
-	case ServicePrincipal:
-		return GetObjectFromAzureById(mazType, id, z)
-	case DirRoleDefinition:
-		return GetObjectFromAzureById(mazType, id, z)
-	case DirRoleAssignment:
+	default:
 		return nil
 		//return GetObjectFromAzureById(t, id, z)
 	}
-	return nil
 }
 
 // Gets all Azure RBAC scopes in the tenant's resource hierarchy, starting with the
@@ -242,19 +233,6 @@ func GetAzureRbacScopes(z *Config) (scopes []string) {
 	// other scopes, then we will need to add that here.
 
 	return scopes
-}
-
-// TO BE DELETED
-// Retrieves locally cached list of objects in given cache file
-func GetCachedObjects(cacheFile string) (cachedList []interface{}) {
-	cachedList = nil
-	if utl.FileUsable(cacheFile) {
-		rawList, _ := utl.LoadFileJson(cacheFile, false)
-		if rawList != nil {
-			cachedList = rawList.([]interface{})
-		}
-	}
-	return cachedList
 }
 
 // Generic querying function to get Azure objects of any mazType, whose attributes
@@ -280,84 +258,24 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 // Returns all Azure pages for given API URL call
 func GetAzAllPages(apiUrl string, z *Config) (list []interface{}) {
 	list = nil
-	resp, _, _ := ApiGet(apiUrl, z, nil)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {
+		if statCode != 200 {
+			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", rUp, statCode)
+			fmt.Printf("%s", utl.Yel(msg))
+		}
 		// Forever loop until there are no more pages
-		var thisBatch []interface{} = nil // Assume zero entries in this batch
-		if resp["value"] != nil {
-			thisBatch = resp["value"].([]interface{})
-			if len(thisBatch) > 0 {
-				list = append(list, thisBatch...) // Continue growing list
-			}
+		thisBatch := utl.Slice(resp["value"])
+		if len(thisBatch) > 0 {
+			list = append(list, thisBatch...) // Continue growing list
 		}
 		nextLink := utl.Str(resp["@odata.nextLink"])
 		if nextLink == "" {
 			break // Break once there is no more pages
 		}
-		resp, _, _ = ApiGet(nextLink, z, nil) // Get next batch
+		resp, statCode, _ = ApiGet(nextLink, z, nil) // Get next batch
 	}
 	return list
-}
-
-func GetAzObjects(apiUrl string, z *Config, verbose bool) (deltaSet []interface{}, deltaLinkMap map[string]interface{}) {
-	// To be replaced by FetchAzureObjectsDelta()
-	k := 1 // Track number of API calls
-	resp, _, _ := ApiGet(apiUrl, z, nil)
-	for {
-		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
-		var thisBatch []interface{} = nil // Assume zero entries in this batch
-		var objCount int = 0
-		if resp["value"] != nil {
-			thisBatch = resp["value"].([]interface{})
-			objCount = len(thisBatch)
-			if objCount > 0 {
-				deltaSet = append(deltaSet, thisBatch...) // Continue growing deltaSet
-			}
-		}
-		if verbose {
-			// Progress count indicator. Using global var rUp to overwrite last line. Defer newline until done
-			fmt.Printf("%sCall %05d : count %05d", rUp, k, objCount)
-		}
-		if resp["@odata.deltaLink"] != nil {
-			deltaLinkMap := map[string]interface{}{
-				"@odata.deltaLink": utl.Str(resp["@odata.deltaLink"]),
-			}
-			if verbose {
-				fmt.Print(rUp) // Go up to overwrite progress line
-			}
-			return deltaSet, deltaLinkMap // Return immediately after deltaLink appears
-		}
-		resp, _, _ = ApiGet(utl.Str(resp["@odata.nextLink"]), z, nil) // Get next batch
-		k++
-	}
-}
-
-// Removes specified cache file
-func RemoveCacheFile(mazType string, z *Config) {
-	// Takes global pointer z
-	switch mazType {
-	case "id": // Special type for credential
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.CredsFile))
-	case "t": // Special type for token
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TokenFile))
-	case RbacDefinition:
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_roleDefinitions."+ConstCacheFileExtension))
-	case RbacAssignment:
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_roleAssignments."+ConstCacheFileExtension))
-	case Subscription:
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_subscriptions."+ConstCacheFileExtension))
-	case ManagementGroup:
-		utl.RemoveFile(filepath.Join(z.ConfDir, z.TenantId+"_managementGroups."+ConstCacheFileExtension))
-	case "all":
-		// See https://stackoverflow.com/questions/48072236/remove-files-with-wildcard
-		fileList, err := filepath.Glob(filepath.Join(z.ConfDir, z.TenantId+"_*."+ConstCacheFileExtension))
-		if err != nil {
-			panic(err)
-		}
-		for _, filePath := range fileList {
-			utl.RemoveFile(filePath)
-		}
-	}
 }
 
 // Processes given specfile and returns the format type, the maz object type code, and the object.
@@ -372,22 +290,22 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	}
 
 	// Attempt to unpack the object
-	specfileObj, ok := rawObj.(map[string]interface{})
-	if !ok {
+	specfileObj := utl.Map(rawObj)
+	if specfileObj == nil {
 		utl.Die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
 	}
 
 	obj = AzureObject(specfileObj) // Convert to AzureObject type
 
 	// Determine object type based on properties
-	if props, hasProperties := obj["properties"].(map[string]interface{}); hasProperties {
+	// TODO: Move these to Is* functions like groups and AppSP below, with more checks
+	if props := utl.Map(obj["properties"]); props != nil {
 		roleName := utl.Str(props["roleName"])
 		principalId := utl.Str(props["principalId"])
-
 		if roleName != "" {
-			return format, RbacDefinition, obj // RBAC role definition
+			return format, RbacDefinition, obj
 		} else if principalId != "" {
-			return format, RbacAssignment, obj // RBAC role assignment
+			return format, RbacAssignment, obj
 		}
 	}
 
@@ -426,7 +344,7 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 			fmt.Printf("Role %s, as defined in specfile, does %s exist in Azure.\n", utl.Mag(roleName), utl.Red("not"))
 		} else {
 			fmt.Printf("Role definition in specfile %s exists in Azure:\n", utl.Gre("already"))
-			DiffRoleDefinitionSpecfileVsAzure(obj, azureObj, z)
+			DiffRoleDefinitionSpecfileVsAzure(obj, azureObj)
 		}
 	case RbacAssignment:
 		azureObj := GetRbacAssignmentByObject(obj, z)
