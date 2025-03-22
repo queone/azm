@@ -17,26 +17,25 @@ func PrintGroup(x AzureObject, z *Config) {
 	fmt.Printf("%s\n", utl.Gra("# Directory Group"))
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
 	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
-	if x["description"] != nil {
-		fmt.Printf("%s: %s\n", utl.Blu("description"), utl.Gre(utl.Str(x["description"])))
+	description := utl.Str(x["description"])
+	if description != "" {
+		fmt.Printf("%s: %s\n", utl.Blu("description"), utl.Gre(description))
 	}
-	if x["isAssignableToRole"] != nil {
-		fmt.Printf("%s: %s\n", utl.Blu("isAssignableToRole"), utl.Mag(x["isAssignableToRole"].(bool)))
+	isAssignableToRole := utl.Bool(x["isAssignableToRole"])
+	if isAssignableToRole {
+		fmt.Printf("%s: %s\n", utl.Blu("isAssignableToRole"), utl.Mag(isAssignableToRole))
 	}
 
 	// Print owners of this group
 	apiUrl := ConstMgUrl + "/v1.0/groups/" + id + "/owners"
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil {
-		owners := resp["value"].([]interface{}) // Assert as JSON array type
-		if len(owners) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("owners"))
-			for _, i := range owners {
-				if mapObj, ok := i.(map[string]interface{}); ok {
-					o := AzureObject(mapObj) // Convert map[string]interface{} to AzureObject
-					fmt.Printf("  %-50s %s\n", utl.Gre(utl.Str(o["userPrincipalName"])),
-						utl.Gre(utl.Str(o["id"])))
-				}
+	resp, _, _ := ApiGet(apiUrl, z, nil)
+	owners := utl.Slice(resp["value"])
+	if len(owners) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("owners"))
+		for _, item := range owners {
+			if owner := utl.Map(item); owner != nil {
+				fmt.Printf("  %-50s %s\n", utl.Gre(utl.Str(owner["userPrincipalName"])),
+					utl.Gre(utl.Str(owner["id"])))
 			}
 		}
 	}
@@ -48,34 +47,30 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/transitiveMemberOf"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil {
-		if memberOf, ok := resp["value"].([]interface{}); ok {
-			PrintMemberOfs(memberOf)
-		}
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	memberOfList := utl.Slice(resp["value"])
+	if len(memberOfList) > 0 {
+		PrintMemberOfs(memberOfList)
 	}
 
 	// Print members of this group
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members" // beta works
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil {
-		members := resp["value"].([]interface{})
-		if len(members) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("members"))
-			for _, item := range members {
-				if member := utl.Map(item); member != nil {
-					azObj := AzureObject(member) // Cast map[string]interface{}
-					Type, Name := "-", "-"
-					Type = utl.LastElemByDot(utl.Str(azObj["@odata.type"]))
-					switch Type {
-					case "group", "servicePrincipal":
-						Name = utl.Str(azObj["displayName"])
-					default:
-						Name = utl.Str(azObj["userPrincipalName"])
-					}
-					fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name),
-						utl.Gre(utl.Str(azObj["id"])), utl.Gre(Type))
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	members := utl.Slice(resp["value"])
+	if len(members) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("members"))
+		for _, item := range members {
+			if member := utl.Map(item); member != nil {
+				Type, Name := "-", "-"
+				Type = utl.LastElemByDot(utl.Str(member["@odata.type"]))
+				switch Type {
+				case "group", "servicePrincipal":
+					Name = utl.Str(member["displayName"])
+				default:
+					Name = utl.Str(member["userPrincipalName"])
 				}
+				fmt.Printf("  %-50s %s (%s)\n", utl.Gre(Name),
+					utl.Gre(utl.Str(member["id"])), utl.Gre(Type))
 			}
 		}
 	}
@@ -83,27 +78,14 @@ func PrintGroup(x AzureObject, z *Config) {
 
 // Lists all cached Privileged Access Groups (PAGs)
 func PrintPags(z *Config) {
-	groups := GetMatchingDirObjects("g", "", false, z) // false = get from cache, not Azure
-	for _, x := range groups {
-		if utl.Bool(x["isAssignableToRole"]) {
-			PrintTersely("g", x)
+	groups := GetMatchingDirObjects(DirectoryGroup, "", false, z) // false = get from cache, not Azure
+	for i := range groups {
+		group := groups[i]
+		isAssignableToRole := utl.Bool(group["isAssignableToRole"])
+		if isAssignableToRole {
+			PrintTersely(DirectoryGroup, group)
 		}
 	}
-}
-
-func PrintCountStatusGroups(z *Config) {
-	c1Width := 44 // Column 1 width
-	c2Width := 10 // Column 2 width
-	c3Width := 10 // Column 3 width
-	fmt.Print(utl.Whi2(utl.PostSpc("OBJECTS", c1Width)+
-		utl.PreSpc("LOCAL", c2Width)+
-		utl.PreSpc("AZURE", c3Width)) + "\n")
-	status := utl.Blu(utl.PostSpc("Azure Directory Groups", c1Width))
-	localCount := utl.Int2StrWithCommas(ObjectCountLocal("g", z))
-	azureCount := utl.Int2StrWithCommas(ObjectCountAzure("g", z))
-	status += utl.Gre(utl.PreSpc(localCount, c2Width))
-	status += utl.Gre(utl.PreSpc(azureCount, c3Width)) + "\n"
-	fmt.Print(status)
 }
 
 // Creates or updates an Azure directory group from given command-line arguments.

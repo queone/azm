@@ -1,5 +1,17 @@
 ## Releases
 
+### v0.4.0
+Release Date: 2025-mar-22
+- Completed role assignments; now all objects follow new model
+- Delete old RemoveCacheFile() and cleaned that up a bit
+- Deleted old GetCachedObjects() now that we are following a new caching model
+- Replaced all AzureObjectList.Add() with normal append() because it's faster and more idiomatic
+- As misc/go-slice-benchmarks.go shows, for-loop pointer memory-walk optimization wasn't really optimizing, and clarity actually suffers. We willl still switch from value-based to index-based loop for code simplicity.
+- In maz.go, switched from strconv.ParseBool() to utl.Bool() as it suddenly began failing. Bizarre!
+- Fixed bug whereby cacheNeedsRefreshing boolean also needed to check if cache.Count() < 1
+- Bump github.com/golang-jwt/jwt/v5 from 5.2.1 to 5.2.2 to correct CVE-2025-30204
+- Fixed DiffRoleDefinitionSpecfileVsAzure() so that -vs specfile shows proper coloring of what would be updated
+
 ### v0.3.2
 Release Date: 2025-mar-20
 - Optimized all functions that build id:name maps with pointer memory-walk, and also renamed them for consistency

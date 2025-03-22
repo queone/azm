@@ -65,128 +65,126 @@ func ApiDeleteVerbose(apiUrl string, z *Config, params map[string]string) (map[s
 	return ApiCall("DELETE", apiUrl, z, nil, params, true) // true = verbose, for debugging
 }
 
-// Makes an API call and returns the result object, statusCode, and error. For a more clear
-// explanation of how to interpret the JSON responses see https://eager.io/blog/go-and-json/
-// This function is the cornerstone of the maz package, extensively handling all API interactions.
-func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
-	if !strings.HasPrefix(apiUrl, "http") {
-		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
-	}
+// // Makes an API call and returns the result object, statusCode, and error.
+// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+// 	if !strings.HasPrefix(apiUrl, "http") {
+// 		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
+// 	}
 
-	// Map headers to corresponding API endpoint
-	var headers map[string]string
-	if strings.HasPrefix(apiUrl, ConstMgUrl) {
-		headers = z.MgHeaders
-	} else if strings.HasPrefix(apiUrl, ConstAzUrl) {
-		headers = z.AzHeaders
-	}
+// 	// Map headers to corresponding API endpoint
+// 	var headers map[string]string
+// 	if strings.HasPrefix(apiUrl, ConstMgUrl) {
+// 		headers = z.MgHeaders
+// 	} else if strings.HasPrefix(apiUrl, ConstAzUrl) {
+// 		headers = z.AzHeaders
+// 	}
 
-	// Set up new HTTP request client
-	client := &http.Client{Timeout: time.Second * 60} // One minute timeout
-	var req *http.Request
-	var err error
-	switch strings.ToUpper(method) {
-	case "GET":
-		req, err = http.NewRequest("GET", apiUrl, nil)
-	case "PATCH":
-		jsonData, err2 := json.Marshal(payload)
-		if err2 != nil {
-			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
-		}
-		req, err = http.NewRequest("PATCH", apiUrl, bytes.NewBuffer(jsonData))
-	case "POST":
-		jsonData, err2 := json.Marshal(payload)
-		if err2 != nil {
-			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
-		}
-		req, err = http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonData))
-	case "PUT":
-		jsonData, err2 := json.Marshal(payload)
-		if err2 != nil {
-			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
-		}
-		req, err = http.NewRequest("PUT", apiUrl, bytes.NewBuffer(jsonData))
-	case "DELETE":
-		req, err = http.NewRequest("DELETE", apiUrl, nil)
-	default:
-		return nil, 0, fmt.Errorf("%s Error: Unsupported HTTP method", utl.Trace())
-	}
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
+// 	// Set up new HTTP request client
+// 	client := &http.Client{Timeout: time.Second * 60} // One minute timeout
+// 	var req *http.Request
+// 	var err error
+// 	switch strings.ToUpper(method) {
+// 	case "GET":
+// 		req, err = http.NewRequest("GET", apiUrl, nil)
+// 	case "PATCH":
+// 		jsonData, err2 := json.Marshal(payload)
+// 		if err2 != nil {
+// 			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
+// 		}
+// 		req, err = http.NewRequest("PATCH", apiUrl, bytes.NewBuffer(jsonData))
+// 	case "POST":
+// 		jsonData, err2 := json.Marshal(payload)
+// 		if err2 != nil {
+// 			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
+// 		}
+// 		req, err = http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonData))
+// 	case "PUT":
+// 		jsonData, err2 := json.Marshal(payload)
+// 		if err2 != nil {
+// 			return nil, 0, fmt.Errorf("failed to marshal payload: %w", err2)
+// 		}
+// 		req, err = http.NewRequest("PUT", apiUrl, bytes.NewBuffer(jsonData))
+// 	case "DELETE":
+// 		req, err = http.NewRequest("DELETE", apiUrl, nil)
+// 	default:
+// 		return nil, 0, fmt.Errorf("%s Error: Unsupported HTTP method", utl.Trace())
+// 	}
+// 	if err != nil {
+// 		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
+// 	}
 
-	// Set up the headers
-	for h, v := range headers {
-		req.Header.Add(h, v)
-	}
+// 	// Set up the headers
+// 	for h, v := range headers {
+// 		req.Header.Add(h, v)
+// 	}
 
-	// Set up the query parameters and encode
-	reqParams := req.URL.Query()
-	for p, v := range params {
-		reqParams.Add(p, v)
-	}
-	req.URL.RawQuery = reqParams.Encode()
+// 	// Set up the query parameters and encode
+// 	reqParams := req.URL.Query()
+// 	for p, v := range params {
+// 		reqParams.Add(p, v)
+// 	}
+// 	req.URL.RawQuery = reqParams.Encode()
 
-	// === MAKE THE CALL ============
-	if verbose {
-		fmt.Println(utl.Blu("==== REQUEST ================================="))
-		fmt.Println(method + " " + apiUrl)
-		PrintHeaders(req.Header)
-		PrintParams(reqParams)
-		if payload != nil {
-			fmt.Println(utl.Blu("payload") + ":")
-			utl.PrintJsonColor(payload)
-		}
-	}
-	// Make the call
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to execute HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
+// 	// === MAKE THE CALL ============
+// 	if verbose {
+// 		fmt.Println(utl.Blu("==== REQUEST ================================="))
+// 		fmt.Println(method + " " + apiUrl)
+// 		PrintHeaders(req.Header)
+// 		PrintParams(reqParams)
+// 		if payload != nil {
+// 			fmt.Println(utl.Blu("payload") + ":")
+// 			utl.PrintJsonColor(payload)
+// 		}
+// 	}
+// 	// Make the call
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return nil, 0, fmt.Errorf("failed to execute HTTP request: %w", err)
+// 	}
+// 	defer resp.Body.Close()
 
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read response body: %w", err)
-	}
+// 	// Read the response body
+// 	body, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return nil, 0, fmt.Errorf("failed to read response body: %w", err)
+// 	}
 
-	// This function caters to Microsoft Azure REST API calls. Note that variable 'body' is of type
-	// []uint8, which is essentially a long string that evidently can be either: 1) a single integer
-	// number, or 2) a JSON object string that needs unmarshalling. Below conditional is based on
-	// this interpretation, but may need further confirmation and improved handling.
+// 	// This function caters to Microsoft Azure REST API calls. Note that variable 'body' is of type
+// 	// []uint8, which is essentially a long string that evidently can be either: 1) a single integer
+// 	// number, or 2) a JSON object string that needs unmarshalling. Below conditional is based on
+// 	// this interpretation, but may need further confirmation and improved handling.
 
-	var result map[string]interface{} // JSON object to be returned
-	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
-		// It's an integer, probably an API object count value
-		result = make(map[string]interface{})
-		result["value"] = intValue
-	} else {
-		// It's a regular JSON result, or null
-		if len(body) > 0 { // Make sure we have something to unmarshal, else return nil
-			if err = json.Unmarshal(body, &result); err != nil {
-				return nil, 0, fmt.Errorf("failed to unmarshal response body: %w", err)
-			}
-		}
-		// If it's null, returning r.StatusCode below will let caller know
-	}
+// 	var result map[string]interface{} // JSON object to be returned
+// 	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
+// 		// It's an integer, probably an API object count value
+// 		result = make(map[string]interface{})
+// 		result["value"] = intValue
+// 	} else {
+// 		// It's a regular JSON result, or null
+// 		if len(body) > 0 { // Make sure we have something to unmarshal, else return nil
+// 			if err = json.Unmarshal(body, &result); err != nil {
+// 				return nil, 0, fmt.Errorf("failed to unmarshal response body: %w", err)
+// 			}
+// 		}
+// 		// If it's null, returning r.StatusCode below will let caller know
+// 	}
 
-	statCode := resp.StatusCode
-	if verbose {
-		fmt.Println(utl.Blu("==== RESPONSE ================================"))
-		fmt.Printf("%s: %d %s\n", utl.Blu("status"), statCode, http.StatusText(statCode))
-		fmt.Println(utl.Blu("result") + ":")
-		utl.PrintJsonColor(result)
-		resHeaders, err := httputil.DumpResponse(resp, false)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to dump response: %w", err)
-		}
-		fmt.Println(utl.Blu("headers") + ":")
-		fmt.Println(string(resHeaders))
-	}
+// 	statCode := resp.StatusCode
+// 	if verbose {
+// 		fmt.Println(utl.Blu("==== RESPONSE ================================"))
+// 		fmt.Printf("%s: %d %s\n", utl.Blu("status"), statCode, http.StatusText(statCode))
+// 		fmt.Println(utl.Blu("result") + ":")
+// 		utl.PrintJsonColor(result)
+// 		resHeaders, err := httputil.DumpResponse(resp, false)
+// 		if err != nil {
+// 			return nil, 0, fmt.Errorf("failed to dump response: %w", err)
+// 		}
+// 		fmt.Println(utl.Blu("headers") + ":")
+// 		fmt.Println(string(resHeaders))
+// 	}
 
-	return result, statCode, nil
-}
+// 	return result, statCode, nil
+// }
 
 // Returns API error message string.
 func ApiErrorMsg(obj map[string]interface{}) string {
@@ -254,8 +252,154 @@ func PrintParams(params url.Values) {
 	}
 }
 
+// =========================================================================
+// Makes an API call and returns the result object, statusCode, and error.
+func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+	// Validate URL
+	if !strings.HasPrefix(apiUrl, "http") {
+		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
+	}
+
+	// Set headers based on the API URL
+	headers := getHeadersForApi(apiUrl, z)
+
+	// Create HTTP request
+	req, err := createHttpRequest(method, apiUrl, payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// Add headers and query parameters to the request
+	setRequestHeaders(req, headers)
+	setQueryParameters(req, params)
+
+	// Log request details if verbose mode is enabled
+	if verbose {
+		logRequestDetails(method, apiUrl, req, payload, params)
+	}
+
+	// Execute the HTTP request
+	resp, err := executeHttpRequest(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to execute HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read and process the response
+	result, err := processResponse(resp, verbose)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to process response: %w", err)
+	}
+
+	return result, resp.StatusCode, nil
+}
+
+// Helper function to get headers based on the API URL
+func getHeadersForApi(apiUrl string, z *Config) map[string]string {
+	if strings.HasPrefix(apiUrl, ConstMgUrl) {
+		return z.MgHeaders
+	} else if strings.HasPrefix(apiUrl, ConstAzUrl) {
+		return z.AzHeaders
+	}
+	return nil
+}
+
+// Helper function to create an HTTP request
+func createHttpRequest(method, apiUrl string, payload map[string]interface{}) (*http.Request, error) {
+	switch strings.ToUpper(method) {
+	case "GET":
+		return http.NewRequest("GET", apiUrl, nil)
+	case "PATCH", "POST", "PUT":
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		}
+		return http.NewRequest(strings.ToUpper(method), apiUrl, bytes.NewBuffer(jsonData))
+	case "DELETE":
+		return http.NewRequest("DELETE", apiUrl, nil)
+	default:
+		return nil, fmt.Errorf("%s Error: Unsupported HTTP method", utl.Trace())
+	}
+}
+
+// Helper function to set headers on the request
+func setRequestHeaders(req *http.Request, headers map[string]string) {
+	for h, v := range headers {
+		req.Header.Add(h, v)
+	}
+}
+
+// Helper function to set query parameters on the request
+func setQueryParameters(req *http.Request, params map[string]string) {
+	reqParams := req.URL.Query()
+	for p, v := range params {
+		reqParams.Add(p, v)
+	}
+	req.URL.RawQuery = reqParams.Encode()
+}
+
+// Helper function to log request details in verbose mode
+func logRequestDetails(method, apiUrl string, req *http.Request, payload map[string]interface{}, params map[string]string) {
+	fmt.Println(utl.Blu("==== REQUEST ================================="))
+	fmt.Println(method + " " + apiUrl)
+	PrintHeaders(req.Header)
+	PrintParams(req.URL.Query())
+	if payload != nil {
+		fmt.Println(utl.Blu("payload") + ":")
+		utl.PrintJsonColor(payload)
+	}
+}
+
+// Helper function to execute the HTTP request
+func executeHttpRequest(req *http.Request) (*http.Response, error) {
+	client := &http.Client{Timeout: time.Second * 30} // Thirty second timeout
+	return client.Do(req)
+}
+
+// Helper function to process the HTTP response
+func processResponse(resp *http.Response, verbose bool) (map[string]interface{}, error) {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var result map[string]interface{}
+	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
+		// It's an integer, probably an API object count value
+		result = make(map[string]interface{})
+		result["value"] = intValue
+	} else if len(body) > 0 {
+		// It's a regular JSON result
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+		}
+	}
+
+	// Log response details if verbose mode is enabled
+	if verbose {
+		logResponseDetails(resp, result)
+	}
+
+	return result, nil
+}
+
+// Helper function to log response details in verbose mode
+func logResponseDetails(resp *http.Response, result map[string]interface{}) {
+	fmt.Println(utl.Blu("==== RESPONSE ================================"))
+	fmt.Printf("%s: %d %s\n", utl.Blu("status"), resp.StatusCode, http.StatusText(resp.StatusCode))
+	fmt.Println(utl.Blu("result") + ":")
+	utl.PrintJsonColor(result)
+	resHeaders, err := httputil.DumpResponse(resp, false)
+	if err != nil {
+		fmt.Println("failed to dump response:", err)
+		return
+	}
+	fmt.Println(utl.Blu("headers") + ":")
+	fmt.Println(string(resHeaders))
+}
+
 // ==========================================================================
-// TODO: Things to make these functions more readable
+// TODO: Make the alias functions more readable
 //
 // 1. Use Structs for Complex Parameters
 //

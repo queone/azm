@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/queone/utl"
@@ -29,7 +28,6 @@ const (
 	rUp = "\x1B[2K\r" // Clears the line completely and move cursor to the start of the line
 	// See https://stackoverflow.com/questions/1508490/erase-the-current-printed-console-line
 
-	ConstCacheFileExtension   = "gz"
 	ConstMgCacheFileAgePeriod = 1800  // Half hour
 	ConstAzCacheFileAgePeriod = 86400 // One day
 
@@ -37,8 +35,8 @@ const (
 	JsonFormat = "json"
 
 	// Maz object type strings
-	RbacDefinition    = "d"  // Azure resource role role definition
-	RbacAssignment    = "a"  // Azure resource role role assignment
+	RbacDefinition    = "d"  // Azure resource role definition
+	RbacAssignment    = "a"  // Azure resource role assignment
 	Subscription      = "s"  // Azure resource subscription
 	ManagementGroup   = "m"  // Azure resource management group
 	DirectoryUser     = "u"  // Azure directory user
@@ -240,14 +238,17 @@ func DumpLoginValues(z *Config) {
 	if err != nil {
 		utl.Die("  %s\n", utl.Red("Credentials file does not exists yet."))
 	}
-	creds := credsRaw.(map[string]interface{})
-	fmt.Printf("  %s: %s\n", utl.Blu("tenant_id"), utl.Gre(utl.Str(creds["tenant_id"])))
-	if strings.ToLower(utl.Str(creds["interactive"])) == "true" {
-		fmt.Printf("  %s: %s\n", utl.Blu("username"), utl.Gre(utl.Str(creds["username"])))
-		fmt.Printf("  %s: %s\n", utl.Blu("interactive"), utl.Mag("true"))
+	if creds := utl.Map(credsRaw); creds != nil {
+		fmt.Printf("  %s: %s\n", utl.Blu("tenant_id"), utl.Gre(utl.Str(creds["tenant_id"])))
+		if strings.ToLower(utl.Str(creds["interactive"])) == "true" {
+			fmt.Printf("  %s: %s\n", utl.Blu("username"), utl.Gre(utl.Str(creds["username"])))
+			fmt.Printf("  %s: %s\n", utl.Blu("interactive"), utl.Mag("true"))
+		} else {
+			fmt.Printf("  %s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(creds["client_id"])))
+			fmt.Printf("  %s: %s\n", utl.Blu("client_secret"), utl.Gre(utl.Str(creds["client_secret"])))
+		}
 	} else {
-		fmt.Printf("  %s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(creds["client_id"])))
-		fmt.Printf("  %s: %s\n", utl.Blu("client_secret"), utl.Gre(utl.Str(creds["client_secret"])))
+		utl.Die("  %s\n", utl.Red("Error reading credentials file."))
 	}
 	os.Exit(0)
 }
@@ -258,7 +259,8 @@ func SetupInterativeLogin(z *Config) {
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
 	}
-	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId, "username:", z.Username, "interactive:", "true")
+	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId,
+		"username:", z.Username, "interactive:", "true")
 	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
@@ -275,7 +277,8 @@ func SetupAutomatedLogin(z *Config) {
 	if !utl.ValidUuid(z.ClientId) {
 		utl.Die("Error. CLIENT_ID is an invalid UUID.\n")
 	}
-	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId, "client_id:", z.ClientId, "client_secret:", z.ClientSecret)
+	content := fmt.Sprintf("%-14s %s\n%-14s %s\n%-14s %s\n", "tenant_id:", z.TenantId,
+		"client_id:", z.ClientId, "client_secret:", z.ClientSecret)
 	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
@@ -306,7 +309,7 @@ func SetupCredentials(z *Config) {
 		MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
 		if !AzTokenValid && !MgTokenValid {
 			// If they are both not valid, then we'll process the other variables
-			z.Interactive, _ = strconv.ParseBool(utl.Str(eVars["MAZ_INTERACTIVE"]))
+			z.Interactive = utl.Bool(eVars["MAZ_INTERACTIVE"]) // Try casting as bool
 			if z.Interactive {
 				z.Username = strings.ToLower(utl.Str(eVars["MAZ_USERNAME"]))
 				if z.ClientId != "" || z.ClientSecret != "" {
@@ -334,12 +337,17 @@ func SetupCredentials(z *Config) {
 		if err != nil {
 			utl.Die("[%s] %s\n", credsFile, err)
 		}
-		creds := credsRaw.(map[string]interface{})
+		creds := utl.Map(credsRaw)
+		if creds == nil {
+			utl.Die("[%s] Values in file are not properly formatted.\n", credsFile)
+		}
+
 		z.TenantId = utl.Str(creds["tenant_id"])
 		if !utl.ValidUuid(z.TenantId) {
 			utl.Die("[%s] tenant_id '%s' is not a valid UUID\n", credsFile, z.TenantId)
 		}
-		z.Interactive, _ = strconv.ParseBool(utl.Str(creds["interactive"]))
+
+		z.Interactive = utl.Bool(creds["interactive"]) // Try casting as bool
 		if z.Interactive {
 			z.Username = strings.ToLower(utl.Str(creds["username"]))
 		} else {

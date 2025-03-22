@@ -50,11 +50,11 @@ func GetCache(mazType string, z *Config) (*Cache, error) {
 
 // Removes cache files for a given type code and configuration.
 // It ensures both the cache file and deltaLink file associated with the type are deleted.
-func RemoveCacheFiles(t string, z *Config) error {
+func RemoveCacheFiles(mazType string, z *Config) error {
 	// Validate the input type and get the suffix.
-	suffix, ok := CacheSuffix[t]
+	suffix, ok := CacheSuffix[mazType]
 	if !ok {
-		return fmt.Errorf("invalid object type code: %s", utl.Red(t))
+		return fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
 	}
 
 	// Construct the cache file and delta link file paths without loading the cache.
@@ -165,8 +165,7 @@ func (c *Cache) Upsert(obj AzureObject) error {
 		// Merge the new object into the existing one in place
 		MergeAzureObjects(obj, *existingObj)
 	} else {
-		// Add the new object to the cache
-		c.data.Add(obj)
+		c.data = append(c.data, obj) // Add the new object to the cache
 	}
 
 	// Save the updated cache to ensure persistence
@@ -204,16 +203,17 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 
 	// 1. Process deltaSet to build mergeSet and track deleted IDs
 	for i := range deltaSet {
-		item := &deltaSet[i] // Access the element directly via pointer
-		id := utl.Str((*item)["id"])
+		obj := deltaSet[i]
+
+		id := utl.Str(obj["id"])
 		if id == "" {
 			continue // Skip items without a valid "id"
 		}
 
-		if (*item)["@removed"] == nil && (*item)["members@delta"] == nil {
+		if obj["@removed"] == nil && obj["members@delta"] == nil {
 			// New or updated object
 			if !uniqueIds.Exists(id) {
-				mergeSet.Add(*item) // Add to mergeSet
+				mergeSet = append(mergeSet, obj)
 				uniqueIds.Add(id)
 			}
 		} else {
@@ -229,9 +229,9 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 
 	// 3. Add new entries from mergeSet to the cache
 	for i := range mergeSet {
-		item := &mergeSet[i] // Access the element directly via pointer
-		if err := c.Upsert(*item); err != nil {
-			fmt.Printf("WARNING: Failed to upsert cache object with ID '%s': %v\n", (*item)["id"], err)
+		obj := mergeSet[i]
+		if err := c.Upsert(obj); err != nil {
+			fmt.Printf("WARNING: Failed to upsert cache object with ID '%s': %v\n", obj["id"], err)
 		}
 	}
 }

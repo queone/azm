@@ -56,65 +56,71 @@ func PrintRbacDefinition(obj AzureObject, z *Config) {
 	}
 
 	// Print role permissions
-	permissionsSlice := utl.Slice(props["permissions"])
-	if permissionsSlice == nil {
-		fmt.Printf("%s\n", utl.Red("    <Error: Role 'permissions' is not a slice.>"))
+	permissions := utl.Slice(props["permissions"])
+	permCount := len(permissions)
+	if permCount == 0 {
+		fmt.Printf("%s\n", utl.Red("    <Error. Role 'permissions' has no entries.>"))
+	} else if permCount > 1 {
+		msg := fmt.Sprintf("    <Error. Role 'permissions' has %d entries. There can only be one.>",
+			permCount)
+		fmt.Printf("%s\n", utl.Red(msg))
 	} else {
 		fmt.Printf("  %s:\n", utl.Blu("permissions"))
+		// Select and focus on the one expected single permission set
+		perms := utl.Map(permissions[0])
+		if perms == nil {
+			utl.Die("%s\n", utl.Red("    <Error. The expected single permission set is empty.>"))
+		}
 
-		permissionsCount := len(permissionsSlice)
-		if permissionsCount == 0 {
-			fmt.Printf("%s\n", utl.Red("    <Error. Role 'permissions' has no entries.>"))
-		} else if permissionsCount > 1 {
-			msg := fmt.Sprintf("    <Error. Role 'permissions' slice has more than one entry (%d)?.>",
-				permissionsCount)
-			fmt.Printf("%s\n", utl.Red(msg))
-		} else {
-			// Select and focus on the one expected single permission set
-			perms := utl.Map(permissionsSlice[0])
-			if perms == nil {
-				utl.Die("%s\n", utl.Red("    <Error. The expected single permission set is nil.>"))
-			} else {
-				// Print the 4 sets of permissions type
-				fmt.Printf("    - %s: ", utl.Blu("actions"))
-				// NOTE, that the first one is different, it starts with the YAML array dash '-'
-				if actions := utl.Slice(perms["actions"]); actions == nil {
-					fmt.Println("[]") // Note this newline, to finish the last Printf()
-				} else {
-					fmt.Println() // Note this newline, to finish the last Printf()
-					for _, item := range actions {
-						// StrSingleQuote() wraps any potential leading '*' in single-quotes
-						fmt.Printf("        - %s\n", utl.Gre(utl.StrSingleQuote(item)))
-					}
-				}
-				fmt.Printf("      %s: ", utl.Blu("notActions"))
-				if notActions := utl.Slice(perms["notActions"]); notActions == nil {
-					fmt.Println("[]")
-				} else {
-					fmt.Println()
-					for _, item := range notActions {
-						fmt.Printf("        - %s\n", utl.Gre(utl.StrSingleQuote(item)))
-					}
-				}
-				fmt.Printf("      %s: ", utl.Blu("dataActions"))
-				if dataActions := utl.Slice(perms["dataActions"]); dataActions == nil {
-					fmt.Println("[]")
-				} else {
-					fmt.Println()
-					for _, item := range dataActions {
-						fmt.Printf("        - %s\n", utl.Gre(utl.StrSingleQuote(item)))
-					}
-				}
-				fmt.Printf("      %s: ", utl.Blu("notDataActions"))
-				if notDataActions := utl.Slice(perms["notDataActions"]); notDataActions == nil {
-					fmt.Println("[]")
-				} else {
-					fmt.Println()
-					for _, item := range notDataActions {
-						fmt.Printf("        - %s\n", utl.Gre(utl.StrSingleQuote(item)))
-					}
-				}
+		// Print the 4 sets of permissions type
+		fmt.Printf("    - %s: ", utl.Blu("actions"))
+		// NOTE, that 'actions' is printed differently, it starts with the YAML array dash '-'
+		actions := utl.Slice(perms["actions"])
+		if len(actions) > 0 {
+			fmt.Println() // Note this newline ends the header Printf() above
+			for _, value := range actions {
+				// Function StrSingleQuote() wraps any potential leading '*' in single-quotes
+				permission := utl.StrSingleQuote(value)
+				fmt.Printf("        - %s\n", utl.Gre(permission))
 			}
+		} else {
+			fmt.Println("[]") // Note this newline ends the header Printf() above
+		}
+
+		fmt.Printf("      %s: ", utl.Blu("notActions"))
+		notActions := utl.Slice(perms["notActions"])
+		if len(notActions) > 0 {
+			fmt.Println()
+			for _, value := range notActions {
+				permission := utl.StrSingleQuote(value)
+				fmt.Printf("        - %s\n", utl.Gre(permission))
+			}
+		} else {
+			fmt.Println("[]")
+		}
+
+		fmt.Printf("      %s: ", utl.Blu("dataActions"))
+		dataActions := utl.Slice(perms["dataActions"])
+		if len(dataActions) > 0 {
+			fmt.Println()
+			for _, value := range dataActions {
+				permission := utl.StrSingleQuote(value)
+				fmt.Printf("        - %s\n", utl.Gre(permission))
+			}
+		} else {
+			fmt.Println("[]")
+		}
+
+		fmt.Printf("      %s: ", utl.Blu("notDataActions"))
+		notDataActions := utl.Slice(perms["notDataActions"])
+		if len(notDataActions) > 0 {
+			fmt.Println()
+			for _, value := range notDataActions {
+				permission := utl.StrSingleQuote(value)
+				fmt.Printf("        - %s\n", utl.Gre(permission))
+			}
+		} else {
+			fmt.Println("[]")
 		}
 	}
 }
@@ -268,13 +274,11 @@ func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
 // Returns id:name map of all Azure RBAC role definitions
 func GetIdMapRoleDefs(z *Config) (nameMap map[string]string) {
 	nameMap = make(map[string]string)
-	definitions := GetMatchingRbacDefinitions("", false, z) // false = get from cache, not Azure
+	roles := GetMatchingRbacDefinitions("", false, z) // false = get from cache, not Azure
 	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
 
-	// Memory-walk the slice to gather these values more efficiently
-	for i := range definitions {
-		rolePtr := &definitions[i]  // Use a pointer to avoid copying the element
-		role := *rolePtr            // Dereference the pointer for easier access
+	for i := range roles {
+		role := roles[i]
 		id := utl.Str(role["name"]) // Accessing the field directly
 		if id == "" {
 			continue // Skip if "name" is missing or not a string
@@ -338,7 +342,7 @@ func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list Azur
 	}
 
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
-	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
 		CacheAzureRbacDefinitions(cache, true, z) // true = be verbose
 	}
@@ -349,29 +353,13 @@ func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list Azur
 	}
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
 	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
+
 	for i := range cache.data {
-		rawPtr := &cache.data[i]   // Access the element directly via pointer (memory walk)
-		rawObj := *rawPtr          // Dereference the pointer manually
-		roleMap := utl.Map(rawObj) // Try asserting as a map type
-		if roleMap == nil {
-			continue // Skip this entry if not a map
-		}
-		role := AzureObject(roleMap) // Cast as our standard AzureObject type
-
-		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
-		id := utl.Str(role["id"])
-		name := utl.Str(role["name"])
-		if id != "" {
-			id = path.Base(id) // Extract the last part of the path (UUID)
-		} else if name != "" {
-			id = name // Fall back to the "name" field if "id" is empty
-		}
-
-		// Skip if the ID is empty or already seen
+		role := cache.data[i]       // Index-based loop seem a bit faster
+		id := utl.Str(role["name"]) // Resource role definitions use 'name' as the unique ID
 		if id == "" || ids.Exists(id) {
-			continue
+			continue // Skip if the ID is empty () or already seen
 		}
-
 		// Check if the object contains the filter string
 		if role.HasString(filter) {
 			matchingList = append(matchingList, role) // Add matching object to the list
@@ -405,36 +393,24 @@ func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-		resp, statCode, _ := ApiGet(apiUrl, z, params)
-		if statCode != 200 {
-			// For now, I don't think we care about any errors
-			continue // If any issues retrieving items for this scope, go to next one
-		}
-		definitions := utl.Slice(resp["value"]) // Try asserting value as an object of slice type
-		if definitions == nil {
-			continue // If its's not a slice with values, process next scope
-		}
-
+		resp, _, _ := ApiGet(apiUrl, z, params)
+		roles := utl.Slice(resp["value"])
 		count := 0
-		for i := range definitions {
-			rawPtr := &definitions[i] // Access the element directly via pointer (memory walk)
-			rawObj := *rawPtr         // Dereference the pointer manually
-			role := utl.Map(rawObj)   // Try asserting as a map type
-			if role == nil {
-				continue // Skip this entry if not a map
+		for i := range roles {
+			obj := roles[i]
+			if role := utl.Map(obj); role != nil {
+				// Root out potential duplicates
+				id := utl.Str(role["name"])
+				if ids.Exists(id) {
+					continue
+					// Skip this repeated one. This can happen because of the way Azure RBAC
+					// hierarchy inheritance works, and the same role is seen from multiple places.
+				}
+				list = append(list, role) // Add object to the list
+				ids.Add(id)               // Mark this id as seen
+				count++
 			}
-			// Root out potential duplicates
-			id := utl.Str(role["name"])
-			if ids.Exists(id) {
-				continue // Skip this entry if it's a repeat
-				// Skip this repeated one. This can happen because of the way Azure RBAC
-				// hierarchy inheritance works, and the same role is seen from multiple places.
-			}
-			list = append(list, role) // Add object to the list
-			ids.Add(id)               // Mark this id as seen
-			count++
 		}
-
 		if verbose && count > 0 {
 			scopeName := scope
 			scopeType := "Subscription"
@@ -500,7 +476,14 @@ func GetAzureRbacDefinitionByNameAndScope(roleName, scope string, z *Config) (st
 
 // Retrieves all role definitions with given roleName from the Azure resource RBAC hierarchy.
 func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
-	scopes := GetAzureRbacScopes(z)    // Get all the scopes in the tenant hierarchy
+	// Get all the scopes in the tenant hierarchy
+	scopes := GetAzureRbacScopes(z)
+
+	// NOTE: It is possible for a role with the same roleName to exist in multiple scopes
+	// within the Azure ARM API. That is the reason why a list of matchingRoles is required.
+	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
+	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
+
 	matchingRoles := AzureObjectList{} // Initialize an empty AzureObjectList
 	ids := utl.StringSet{}             // Keep track of unique IDs to eliminate duplicates
 
@@ -512,15 +495,9 @@ func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
 		resp, _, _ := ApiGet(apiUrl, z, params)
-		sliceArray := utl.Slice(resp["value"]) // The response is a 'value' slice array
-		if resp == nil || sliceArray == nil {
-			continue // Skip this scope if a role with that roleName was not found
-		}
-		// NOTE: It is possible for a role with the same roleName to exist in multiple scopes
-		// within the Azure ARM API. That is the reason why a list of matchingRoles is required.
-		// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-		// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
-		for _, obj := range sliceArray {
+		roles := utl.Slice(resp["value"])
+		for i := range roles {
+			obj := roles[i]
 			if role := utl.Map(obj); role != nil {
 				id := utl.Str(role["name"])
 				if ids.Exists(id) {
@@ -528,8 +505,8 @@ func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
 					// Skip this repeated one. This can happen because of the way Azure RBAC
 					// hierarchy inherantance works, and the same role is seen from multiple places.
 				}
-				ids.Add(id)                                              // Mark this id as seen
 				matchingRoles = append(matchingRoles, AzureObject(role)) // Append unique role
+				ids.Add(id)                                              // Mark this id as seen
 			}
 		}
 	}
@@ -537,7 +514,7 @@ func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
 }
 
 // Retrieves a role definition by its unique ID from the Azure resource RBAC hierarchy.
-func GetAzureRbacDefinitionById(id string, z *Config) AzureObject {
+func GetAzureRbacDefinitionById(targetId string, z *Config) AzureObject {
 	// Get all the scopes in the tenant hierarchy
 	scopes := GetAzureRbacScopes(z)
 
@@ -550,15 +527,14 @@ func GetAzureRbacDefinitionById(id string, z *Config) AzureObject {
 	// Search each of the tenant scopes
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
-		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions/" + id
-		resp, statCode, _ := ApiGet(apiUrl, z, params)
-		if statCode == 200 {
-			roleObj := utl.Map(resp) // Try asserting the response as a single object of map type
-			if roleObj == nil {
-				continue // Invalid response/object type - proceed to next scope
+		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions/" + targetId
+		resp, _, _ := ApiGet(apiUrl, z, params)
+		if role := utl.Map(resp); role != nil {
+			id := utl.Str(role["name"])
+			if id == targetId {
+				role["maz_from_azure"] = true
+				return AzureObject(role) // Return immediately if a match is found
 			}
-			roleObj["maz_from_azure"] = true
-			return AzureObject(roleObj) // Return immediately when a match is found
 		}
 	}
 	return nil

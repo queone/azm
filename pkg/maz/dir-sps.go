@@ -23,65 +23,54 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print certificates keys
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
-		keyCredentials := resp["value"].([]interface{}) // Assert as JSON array
-		if keyCredentials != nil {
-			PrintCertificateList(keyCredentials)
-		}
-	}
+	resp, _, _ := ApiGet(apiUrl, z, nil)
+	keyCredentials := utl.Slice(resp["value"])
+	PrintCertificateList(keyCredentials)
 
 	// Print secret expiry and other details. Not actual secretText, which cannot be retrieve anyway!
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
-		passwordCredentials := resp["value"].([]interface{}) // Assert as JSON array
-		if passwordCredentials != nil {
-			PrintSecretList(passwordCredentials)
-		}
-	}
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	passwordCredentials := utl.Slice(resp["value"])
+	PrintSecretList(passwordCredentials)
 
 	// Print owners
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/owners"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil {
-		PrintOwners(resp["value"].([]interface{}))
-	}
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	owners := utl.Slice(resp["value"])
+	PrintOwners(owners)
 
 	// Below loop does 2 things:
 	// 1. Prints the SP's all app roles
 	// 2. Creates an role:name map to use later when calling PrintAppRoleAssignments()
 	roleNameMap := make(map[string]string)
 	roleNameMap["00000000-0000-0000-0000-000000000000"] = "Default" // Include default app permissions role
-	if appRoles, ok := x["appRoles"].([]interface{}); ok {
-		if len(appRoles) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("app_roles"))
-			for _, i := range appRoles {
-				a := i.(map[string]interface{})
-				rId := utl.Str(a["id"])
-				displayName := utl.Str(a["displayName"])
+	appRoles := utl.Slice(x["appRoles"])
+	if len(appRoles) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("app_roles"))
+		for _, item := range appRoles {
+			if appRole := utl.Map(item); appRole != nil {
+				rId := utl.Str(appRole["id"])
+				displayName := utl.Str(appRole["displayName"])
 				roleNameMap[rId] = displayName // Update growing list of roleNameMap
 				if len(displayName) >= 60 {
-					displayName = utl.FirstN(displayName, 57) + "..."
+					displayName = displayName[:57] + "..." // Shorten displayName for nicer printout
 				}
-				fmt.Printf("  %s  %-50s  %-60s\n", utl.Gre(rId), utl.Gre(utl.Str(a["value"])), utl.Gre(displayName))
+				fmt.Printf("  %s  %-50s  %-60s\n", utl.Gre(rId),
+					utl.Gre(utl.Str(appRole["value"])), utl.Gre(displayName))
 			}
 		}
 	}
 
 	// Print app role assignment members and the specific role assigned
 	apiUrl = ConstMgUrl + "/beta/servicePrincipals/" + id + "/appRoleAssignedTo"
-	appRoleAssignments := GetAzAllPages(apiUrl, z)
-	PrintAppRoleAssignmentsSp(roleNameMap, appRoleAssignments) // roleNameMap is used here
+	appRoleAssignedTo := GetAzAllPages(apiUrl, z)
+	PrintAppRoleAssignmentsSp(roleNameMap, appRoleAssignedTo) // roleNameMap is used here
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["value"] != nil {
-		if memberOf, ok := resp["value"].([]interface{}); ok {
-			PrintMemberOfs(memberOf)
-		}
-	}
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	memberOf := utl.Slice(resp["value"])
+	PrintMemberOfs(memberOf)
 
 	// Print API permissions that have been granted admin consent
 	// ======================================================================
@@ -94,7 +83,8 @@ func PrintSp(x AzureObject, z *Config) {
 	// 1st, let us gather any 'Delegated' type permission admin grants
 	params := map[string]string{"$filter": "clientId eq '" + id + "'"}
 	apiUrl = ConstMgUrl + "/v1.0/oauth2PermissionGrants"
-	resp, statCode, _ = ApiGet(apiUrl, z, params)
+	resp, _, _ = ApiGet(apiUrl, z, params)
+	oauth2PermissionGrants := utl.Slice(resp["value"])
 
 	// IMPORTANT: Please read this carefully -- not as obvious as it seems -- if no admin grants
 	// have been done for any assigned 'Delegated' type permission for this clientId, then above
@@ -102,86 +92,85 @@ func PrintSp(x AzureObject, z *Config) {
 	// that 'clientId' refers to the 'Object ID' of the SP in question. Moreover, the call is
 	// for ALL Delegated permissions in the ENTIRE tenant.
 
-	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
-		oauth2_perms_admin_grants := resp["value"].([]interface{}) // Assert as JSON array
+	if len(oauth2PermissionGrants) > 0 {
 		// Collate OAuth 2.0 scope permission admin grants
-		for _, i := range oauth2_perms_admin_grants {
-			api := i.(map[string]interface{}) // Assert as JSON object
-			oauthId := utl.Str(api["id"])
+		for _, item := range oauth2PermissionGrants {
+			if api := utl.Map(item); api != nil {
+				oauthId := utl.Str(api["id"])
+				resourceId := utl.Str(api["resourceId"]) // Get API's SP to get its displayName and claim values
+				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
+				r2, _, _ := ApiGet(apiUrl2, z, nil)
 
-			resourceId := utl.Str(api["resourceId"]) // Get API's SP to get its displayName and claim values
-			apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-			r2, _, _ := ApiGet(apiUrl2, z, nil)
-
-			apiName := "Unknown"
-			if r2["displayName"] != nil {
-				apiName = utl.Str(r2["displayName"])
-			}
-			// Collect each Delegated claim value for this permission
-			scope := strings.TrimSpace(utl.Str(api["scope"]))
-			scopeValues := strings.Split(scope, " ")
-			for _, claim := range scopeValues {
-				// Keep growing the list of api permission grants
-				apiPerms = append(apiPerms, []string{oauthId, apiName, "Delegated", claim})
+				apiName := "Unknown"
+				if r2["displayName"] != nil {
+					apiName = utl.Str(r2["displayName"])
+				}
+				// Collect each Delegated claim value for this permission
+				scope := strings.TrimSpace(utl.Str(api["scope"]))
+				scopeValues := strings.Split(scope, " ")
+				for _, claim := range scopeValues {
+					// Keep growing the list of api permission grants
+					apiPerms = append(apiPerms, []string{oauthId, apiName, "Delegated", claim})
+				}
 			}
 		}
 	}
 
 	// 2nd, let us gather any 'Application' type permission admin grants
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/appRoleAssignments"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	appRoleAssignments := utl.Slice(resp["value"])
 
 	// IMPORTANT: Again, read this carefully -- not as obvious as it seems -- if no admin grants
 	// have been done for any assigned 'Application' type permission for this SP, then above API
 	// call will return nothing. And again, above is looking *only* for APPLICATION type grants.
 
-	if statCode == 200 && resp != nil && resp["value"] != nil && len(resp["value"].([]interface{})) > 0 {
-		apiAssignments := resp["value"].([]interface{}) // Assert as JSON array
-
+	if len(appRoleAssignments) > 0 {
 		// Create temporary map of role Ids to role values
 		roleIdValueMap := make(map[string]string)
 		uniqueResourceIds := utl.StringSet{} // Unique resourceIds (API SPs)
-		for _, i := range apiAssignments {
-			api := i.(map[string]interface{})        // Assert as JSON object
-			resourceId := utl.Str(api["resourceId"]) // Get API's SP, to then fetch the role's claim value
+		for _, item := range appRoleAssignments {
+			if api := utl.Map(item); api != nil {
+				resourceId := utl.Str(api["resourceId"]) // Get API's SP, to then fetch the role's claim value
 
-			// Skip processing if this resourceId (this API SP) has already been seen
-			if !uniqueResourceIds.Exists(resourceId) {
-				continue
-			}
-
-			// Map each role ID to its claim value
-			apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-			resp2, _, _ := ApiGet(apiUrl2, z, nil)
-
-			if resp2["appRoles"] != nil {
-				for _, i := range resp2["appRoles"].([]interface{}) {
-					role := i.(map[string]interface{}) // Assert as JSON object
-					roleId := utl.Str(role["id"])
-					claim := utl.Str(role["value"])
-					if claim == "" {
-						claim = "<unknown>"
-					}
-					roleIdValueMap[roleId] = claim // Keep growing roleId:value map
+				// Skip processing if this resourceId (this API SP) has already been seen
+				if !uniqueResourceIds.Exists(resourceId) {
+					continue
 				}
-			}
-			// QUESTION: Aside from roles under r2["appRoles"] is there ever a need to also parse
-			// r2["resourceSpecificApplicationPermissions"]? It doesn't appear those are grantable,
-			// but it's unclear exactly what that attribute parameter block is used for.
 
-			uniqueResourceIds.Add(resourceId) // Mark resourceId as seen
+				// Map each role ID to its claim value
+				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
+				resp2, _, _ := ApiGet(apiUrl2, z, nil)
+				appRoles := utl.Slice(resp2["appRoles"])
+				for item := range appRoles {
+					if role := utl.Map(item); role != nil {
+						roleId := utl.Str(role["id"])
+						claim := utl.Str(role["value"])
+						if claim == "" {
+							claim = "<unknown>"
+						}
+						roleIdValueMap[roleId] = claim // Keep growing roleId:value map
+					}
+				}
+				// QUESTION: Aside from roles under r2["appRoles"] is there ever a need to also parse
+				// r2["resourceSpecificApplicationPermissions"]? It doesn't appear those are grantable,
+				// but it's unclear exactly what that attribute parameter block is used for.
+
+				uniqueResourceIds.Add(resourceId) // Mark resourceId as seen
+			}
 		}
 
 		// Collate OAuth 2.0 role permission admin grants
-		for _, i := range apiAssignments {
-			api := i.(map[string]interface{}) // Assert as JSON object
-			oauthId := utl.Str(api["id"])
-			apiName := utl.Str(api["resourceDisplayName"])
-			appRoleId := utl.Str(api["appRoleId"])
-			claim := roleIdValueMap[appRoleId]
+		for _, item := range appRoleAssignments {
+			if api := utl.Map(item); api != nil {
+				oauthId := utl.Str(api["id"])
+				apiName := utl.Str(api["resourceDisplayName"])
+				appRoleId := utl.Str(api["appRoleId"])
+				claim := roleIdValueMap[appRoleId]
 
-			// Keep growing the list of api permission grants
-			apiPerms = append(apiPerms, []string{oauthId, apiName, "Application", claim})
+				// Keep growing the list of api permission grants
+				apiPerms = append(apiPerms, []string{oauthId, apiName, "Application", claim})
+			}
 		}
 	}
 
@@ -203,19 +192,19 @@ func PrintSp(x AzureObject, z *Config) {
 	}
 
 	// Print published permission scopes
-	if publishedPermissionScopes, ok := x["publishedPermissionScopes"].([]interface{}); ok {
-		if len(publishedPermissionScopes) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("published_permission_scopes"))
-			for _, i := range publishedPermissionScopes {
-				a := i.(map[string]interface{})
-				scopeId := utl.Str(a["id"])
+	publishedPermissionScopes := utl.Slice(x["publishedPermissionScopes"])
+	if len(publishedPermissionScopes) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("published_permission_scopes"))
+		for _, item := range publishedPermissionScopes {
+			if scope := utl.Map(item); scope != nil {
+				scopeId := utl.Str(scope["id"])
 				enabledStat := "Disabled"
-				if utl.Str(a["isEnabled"]) == "true" {
+				if utl.Str(scope["isEnabled"]) == "true" {
 					enabledStat = "Enabled"
 				}
 				apiName := spDisplayName
 				scopeType := "Delegated"
-				scopeValue := utl.Str(a["value"])
+				scopeValue := utl.Str(scope["value"])
 				fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",
 					utl.Gre(scopeId), utl.PadSpaces(38, len(scopeId)),
 					utl.Gre(enabledStat), utl.PadSpaces(10, len(enabledStat)),
@@ -228,15 +217,16 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print all Custom Security Attributes for this SP
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "?$select=customSecurityAttributes"
-	resp, statCode, _ = ApiGet(apiUrl, z, nil)
-	if statCode == 200 && resp != nil && resp["customSecurityAttributes"] != nil && len(resp["customSecurityAttributes"].(map[string]interface{})) > 0 {
-		csas := resp["customSecurityAttributes"].(map[string]interface{}) // Assert as JSON object
+	resp, _, _ = ApiGet(apiUrl, z, nil)
+	customSecurityAttributes := utl.Map(resp["customSecurityAttributes"])
+	if customSecurityAttributes != nil {
 		fmt.Printf("%s:\n", utl.Blu("custom_security_attributes"))
 		var csa_list []map[string]string = nil
-		//utl.PrintJsonColor(attr_map)
-
-		for attr_set, v := range csas {
-			attr_map := v.(map[string]interface{})
+		for attr_set, value := range customSecurityAttributes {
+			attr_map := utl.Map(value)
+			if attr_map == nil {
+				continue // Skip if not a map
+			}
 			for attr_name, v2 := range attr_map {
 				// Skip '*@odata.type' entries. Hey Microsoft, this is a terrible design!
 				// The value of each of these CSAs should have been a list insted of a map.
@@ -329,15 +319,10 @@ func SpsCountLocal(z *Config) (native, others int64) {
 // Retrieves counts of SPs native to this Azure tenant, and all others.
 func SpsCountAzure(z *Config) (native, others int64) {
 	// First, get total number of SPs in native tenant
-	var all int64 = 0
 	z.AddMgHeader("ConsistencyLevel", "eventual")
 	apiUrl := ConstMgUrl + ApiEndpoint["sp"] + "/$count"
 	resp, _, _ := ApiGet(apiUrl, z, nil)
-	if value, ok := resp["value"]; ok {
-		if count, valid := value.(int64); valid {
-			all = count
-		}
-	}
+	all := utl.Int64(resp["value"])
 
 	// Now get count of SPs registered and native to only this tenant
 	params := map[string]string{
@@ -346,11 +331,8 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint["sp"]
 	resp, _, _ = ApiGet(apiUrl, z, params)
-	if resp["value"] == nil {
-		return 0, all // Something went wrong with native count, retun all as others
-	}
+	native = utl.Int64(resp["@odata.count"].(float64))
 
-	native = int64(resp["@odata.count"].(float64))
 	others = all - native
 
 	return native, others

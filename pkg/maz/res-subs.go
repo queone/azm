@@ -42,10 +42,8 @@ func GetIdMapSubscriptions(z *Config) map[string]string {
 	nameMap := make(map[string]string)
 	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
 
-	// Memory-walk the slice to gather these values more efficiently
 	for i := range subscriptions {
-		subPtr := &subscriptions[i]          // Use a pointer to avoid copying the element
-		sub := *subPtr                       // Dereference the pointer for easier access
+		sub := subscriptions[i]
 		id := utl.Str(sub["subscriptionId"]) // Accessing the field directly
 		if id == "" {
 			continue // Skip if "subscriptionId" is missing or not a string
@@ -86,7 +84,7 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 	}
 
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
-	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
 		CacheAzureSubscriptions(cache, z, true)
 	}
@@ -100,14 +98,14 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 
 	for i := range cache.data {
-		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
+		sub := cache.data[i]
 
 		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
 		id := ""
-		if idVal := utl.Str((*obj)["id"]); idVal != "" {
-			id = path.Base(idVal) // Extract the last part of the path (UUID)
-		} else if subscriptionIdVal := utl.Str((*obj)["subscriptionId"]); subscriptionIdVal != "" {
-			id = subscriptionIdVal // Fall back to the "subscriptionId" field if "id" is empty
+		if id = utl.Str(sub["id"]); id != "" {
+			id = path.Base(id) // Extract the last part of the path (UUID)
+		} else if subscriptionId := utl.Str(sub["subscriptionId"]); subscriptionId != "" {
+			id = subscriptionId // Fall back to the "subscriptionId" field if "id" is empty
 		}
 
 		// Skip if the ID is empty or already seen
@@ -116,9 +114,9 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 		}
 
 		// Check if the object matches the filter
-		if obj.HasString(filter) {
-			matchingList.Add(*obj) // Add matching object to the list
-			ids.Add(id)            // Mark this ID as seen
+		if sub.HasString(filter) {
+			matchingList = append(matchingList, sub) // Add matching object to the list
+			ids.Add(id)                              // Mark this ID as seen
 		}
 	}
 	return matchingList
@@ -127,27 +125,28 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 // Retrieves all Azure subscription objects in current tenant and saves them to local
 // cache. Note that we are updating the cache via its pointer, so no return value.
 func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
+	list := AzureObjectList{} // List of subscription objects to cache
+
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	r, _, _ := ApiGet(apiUrl, z, params)
-	if r["value"] != nil {
-		rawSubscriptions, ok := r["value"].([]interface{})
-		if !ok {
-			utl.Die("unexpected type for subscriptions")
-		}
-		for _, raw := range rawSubscriptions {
-			azObj, ok := raw.(map[string]interface{})
-			if !ok {
-				fmt.Printf("WARNING: Unexpected type for subscription object: %v\n", raw)
-				continue
-			}
-			trimmedObj := AzureObject(azObj).TrimForCache("s")
-			if err := cache.Upsert(trimmedObj); err != nil {
-				fmt.Printf("WARNING: Failed to upsert cache for subscription object with ID '%s': %v\n",
-					azObj["id"], err)
-			}
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	subscriptions := utl.Slice(resp["value"])
+	for i := range subscriptions {
+		obj := subscriptions[i]
+		if subscription := utl.Map(obj); subscription != nil {
+			list = append(list, subscription)
 		}
 	}
+
+	// Trim and prepare all objects for caching
+	for i := range list {
+		// Directly modify the object in the original list
+		list[i] = list[i].TrimForCache(Subscription)
+	}
+
+	// Update the cache with the entire list of definitions
+	cache.data = list
+
 	// Save updated cache
 	if err := cache.Save(); err != nil {
 		utl.Die("Error saving updated cache: %s\n", err.Error())
@@ -158,8 +157,8 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 func GetAzureSubscriptionById(id string, z *Config) AzureObject {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions/" + id
-	r, _, _ := ApiGet(apiUrl, z, params)
-	azObj := AzureObject(r)
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	azObj := AzureObject(resp)
 	azObj["maz_from_azure"] = true
 	return azObj
 }
@@ -169,12 +168,9 @@ func CountAzureSubscriptions(z *Config) int64 {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
 	resp, _, _ := ApiGet(apiUrl, z, params)
-	if resp["count"] != nil {
-		rawCount, ok := resp["count"].(map[string]interface{})
-		if ok {
-			count := utl.Int64(rawCount["value"]) // Get int64 value
-			return count
-		}
+	if rawCount := utl.Map(resp["count"]); rawCount != nil {
+		count := utl.Int64(rawCount["value"]) // Get int64 value
+		return count
 	}
 	return 0
 }

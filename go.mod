@@ -4,10 +4,10 @@ go 1.24.0
 
 require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.0
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/queone/azm v0.0.0-00010101000000-000000000000
-	github.com/queone/utl v1.3.7
+	github.com/queone/utl v1.3.8
 )
 
 require (

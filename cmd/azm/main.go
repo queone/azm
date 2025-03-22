@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.3.2"
+	program_version = "0.4.0"
 )
 
 func printUsage(extended bool) {
@@ -114,7 +115,7 @@ func main() {
 
 	// Set up global config z pointer variable
 	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
-	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", etc
+	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", and so on
 
 	switch numberOfArguments {
 	case 1: // 1 argument
@@ -131,24 +132,18 @@ func main() {
 		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens
 		switch arg1 {
 		case "-tx":
-			maz.RemoveCacheFile("t", z)
-			maz.RemoveCacheFile("id", z)
+			utl.RemoveFile(filepath.Join(z.ConfDir, z.TokenFile)) // Remove token file
+			utl.RemoveFile(filepath.Join(z.ConfDir, z.CredsFile)) // Remove credentials file
 		case "-xx":
-			// Loop through each maz type in CacheSuffix
+			// Loop through each mazType in CacheSuffix
 			for mazType := range maz.CacheSuffix {
 				if err := maz.RemoveCacheFiles(mazType, z); err != nil {
-					fmt.Printf("Error removing %s cache files for type: %v\n", utl.Red(mazType), err)
+					fmt.Printf("Error removing %s cache files: %v\n", utl.Red(mazType), err)
 				}
 			}
-
-		// Migrating from RemoveCacheFile() ==> to RemoveCacheFiles()
-		case "-ax":
-			mazType := arg1[1:] // Single out the maz type
-			maz.RemoveCacheFile(mazType, z)
-		case "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
+		case "-ax", "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
 			mazType := arg1[1 : len(arg1)-1]
 			maz.RemoveCacheFiles(mazType, z)
-
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove arg1 leading '-'

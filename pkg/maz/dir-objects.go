@@ -2,7 +2,6 @@ package maz
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/queone/utl"
 )
@@ -24,16 +23,12 @@ func ObjectCountLocal(mazType string, z *Config) int64 {
 func ObjectCountAzure(t string, z *Config) int64 {
 	z.AddMgHeader("ConsistencyLevel", "eventual")
 	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/$count"
-	r, _, _ := ApiGet(apiUrl, z, nil)
-	if value, ok := r["value"]; ok {
-		if count, valid := value.(int64); valid {
-			return count
-		}
-		fmt.Printf("Unexpected value type in response: %T\n", value)
-	} else {
-		fmt.Println("Response does not contain 'value' field.")
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		return 0
 	}
-	return 0
+	count := utl.Int64(resp["value"]) // Try asserting response as a int64 value
+	return count
 }
 
 // Returns an id:name map of objects of the given type.
@@ -44,15 +39,11 @@ func GetIdMapDirObjects(mazType string, z *Config) map[string]string {
 
 	// Memory-walk the slice to gather these values more efficiently
 	for i := range objects {
-		objPtr := &objects[i]    // Use a pointer to avoid copying the element
-		obj := *objPtr           // Dereference the pointer for easier access
-		id := utl.Str(obj["id"]) // Accessing the field directly
-		if id == "" {
-			continue // Skip if "id" is missing or not a string
-		}
-		name := utl.Str(obj["displayName"])
-		if name == "" {
-			continue // Skip if "displayName" is missing or not a string
+		obj := objects[i]                   // No need to cast; should already be AzureObject type
+		id := utl.Str(obj["id"])            // Try casting as a string
+		name := utl.Str(obj["displayName"]) // Try casting as a string
+		if id == "" || name == "" {
+			continue // Skip is either is not a string or empty
 		}
 		nameMap[id] = name
 	}
@@ -61,89 +52,76 @@ func GetIdMapDirObjects(mazType string, z *Config) map[string]string {
 }
 
 // Gets object of given type from Azure by id. Updates entry in local cache.
-func GetObjectFromAzureById(mazType, id string, z *Config) AzureObject {
+func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
+	obj := AzureObject{}
 	baseUrl := ConstMgUrl + ApiEndpoint[mazType]
-	apiUrl := baseUrl + "/" + id
-	obj, _, _ := ApiGet(apiUrl, z, nil)
-	if obj == nil || obj["id"] == nil {
+	apiUrl := baseUrl + "/" + targetId
+	resp, _, _ := ApiGet(apiUrl, z, nil)
+	// TODO: Maybe improve error checking and reporting?
+	id := utl.Str(resp["id"]) // Try casting to a string
+	if id != "" {
+		// If we have an ID, then we found an object
+		objMap := utl.Map(resp)   // Cast object to a map
+		obj = AzureObject(objMap) // then to an AzureObject
+	} else {
+		// Check if the targetId is a Client ID/appId belonging to an AppSP pair
 		if mazType == Application || mazType == ServicePrincipal {
-			// If 1st search doesn't find the object, then for Apps and SPS,
-			// do a 2nd search based on their Client Id.
 			apiUrl := baseUrl
-			params := map[string]string{"$filter": "appId eq '" + id + "'"}
-			r, _, _ := ApiGet(apiUrl, z, params)
-			if r != nil {
-				// Check if "value" key exists and is a list
-				if value, ok := r["value"].([]interface{}); ok {
-					count := len(value)
-					switch {
-					case count == 1:
-						obj = value[0].(map[string]interface{}) // Assign single object
-					case count > 1:
-						msg := fmt.Sprintf("Warning! Found %d entries with this appId", count)
+			params := map[string]string{"$filter": "appId eq '" + targetId + "'"}
+			resp, _, _ := ApiGet(apiUrl, z, params)
+			objList := utl.Slice(resp["value"]) // Try casting to a slice
+			if objList != nil {
+				count := len(objList)
+				if count >= 1 {
+					objMap := utl.Map(objList[0]) // Try casting the first object to a map
+					if objMap != nil {
+						obj = AzureObject(objMap) // then cast to an AzureObject
+					}
+					if count > 1 {
+						msg := fmt.Sprintf("Warning! Found %d entries with this appId. Returning entry 0.", count)
 						fmt.Println(utl.Yel(msg))
 					}
 				}
 			}
 		}
 	}
-
-	if obj == nil || obj["id"] == nil {
+	if obj == nil {
 		return nil // No valid object found after all attempts
 	}
 
-	azObj := AzureObject(obj)      // Cast the result to AzureObject
-	azObj["maz_from_azure"] = true // Mark it as being from Azure
+	obj["maz_from_azure"] = true // Mark it as being from Azure
 
 	// Update the object in the local cache
 	cache, err := GetCache(mazType, z)
 	if err != nil {
 		fmt.Printf("Warning: Failed to load cache for type '%s': %v\n", mazType, err)
-		return azObj // Return the fetched object even if cache update fails
+		return obj // Return the fetched object even if cache update fails
 	}
+	cache.Upsert(obj.TrimForCache(mazType))
 
-	cache.Upsert(azObj.TrimForCache(mazType)) // Add or update the object in the cache
-	if err := cache.Save(); err != nil {
-		fmt.Printf("Warning: Failed to save updated cache for type '%s': %v\n", mazType, err)
-	}
-
-	return azObj // Return the found object or nil
+	return obj // Return the found object or nil
 }
 
 // Fetches objects of the given type from Azure by displayName. It returns a list of
 // matching objects, accounting for the possibility of multiple objects with the
 // same displayName.
 func GetObjectFromAzureByName(mazType, displayName string, z *Config) AzureObjectList {
+	result := AzureObjectList{} // Initialize the result list
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "?$filter=displayName eq '" + displayName + "'"
-	resp, statusCode, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		fmt.Printf("Error: Failed to fetch objects by name '%s' for type '%s': %v\n",
-			displayName, mazType, err)
-		return nil
-	}
-
-	// Check for a successful response
-	if statusCode == 200 && resp != nil && resp["value"] != nil {
-		result := AzureObjectList{} // Initialize the result list
-
-		// Safely iterate over the returned objects
-		if items, ok := resp["value"].([]interface{}); ok {
-			for _, item := range items {
-				if mapObj, mapOk := item.(map[string]interface{}); mapOk {
-					result.Add(AzureObject(mapObj))
-				}
+	resp, _, _ := ApiGet(apiUrl, z, nil)
+	matchingObjects := utl.Slice(resp["value"]) // Try casting to a slice
+	if matchingObjects != nil {
+		// It is a slice, let's process it
+		for i := range matchingObjects {
+			obj := utl.Map(matchingObjects[i]) // Try casting to a map
+			if obj == nil {
+				continue // Skip if not a map
 			}
-		} else {
-			fmt.Printf("Warning: Unexpected data format for 'value' in response for name '%s'.\n",
-				displayName)
+			result = append(result, AzureObject(obj))
 		}
 		return result
 	}
-
-	// Log a warning if the request was unsuccessful
-	fmt.Printf("Warning: Failed to fetch objects by name '%s' for type '%s'. Status code: %d\n",
-		displayName, mazType, statusCode)
-	return nil
+	return result
 }
 
 // Retrieves existing object from Azure by its ID or displayName. This is
@@ -164,7 +142,7 @@ func PreFetchAzureObject(mazType, identifier string, z *Config) AzureObject {
 		for _, x := range matchingObjects {
 			fmt.Printf("  %s  %s\n", x["id"], x["displayName"])
 		}
-		utl.Die("%s. Please try processing by id instead of name.\n", utl.Red("Aborting"))
+		utl.Die("%s. Pry processing by ID instead of name.\n", utl.Red("Aborting"))
 	}
 
 	return matchingObjects[0]
@@ -196,7 +174,7 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 	}
 
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
-	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
 		RefreshLocalCacheWithAzure(mazType, cache, z, true) // Call Azure to refresh cache
 	}
@@ -210,20 +188,18 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 
 	for i := range cache.data {
-		obj := &cache.data[i] // Access the element directly via pointer (memory walk)
+		obj := cache.data[i] // No need to cast; should already be AzureObject type
 
-		// Extract the ID
-		id := utl.Str((*obj)["id"])
-
-		// Skip if the ID is empty or already seen
+		// Extract ID and skip if it is empty or has already been seen
+		id := utl.Str(obj["id"])
 		if id == "" || ids.Exists(id) {
 			continue
 		}
 
 		// Check if the object matches the filter
 		if obj.HasString(filter) {
-			matchingList.Add(*obj) // Add matching object to the list
-			ids.Add(id)            // Mark this ID as seen
+			matchingList = append(matchingList, obj) // Add matching object to the list
+			ids.Add(id)                              // Mark this ID as seen
 		}
 	}
 
@@ -289,36 +265,39 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
 // described at https://docs.microsoft.com/en-us/graph/delta-query-overview
-func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet AzureObjectList, deltaLinkMap AzureObject) {
-	k := 1 // Track number of API calls
-	resp, _, _ := ApiGet(apiUrl, z, nil)
-	for {
-		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
-		var thisBatch []interface{} = nil // Assume zero entries in this batch
-		var objCount int = 0
-		if resp["value"] != nil {
-			thisBatch = resp["value"].([]interface{})
-			objCount = len(thisBatch)
+func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectList, AzureObject) {
+	callCount := 1 // Track number of API calls
+	deltaSet := AzureObjectList{}
+	deltaLinkMap := AzureObject{}
 
-			// Convert thisBatch from []interface{} to []map[string]interface{} to AzureObject
-			for _, item := range thisBatch {
-				if obj, ok := item.(map[string]interface{}); ok {
-					deltaSet.Add(AzureObject(obj)) // Add converted object to deltaSet
-				} else {
-					fmt.Printf("Warning: Skipping invalid object type: %v\n", item)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	for {
+		if verbose && statCode != 200 {
+			msg := fmt.Sprintf("%sHTTP %d: %s: Continuing to try...", rUp, statCode, ApiErrorMsg(resp))
+			fmt.Printf("%s", utl.Yel(msg))
+		}
+		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
+		objCount := 0
+		thisBatch := utl.Slice(resp["value"]) // Try casting value as a slice
+		if thisBatch != nil {
+			// If its a valid slice
+			objCount = len(thisBatch)
+			for i := range thisBatch {
+				objMap := utl.Map(thisBatch[i]) // Try casting element as a map
+				if objMap == nil {
+					continue // Skip this entry if not a map
 				}
+				deltaSet = append(deltaSet, AzureObject(objMap))
 			}
 		}
+
 		if verbose {
 			// Progress count indicator. Using global var rUp to overwrite last line. Defer newline until done
-			fmt.Printf("%sCall %05d : count %05d", rUp, k, objCount)
+			fmt.Printf("%sCall %05d : count %05d", rUp, callCount, objCount)
 		}
 
 		// Return immediately when deltaLink appears
-		if resp["@odata.deltaLink"] != nil {
-			deltaLinkMap := map[string]interface{}{
-				"@odata.deltaLink": utl.Str(resp["@odata.deltaLink"]),
-			}
+		if deltaLinkMap := utl.Map(resp["@odata.deltaLink"]); deltaLinkMap != nil {
 			if verbose {
 				fmt.Print(rUp) // Go up to overwrite progress line
 			}
@@ -328,8 +307,8 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (deltaSet Azur
 		// Get nextLink value
 		nextLink := utl.Str(resp["@odata.nextLink"])
 		if nextLink != "" {
-			resp, _, _ = ApiGet(nextLink, z, nil) // Get next batch
-			k++
+			resp, statCode, _ = ApiGet(nextLink, z, nil) // Get next batch
+			callCount++
 		} else {
 			if verbose {
 				fmt.Print(rUp) // Go up to overwrite progress line
@@ -346,7 +325,7 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
 	if statCode == 204 {
-		// Also remove from local cache using Cache.Delete
+		// Also remove from local cache
 		cache, err := GetCache(mazType, z)
 		if err == nil {
 			if err := cache.Delete(id); err != nil {
@@ -528,219 +507,14 @@ func RenameDirObject(force bool, from, newName, mazType string, z *Config) {
 	}
 }
 
-// Adds a new secret to the given App or SP
-func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
-	if mazType != Application && mazType != ServicePrincipal {
-		utl.Die("Error: Secrets can only be added to an App or SP object.\n")
-	}
-	x := GetObjectFromAzureById(mazType, id, z)
-	if x == nil {
-		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
-	}
-
-	// Check if a password with the same displayName already exists
-	object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
-	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/passwordCredentials"
-	r, statCode, _ := ApiGet(apiUrl, z, nil)
-	if statCode == 200 {
-		passwordCredentials := r["value"].([]interface{})
-		for _, credential := range passwordCredentials {
-			credentialMap := credential.(map[string]interface{})
-			if utl.Str(credentialMap["displayName"]) == displayName {
-				utl.Die("A password named %s already exists.\n", utl.Yel(displayName))
-			}
-		}
-	}
-
-	// Setup expiry for endDateType payload variable
-	var endDateTime string
-	if expiry != "" {
-		if utl.ValidDate(expiry, "2006-01-02") {
-			// If user-supplied expiry is a valid date, reformat and use for our purpose
-			var err error
-			endDateTime, err = utl.ConvertDateFormat(expiry, "2006-01-02", time.RFC3339Nano)
-			if err != nil {
-				utl.Die("Error converting %s Expiry to RFC3339Nano/ISO8601 format.\n", utl.Yel(expiry))
-			}
-		} else if days, err := utl.StringToInt64(expiry); err == nil {
-			// If expiry not a valid date, see if it's a valid integer number
-			expiryTime := utl.GetDateInDays(utl.Int64ToString(days)) // Set expiryTime to 'days' from now
-			endDateTime = expiryTime.Format(time.RFC3339Nano)        // Convert to RFC3339Nano/ISO8601 format
-		} else {
-			utl.Die("Invalid expiry format. Please use YYYY-MM-DD or number of days.\n")
-		}
-	} else {
-		// If expiry is blank, default to 365 days from now
-		endDateTime = time.Now().AddDate(0, 0, 365).Format(time.RFC3339Nano)
-	}
-
-	// Call Azure to create the new secret
-	payload := AzureObject{
-		"passwordCredential": map[string]string{
-			"displayName": displayName,
-			"endDateTime": endDateTime,
-		},
-	}
-	apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/addPassword"
-	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
-	if statCode == 200 {
-		if mazType == Application {
-			fmt.Printf("%s: %s\n", utl.Blu("app_object_id"), utl.Gre(object_id))
-		} else {
-			fmt.Printf("%s: %s\n", utl.Blu("sp_object_id"), utl.Gre(object_id))
-		}
-		fmt.Printf("%s: %s\n", utl.Blu("new_secret_id"), utl.Gre(utl.Str(r["keyId"])))
-		fmt.Printf("%s: %s\n", utl.Blu("new_secret_name"), utl.Gre(displayName))
-		fmt.Printf("%s: %s\n", utl.Blu("new_secret_expiry"), utl.Gre(expiry))
-		fmt.Printf("%s: %s\n", utl.Blu("new_secret_text"), utl.Gre(utl.Str(r["secretText"])))
-	} else {
-		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
-		utl.Die("%s\n", utl.Red(msg))
-	}
-}
-
-// Removes a secret from the given App or SP object
-func RemoveAppSpSecret(mazType, id, keyId string, force bool, z *Config) {
-	// TODO: Needs a prompt/force option
-	if mazType != Application && mazType != ServicePrincipal {
-		utl.Die("Error: Secrets can only be removed from an App or SP object.\n")
-	}
-	x := GetObjectFromAzureById(mazType, id, z)
-	if x == nil {
-		utl.Die("No %s with that ID.\n", MazTypeNames[mazType])
-	}
-	if !utl.ValidUuid(keyId) {
-		utl.Die("Secret ID is not a valid UUID.\n")
-	}
-
-	// Display object secret details, and prompt for delete confirmation
-	pwdCreds := x["passwordCredentials"].([]interface{})
-	if len(pwdCreds) < 1 {
-		utl.Die("App object has no secrets.\n")
-	}
-	var a AzureObject = nil // Target keyId, Secret ID to be deleted
-	for _, i := range pwdCreds {
-		targetKeyId := i.(map[string]interface{})
-		if utl.Str(targetKeyId["keyId"]) == keyId {
-			a = targetKeyId
-			break
-		}
-	}
-	if a == nil {
-		utl.Die("App object does not have this Secret ID.\n")
-	}
-	cId := utl.Str(a["keyId"])
-	cName := utl.Str(a["displayName"])
-	cHint := utl.Str(a["hint"]) + "********"
-	cStart, err := utl.ConvertDateFormat(utl.Str(a["startDateTime"]), time.RFC3339Nano, "2006-01-02")
-	if err != nil {
-		utl.Die("%s %s\n", utl.Trace(), err.Error())
-	}
-	cExpiry, err := utl.ConvertDateFormat(utl.Str(a["endDateTime"]), time.RFC3339Nano, "2006-01-02")
-	if err != nil {
-		utl.Die("%s %s\n", utl.Trace(), err.Error())
-	}
-
-	// Prompt
-	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(utl.Str(x["id"])))
-	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
-	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
-	fmt.Printf("%s:\n", utl.Yel("secret_to_be_deleted"))
-	fmt.Printf("  %-36s  %-30s  %-16s  %-16s  %s\n", utl.Yel(cId), utl.Yel(cName),
-		utl.Yel(cHint), utl.Yel(cStart), utl.Yel(cExpiry))
-	if utl.PromptMsg(utl.Yel("DELETE above? y/n ")) == 'y' {
-		payload := AzureObject{"keyId": keyId}
-		object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
-		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/removePassword"
-		resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
-		if statCode == 204 {
-			utl.Die("Successfully deleted secret.\n")
-		} else {
-			msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
-			utl.Die("%s\n", utl.Red(msg))
-		}
-	} else {
-		utl.Die("Aborted.\n")
-	}
-}
-
 // Find JSON object with given ID in slice
 func FindObjectOld(objSet []interface{}, id string) map[string]interface{} {
-	for _, obj := range objSet {
-		if x, ok := obj.(map[string]interface{}); ok { // Inline type assertion and check
-			if utl.Str(x["id"]) == id { // Compare directly
+	for _, item := range objSet {
+		if x := utl.Map(item); x != nil {
+			if utl.Str(x["id"]) == id {
 				return x
 			}
 		}
 	}
 	return nil
-}
-
-// Builds JSON mergeSet from deltaSet, and builds and returns the list of deleted IDs
-func NormalizeCache(baseSet, deltaSet []interface{}) (list []interface{}) {
-	// OLD: To gradually be replaced by NormalizeDirObjectCache()
-
-	// 1. Process deltaSet to build mergeSet and track deleted IDs
-	deletedIds := utl.StringSet{}
-	uniqueIds := utl.StringSet{}
-	var mergeSet []interface{} = nil
-	for _, i := range deltaSet {
-		x := i.(map[string]interface{})
-		id := utl.Str(x["id"])
-		if x["@removed"] == nil && x["members@delta"] == nil {
-			// Only add to mergeSet if '@remove' and 'members@delta' are missing
-			if !uniqueIds.Exists(id) {
-				// Only add if it's unique
-				mergeSet = append(mergeSet, x)
-				uniqueIds.Add(id) // Track unique IDs
-			}
-		} else {
-			deletedIds.Add(id)
-		}
-	}
-
-	// 2. Remove recently deleted entries (deletedIs) from baseSet
-	list = nil
-	baseIds := utl.StringSet{} // Track all the IDs in the base cache set
-	for _, i := range baseSet {
-		x := i.(map[string]interface{})
-		id := utl.Str(x["id"])
-		if deletedIds.Exists(id) {
-			continue
-		}
-		list = append(list, x)
-		baseIds.Add(id)
-	}
-
-	// 3. Merge new entries in deltaSet into baseSet
-	var duplicates []interface{} = nil
-	duplicateIds := utl.StringSet{}
-	for _, obj := range mergeSet {
-		x := obj.(map[string]interface{})
-		id := utl.Str(x["id"])
-		if baseIds.Exists(id) {
-			duplicates = append(duplicates, x)
-			duplicateIds.Add(id)
-			continue // Skip duplicates (these are updates)
-		}
-		list = append(list, x) // Merge all others (these are new entries)
-	}
-
-	// 4. Merge updated entries in deltaSet into baseSet
-	list2 := list
-	list = nil
-	for _, obj := range list2 {
-		x := obj.(map[string]interface{})
-		id := utl.Str(x["id"])
-		if !duplicateIds.Exists(id) {
-			// If this object is not a duplicate, add it to our growing list
-			list = append(list, x)
-		} else {
-			// Merge object updates, then add it to our growing list
-			y := FindObjectOld(duplicates, id)
-			x = utl.MergeJsonObjects(y, x)
-			list = append(list, x)
-		}
-	}
-	return list
 }

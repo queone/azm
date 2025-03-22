@@ -22,44 +22,32 @@ func init() {
 // ==== AzureObject methods and functions
 
 // Checks if the filter string is found anywhere within the AzureObject.
-// This method performs a recursive search.
 func (obj AzureObject) HasString(filter string) bool {
-	// TODO: Consider optimizing further
-	for _, value := range obj {
-		switch v := value.(type) {
+	for i := range obj {
+		field := obj[i]
+		switch v := field.(type) {
 		case string:
-			if utl.SubString(v, filter) { // Directly check if the substring exists
+			// Below does as case-insensitive strings.Contains()
+			if utl.SubString(v, filter) {
 				return true
 			}
 		case []interface{}:
-			for _, item := range v {
-				if nestedMap := utl.Map(item); nestedMap != nil {
-					nestedObj := AzureObject(nestedMap) // Convert to AzureObject
-					if nestedObj.HasString(filter) {
+			// Drill into other maps and string fields in the slice
+			for i := range v {
+				element := v[i]
+				if nestedMap := utl.Map(element); nestedMap != nil {
+					if AzureObject(nestedMap).HasString(filter) {
 						return true
 					}
-					// if nestedMap, ok := item.(map[string]interface{}); ok {
-					// 	nestedObj := AzureObject(nestedMap) // Convert to AzureObject
-					// 	if nestedObj.HasString(filter) {
-					// 		return true
-					// 	}
-				} else if itemStr := utl.Str(item); itemStr != "" {
-					// Check string elements in the slice
+				} else if itemStr := utl.Str(element); itemStr != "" {
 					if utl.SubString(itemStr, filter) {
 						return true
 					}
 				}
-				// } else if itemStr, ok := item.(string); ok {
-				// 	// Check string elements in the slice
-				// 	if utl.SubString(itemStr, filter) {
-				// 		return true
-				// 	}
-				// }
 			}
 		case map[string]interface{}:
 			// Recursively call HasString on nested maps
-			nestedObj := AzureObject(v)
-			if nestedObj.HasString(filter) {
+			if AzureObject(v).HasString(filter) {
 				return true
 			}
 		}
@@ -73,16 +61,16 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 	switch mazType {
 	case RbacDefinition:
 		// Trim the AzureObject to retain only specific fields for role definitions.
-		if properties, ok := obj["properties"].(map[string]interface{}); ok {
+		if props := utl.Map(obj["properties"]); props != nil {
 			trimmed = AzureObject{
 				"id":   obj["id"],
 				"name": obj["name"],
 				"properties": map[string]interface{}{
-					"assignableScopes": properties["assignableScopes"],
-					"description":      properties["description"],
-					"permissions":      properties["permissions"],
-					"roleName":         properties["roleName"],
-					"type":             properties["type"],
+					"assignableScopes": props["assignableScopes"],
+					"description":      props["description"],
+					"permissions":      props["permissions"],
+					"roleName":         props["roleName"],
+					"type":             props["type"],
 				},
 			}
 		} else {
@@ -94,16 +82,16 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 		}
 	case RbacAssignment:
 		// Trim the AzureObject to retain only specific fields for role definitions.
-		if properties, ok := obj["properties"].(map[string]interface{}); ok {
+		if props := utl.Map(obj["properties"]); props != nil {
 			trimmed = AzureObject{
 				"id":   obj["id"],
 				"name": obj["name"],
 				"properties": map[string]interface{}{
-					"roleDefinitionId": properties["roleDefinitionId"],
-					"description":      properties["description"],
-					"principalId":      properties["principalId"],
-					"principalType":    properties["principalType"],
-					"scope":            properties["scope"],
+					"roleDefinitionId": props["roleDefinitionId"],
+					"description":      props["description"],
+					"principalId":      props["principalId"],
+					"principalType":    props["principalType"],
+					"scope":            props["scope"],
 				},
 			}
 		} else {
@@ -121,25 +109,22 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 			"state":          obj["state"],
 		}
 	case ManagementGroup:
-		trimmed = AzureObject{
-			"id":   obj["id"],
-			"name": obj["name"],
-		}
-		// Normalize object by extracting fields from the nested "properties" object
-		if properties, ok := obj["properties"].(map[string]interface{}); ok {
-			trimmed["displayName"] = properties["displayName"]
-			trimmed["tenantId"] = properties["tenantId"]
-			// OPTIONAL: Keep the same struct as Azure does
-			// trimmed["properties"] = map[string]interface{}{
-			// 	"displayName": properties["displayName"],
-			// 	"tenantId":    properties["tenantId"],
-			// }
+		// Trim the AzureObject to retain only specific fields for management group.
+		if props := utl.Map(obj["properties"]); props != nil {
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+				"properties": map[string]interface{}{
+					"displayName": props["displayName"],
+					"tenantId":    props["tenantId"],
+				},
+			}
 		} else {
-			// Fallback if "properties" is missing or not a map
-			trimmed["displayName"] = nil
-			trimmed["tenantId"] = nil
-			// OPTIONAL: Keep the same struct as Azure does
-			// trimmed["properties"] = map[string]interface{}{}
+			// Fallback: if properties is missing or not a map, just include the top-level fields.
+			trimmed = AzureObject{
+				"id":   obj["id"],
+				"name": obj["name"],
+			}
 		}
 	case DirectoryUser:
 		trimmed = AzureObject{
@@ -196,16 +181,20 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 
 // ==== AzureObjectList methods and functions
 
+/*
+This package provides a set of methods and functions for managing lists of Azure objects, represented as `AzureObject` (a `map[string]interface{}`) and `AzureObjectList` (a slice of `AzureObject`). The methods are designed to efficiently manipulate and query these lists, with a focus on performance and memory optimization. A key optimization technique used throughout this package is the use of **pointers** to access and modify elements in the list directly, avoiding unnecessary copying of data.
+
+The use of pointers is particularly important in methods like `Replace`, `DeleteById`, `DeleteByName`, and `Delete`, where elements in the list are modified or removed. By accessing elements via pointers (e.g., `obj := &(*list)[j]`), the code avoids creating temporary copies of the objects, which can be costly for large lists or deeply nested structures. Instead, it directly references the underlying data in the slice, enabling in-place modifications. This approach reduces memory overhead and improves performance, especially when dealing with large datasets.
+
+For methods that query the list, such as `FindById`, `FindByName`, and `Find`, pointers are also used to return references to the matching objects rather than copying them. This allows callers to interact with the original data in the list without duplicating it. Similarly, methods like `ExistsById`, `ExistsByName`, and `Exists` leverage pointers to efficiently check for the presence of objects without unnecessary data copying.
+
+While the use of pointers introduces some syntactic complexity (e.g., dereferencing with `(*obj)`), it provides significant performance benefits. The trade-off is justified in scenarios where the lists are large or the operations are performance-critical. This design ensures that the package remains efficient and scalable while providing a clean and consistent API for managing Azure objects.
+*/
+
 // Add appends an AzureObject to the AzureObjectList.
 func (list *AzureObjectList) Add(obj AzureObject) {
 	*list = append(*list, obj) // Append the new object to the list
 }
-
-// EFFICIENCY NOTE: Below functions use 'for i := range list' and access each
-// element via '&list[i]' to avoid copying each item in the list. This is more
-// efficient than 'for _, obj := range list', which creates a copy of each
-// element during iteration. This is especially beneficial for large lists or
-// large objects, as it reduces memory overhead and improves performance.
 
 // Replaces an object in an AzureObjectList by matching on id, name, or subscriptionId.
 func (list *AzureObjectList) Replace(newObj AzureObject) bool {
@@ -256,7 +245,6 @@ func (list *AzureObjectList) DeleteByName(targetName string) bool {
 	if targetName == "" {
 		return false
 	}
-	// See EFFICIENCY NOTE above
 	for j := range *list {
 		obj := &(*list)[j] // Access the element directly via pointer
 		if (*obj)["displayName"] == targetName {
@@ -270,7 +258,6 @@ func (list *AzureObjectList) DeleteByName(targetName string) bool {
 
 // Deletes an object from the list based on one or more field matches.
 func (list *AzureObjectList) Delete(targetObj AzureObject) bool {
-	// See EFFICIENCY NOTE above
 	for j := range *list {
 		obj := &(*list)[j] // Access the element directly via pointer
 		matches := true
@@ -295,7 +282,6 @@ func (list AzureObjectList) FindById(targetId string) *AzureObject {
 	if targetId == "" {
 		return nil
 	}
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		// Most objects use 'id' for their unique key, but RBAC role definitions
@@ -312,7 +298,6 @@ func (list AzureObjectList) FindByName(targetName string) *AzureObject {
 	if targetName == "" {
 		return nil
 	}
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		if (*obj)["displayName"] == targetName {
@@ -324,7 +309,6 @@ func (list AzureObjectList) FindByName(targetName string) *AzureObject {
 
 // Finds an object in the list based on one or more field matches and returns a pointer to it.
 func (list AzureObjectList) Find(targetObj AzureObject) *AzureObject {
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		matches := true
@@ -346,7 +330,6 @@ func (list AzureObjectList) ExistsById(targetId string) bool {
 	if targetId == "" {
 		return false
 	}
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		// Most objects use 'id' for their unique key, but RBAC role definitions
@@ -363,7 +346,6 @@ func (list AzureObjectList) ExistsByName(targetName string) bool {
 	if targetName == "" {
 		return false
 	}
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		if (*obj)["displayName"] == targetName {
@@ -375,7 +357,6 @@ func (list AzureObjectList) ExistsByName(targetName string) bool {
 
 // Checks if an object exists in the list based on one or more field matches.
 func (list AzureObjectList) Exists(targetObj AzureObject) bool {
-	// See EFFICIENCY NOTE above
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
 		matches := true

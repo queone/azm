@@ -76,19 +76,19 @@ func PrintRbacAssignmentReport(z *Config) {
 
 	assignments := GetMatchingRbacAssignments("", false, z) // Get all the assignments. false = quietly
 
-	// Memory-walk the slice to process them more efficiently
 	for i := range assignments {
-		assignmentPtr := &assignments[i] // Use a pointer to avoid copying the element
-		assignment := *assignmentPtr     // Dereference the pointer for easier access
-
-		props := utl.Map(assignment["properties"])
-		if props == nil {
-			continue // Skip if "properties" is missing or not a map
+		assignment := assignments[i]               // No need to cast; should already be AzureObject type
+		props := utl.Map(assignment["properties"]) // Try casting props as a map
+		if assignment == nil || props == nil {
+			continue // Skip if either isn't valid
 		}
 
+		// Grab the 3 key attributes
 		roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
 		principalId := utl.Str(props["principalId"])
 		principalType := utl.Str(props["principalType"])
+
+		// Use principal type to get its more human-readable display name
 		principalName := "ID-Not-Found"
 		switch principalType {
 		case "Group":
@@ -99,6 +99,7 @@ func PrintRbacAssignmentReport(z *Config) {
 			principalName = spNameMap[principalId]
 		}
 
+		// Make scope a bit more readable also
 		scope := utl.Str(props["scope"])
 		if strings.HasPrefix(scope, "/subscriptions") {
 			// Replace subscription ID with its name, but keep the rest of the resource path
@@ -112,24 +113,21 @@ func PrintRbacAssignmentReport(z *Config) {
 }
 
 // Creates a role assignment as defined by give object
-func CreateRbacAssignment(x map[string]interface{}, z *Config) {
+func CreateRbacAssignment(x AzureObject, z *Config) {
 	if x == nil {
 		return
 	}
-	props := x["properties"].(map[string]interface{})
+	props := utl.Map(x["properties"])
 	roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"])) // Note we only care about the UUID
 	principalId := utl.Str(props["principalId"])
 	scope := utl.Str(props["scope"])
-	if scope == "" {
-		scope = utl.Str(props["Scope"]) // Account for possibly capitalized key
-	}
 	if roleDefinitionId == "" || principalId == "" || scope == "" {
 		utl.Die("Specfile is missing required attributes. Need at least:\n\n" +
 			"properties:\n" +
 			"    roleDefinitionId: <UUID or fully_qualified_roleDefinitionId>\n" +
 			"    principalId: <UUID>\n" +
 			"    scope: <resource_path_scope>\n\n" +
-			"See script '-k*' options to create properly formatted sample files.\n")
+			"See utility '-k*' options to create properly formatted sample files.\n")
 	}
 
 	// Note, there is no need to pre-check if assignment exists, since call will simply let us know
@@ -206,7 +204,7 @@ func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list Azur
 	}
 
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
-	cacheNeedsRefreshing := force || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
+	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
 		CacheAzureRbacAssignments(cache, true, z) // true = be verbose
 	}
@@ -218,13 +216,10 @@ func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list Azur
 	matchingList := AzureObjectList{} // Initialize an empty list for matching items
 	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
 	for i := range cache.data {
-		rawPtr := &cache.data[i]         // Access the element directly via pointer (memory walk)
-		rawObj := *rawPtr                // Dereference the pointer manually
-		assignmentMap := utl.Map(rawObj) // Try asserting as a map type
-		if assignmentMap == nil {
-			continue // Skip this entry if not a map
+		assignment := cache.data[i] // No need to cast; should already be AzureObject type
+		if assignment == nil {
+			continue // But skip if it is nil for whatever reason
 		}
-		assignment := AzureObject(assignmentMap) // Cast as our standard AzureObject type
 
 		// Extract the ID: use the last part of the "id" path or fall back to the "name" field
 		id := utl.Str(assignment["id"])
@@ -269,27 +264,26 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 	// Search in each resource RBAC scope
 	scopes := GetAzureRbacScopes(z)
 
-	// Collate every unique role assignment in each scope
+	// Collate every unique role assignment object in each scope
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
 		resp, statCode, _ := ApiGet(apiUrl, z, params)
 		if statCode != 200 {
 			// For now, I don't think we care about any errors
-			continue // If any issues retrieving items for this scope, go to next one
+			continue // If any issues retrieving items for this scope, skip to next one
 		}
-		assignments := utl.Slice(resp["value"]) // Try asserting value as an object of slice type
+		assignments := utl.Slice(resp["value"]) // Try casting as a slice type
 		if assignments == nil {
-			continue // If its's not a slice with values, process next scope
+			continue // If not a slice, skip to next scope
 		}
 
 		count := 0
 		for i := range assignments {
-			rawPtr := &assignments[i]     // Get a pointer to the current item in the slice
-			rawObj := *rawPtr             // Dereference the pointer manually
-			assignment := utl.Map(rawObj) // Try asserting as a map type
+			obj := assignments[i]
+			assignment := utl.Map(obj) // Try casting as a map type
 			if assignment == nil {
-				continue // Skip this entry if not a map
+				continue // Skip if not a map
 			}
 			// Root out potential duplicates
 			id := utl.Str(assignment["name"])
@@ -298,8 +292,8 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 				// Skip this repeated one. This can happen because of the way Azure RBAC
 				// hierarchy inheritance works, and the same role is seen from multiple places.
 			}
-			ids.Add(id) // Mark this id as seen
 			list = append(list, assignment)
+			ids.Add(id) // Mark this id as seen
 			count++
 		}
 
@@ -335,50 +329,51 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 	}
 }
 
-// Gets Azure resource RBAC role assignment object by matching given objects: roleId, principalId,
+// Gets Azure resource role assignment object by matching on roleId, principalId,
 // and scope (the 3 parameters which make a role assignment unique)
-func GetRbacAssignmentByObject(x map[string]interface{}, z *Config) (y map[string]interface{}) {
-	// First, make sure x is a searchable role assignment object
-	if x == nil {
+func GetRbacAssignmentByObject(targetObj AzureObject, z *Config) AzureObject {
+	// First, validate that the target role assignment object is correct
+	targetProps := utl.Map(targetObj["properties"])
+	if targetObj == nil || targetProps == nil {
+		return nil
+	}
+	targetRoleDefinitionId := path.Base(utl.Str(targetProps["roleDefinitionId"]))
+	targetPrincipalId := utl.Str(targetProps["principalId"])
+	targetScope := utl.Str(targetProps["scope"])
+	if targetScope == "" || targetPrincipalId == "" || targetRoleDefinitionId == "" {
 		return nil
 	}
 
-	props := x["properties"].(map[string]interface{})
-	if props == nil {
-		return nil
-	}
-
-	xRoleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
-	xPrincipalId := utl.Str(props["principalId"])
-	xScope := utl.Str(props["scope"])
-	if xScope == "" {
-		xScope = utl.Str(props["Scope"]) // Account for possibly capitalized key
-	}
-	if xScope == "" || xPrincipalId == "" || xRoleDefinitionId == "" {
-		return nil
-	}
-
-	// Get all role assignments for xPrincipalId under xScope
+	// Get all role assignments for targetPrincipalId under targetScope
 	params := map[string]string{
-		"api-version": "2022-04-01", // roleAssignments
-		"$filter":     "principalId eq '" + xPrincipalId + "'",
+		"api-version": "2022-04-01",
+		"$filter":     "principalId eq '" + targetPrincipalId + "'",
 	}
-	apiUrl := ConstAzUrl + xScope + "/providers/Microsoft.Authorization/roleAssignments"
-	resp, _, _ := ApiGet(apiUrl, z, params)
-	if resp != nil && resp["value"] != nil {
-		results := resp["value"].([]interface{})
-		//fmt.Println(len(results))
-		for _, i := range results {
-			y = i.(map[string]interface{})
-			yProp := y["properties"].(map[string]interface{})
-			yScope := utl.Str(yProp["scope"])
-			yRoleDefinitionId := path.Base(utl.Str(yProp["roleDefinitionId"]))
-			if yScope == xScope && yRoleDefinitionId == xRoleDefinitionId {
-				return y // As soon as we find it
-			}
+	apiUrl := ConstAzUrl + targetScope + "/providers/Microsoft.Authorization/roleAssignments"
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	assignments := utl.Slice(resp["value"]) // Try asserting value as an object of slice type
+
+	// Check if the API call wasn't successful or returned value is invalid
+	if statCode != 200 || assignments == nil {
+		return nil // If so, return nil
+	}
+
+	// Inspect all qualifying assignments for this principalId
+	for i := range assignments {
+		assignment := utl.Map(assignments[i])      // Try casting assigment object to a map
+		props := utl.Map(assignment["properties"]) // Try casting its properties to a map
+		if assignment == nil || props == nil {
+			continue // Skip this entry if neither is a valid map
+		}
+		// Compare this entry to the target we're looking for
+		scope := utl.Str(props["scope"])
+		roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
+		if scope == targetScope && roleDefinitionId == targetRoleDefinitionId {
+			return AzureObject(assignment) // If they match, return immediately
 		}
 	}
-	return nil // If we get here, we didn't fine it, so return nil
+
+	return nil
 }
 
 // Retrieves a role assignment by its unique ID from the Azure resource RBAC hierarchy.
@@ -396,37 +391,14 @@ func GetAzureRbacAssignmentById(id string, z *Config) AzureObject {
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + id
-		//apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
 		resp, statCode, _ := ApiGet(apiUrl, z, params)
 		if statCode == 200 {
-			assignmentObj := utl.Map(resp) // Try asserting the response as a single object of map type
-			if assignmentObj == nil {
+			assignment := utl.Map(resp) // Try asserting the response as a single object of map type
+			if assignment == nil {
 				continue
 			}
-			assignmentObj["maz_from_azure"] = true
-			return AzureObject(assignmentObj) // Return immediately on 1st match
-
-			// Or is below rote scope search method still needed?? -- with out id in apiUrl
-			// assignments := utl.Slice(resp["value"])
-			// if assignments == nil {
-			// 	continue
-			// }
-			// for i := range assignments {
-			// 	assignmentPtr := &assignments[i]
-			// 	assignmentRaw := *assignmentPtr
-			// 	assignment := utl.Map(assignmentRaw)
-			// 	if assignment == nil {
-			// 		continue
-			// 	}
-			// 	name := utl.Str(assignment["name"])
-			// 	if name == "" {
-			// 		continue
-			// 	}
-			// 	if name == id {
-			// 		assignment["maz_from_azure"] = true
-			// 		return AzureObject(assignment) // Return immediately on 1st match
-			// 	}
-			// }
+			assignment["maz_from_azure"] = true
+			return AzureObject(assignment) // Return immediately on 1st match
 		}
 	}
 	return nil
