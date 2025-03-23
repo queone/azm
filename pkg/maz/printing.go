@@ -18,14 +18,14 @@ func PrintCountStatus(z *Config) {
 		utl.PreSpc("Local", c2Width)+
 		utl.PreSpc("Azure", c3Width)) + "\n")
 	status := utl.Blu(utl.PostSpc("Directory users", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("u", z), c2Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("u", z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(DirectoryUser, z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure(DirectoryUser, z), c3Width)) + "\n"
 	status += utl.Blu(utl.PostSpc("Directory groups", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("g", z), c2Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("g", z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(DirectoryGroup, z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure(DirectoryGroup, z), c3Width)) + "\n"
 	status += utl.Blu(utl.PostSpc("Directory applications", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("ap", z), c2Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountAzure("ap", z), c3Width)) + "\n"
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(Application, z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountAzure(Application, z), c3Width)) + "\n"
 	nativeSpsLocal, msSpsLocal := SpsCountLocal(z)
 	nativeSpsAzure, msSpsAzure := SpsCountAzure(z)
 	status += utl.Blu(utl.PostSpc("Directory service principals (this tenant)", c1Width))
@@ -38,24 +38,24 @@ func PrintCountStatus(z *Config) {
 	// Note: ObjectCountAzure() doesn't support dr nor da objects so we just count
 	// the ones in the local cache and print them for local *and* Azure
 	status += utl.Blu(utl.PostSpc("Directory role definitions", c1Width))
-	drCount := ObjectCountLocal("dr", z)
+	drCount := ObjectCountLocal(DirRoleDefinition, z)
 	status += utl.Gre(utl.PreSpc(drCount, c2Width))
 	status += utl.Gre(utl.PreSpc(drCount, c3Width)) + "\n"
-	daCount := ObjectCountLocal("da", z)
+	daCount := ObjectCountLocal(DirRoleAssignment, z)
 	status += utl.Blu(utl.PostSpc("Directory role assignments", c1Width))
 	status += utl.Gre(utl.PreSpc(daCount, c2Width))
 	status += utl.Gre(utl.PreSpc(daCount, c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource management groups", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("m", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(ManagementGroup, z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureMgmtGroups(z), c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource subscriptions", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("s", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(Subscription, z), c2Width))
 	status += utl.Gre(utl.PreSpc(CountAzureSubscriptions(z), c3Width)) + "\n"
 
-	customLocal, builtinLocal := CountRbacDefinitions(false, z) // false = get from cache, not Azure
-	customAzure, builtinAzure := CountRbacDefinitions(true, z)  // true = get from Azure, not cache
+	customLocal, builtinLocal := CountResRoleDefinitions(false, z) // false = get from cache, not Azure
+	customAzure, builtinAzure := CountResRoleDefinitions(true, z)  // true = get from Azure, not cache
 	status += utl.Blu(utl.PostSpc("Resource role definitions (built-in)", c1Width))
 	status += utl.Gre(utl.PreSpc(builtinLocal, c2Width))
 	status += utl.Gre(utl.PreSpc(builtinAzure, c3Width)) + "\n"
@@ -64,7 +64,7 @@ func PrintCountStatus(z *Config) {
 	status += utl.Gre(utl.PreSpc(customAzure, c3Width)) + "\n"
 
 	status += utl.Blu(utl.PostSpc("Resource role assignments", c1Width))
-	status += utl.Gre(utl.PreSpc(ObjectCountLocal("a", z), c2Width))
+	status += utl.Gre(utl.PreSpc(ObjectCountLocal(ResRoleAssignment, z), c2Width))
 	status += utl.Gre(utl.PreSpc(RoleAssignmentsCountAzure(z), c3Width)) + "\n"
 
 	fmt.Print(status)
@@ -73,12 +73,12 @@ func PrintCountStatus(z *Config) {
 // Prints this single object of type mazType tersely, with minimal attributes
 func PrintTersely(mazType string, obj AzureObject) {
 	switch mazType {
-	case RbacDefinition:
+	case ResRoleDefinition:
 		if props := utl.Map(obj["properties"]); props != nil {
 			fmt.Printf("%s  %-60s  %s\n", utl.Str(obj["name"]),
 				utl.Str(props["roleName"]), utl.Str(props["type"]))
 		}
-	case RbacAssignment:
+	case ResRoleAssignment:
 		if props := utl.Map(obj["properties"]); props != nil {
 			rdId := path.Base(utl.Str(props["roleDefinitionId"]))
 			principalId := utl.Str(props["principalId"])
@@ -159,9 +159,9 @@ func PrintObjectById(id string, z *Config) {
 // Generic print object function
 func PrintObject(mazType string, x AzureObject, z *Config) {
 	switch mazType {
-	case RbacDefinition:
-		PrintRbacDefinition(x, z)
-	case RbacAssignment:
+	case ResRoleDefinition:
+		PrintResRoleDefinition(x, z)
+	case ResRoleAssignment:
 		PrintResRoleAssignment(x, z)
 	case Subscription:
 		PrintSubscription(x)
@@ -236,7 +236,7 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 		// We are forced to do this excessive processing for each appRole, because MG Graph does
 		// not appear to have a global registry nor a call to get all SP app roles.
 		roleNameMap := make(map[string]string)
-		x := GetObjectFromAzureById("sp", resourceId, z)
+		x := GetObjectFromAzureById(ServicePrincipal, resourceId, z)
 		roleNameMap["00000000-0000-0000-0000-000000000000"] = "Default" // Include default app permissions role
 		// But also get all other additional appRoles it may have defined
 		appRoles := utl.Slice(x["appRoles"])
@@ -434,7 +434,7 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 				// Subscriptions use 'subscriptionId' instead of the fully-qualified 'id'
 				id = utl.Str(singleObj["subscriptionId"])
 			}
-			if mazType == RbacDefinition || mazType == RbacAssignment || mazType == ManagementGroup {
+			if mazType == ResRoleDefinition || mazType == ResRoleAssignment || mazType == ManagementGroup {
 				// These 3 types use 'name' instead of the fully-qualified 'id'
 				id = utl.Str(singleObj["name"])
 			}

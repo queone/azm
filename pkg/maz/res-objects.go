@@ -4,13 +4,13 @@ package maz
 //     One GetMatchingResourceObjects(mazType...) in favor of below 4:
 //       GetMatchingAzureMgmtGroups()
 //       GetMatchingAzureSubscriptions()
-//       GetMatchingRbacAssignments()
-//       GetMatchingRbacDefinitions()
+//       GetMatchingResRoleAssignments()
+//       GetMatchingResRoleDefinitions()
 //     One CacheResourceObjects(mazType...) in favor of below 4:
 //       CacheAzureMgmtGroups()
 //       CacheAzureSubscriptions()
-//       CacheAzureRbacAssignments()
-//       CacheAzureRbacDefinitions()
+//       CacheAzureResRoleAssignments()
+//       CacheAzureResRoleDefinitions()
 
 func CacheResourceObjects(mazType string) {
 

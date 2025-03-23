@@ -11,7 +11,7 @@ import (
 )
 
 // Prints resource role definition object in a YAML-like format
-func PrintRbacDefinition(obj AzureObject, z *Config) {
+func PrintResRoleDefinition(obj AzureObject, z *Config) {
 	id := utl.Str(obj["name"])
 	if id == "" {
 		return
@@ -180,7 +180,7 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	obj["properties"].(map[string]interface{})["type"] = "CustomRole"
 
 	// Check if role definition already exists
-	id, azureObj, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
+	id, azureObj := GetAzureResRoleDefinitionByScopeAndName(firstScope, roleName, z)
 	promptType := "CREATE"
 	deployType := "CREATED"
 	if utl.ValidUuid(id) { // A valid UUID means the role already exists
@@ -195,7 +195,7 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	if promptType == "UPDATE" {
 		DiffRoleDefinitionSpecfileVsAzure(obj, azureObj)
 	} else {
-		PrintRbacDefinition(obj, z)
+		PrintResRoleDefinition(obj, z)
 	}
 
 	if !force {
@@ -215,11 +215,11 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 		fmt.Printf("%s\n", utl.Gre(msg))
 
 		// Upsert object in local cache also
-		cache, err := GetCache(RbacDefinition, z)
+		cache, err := GetCache(ResRoleDefinition, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
-		err = cache.Upsert(obj.TrimForCache(RbacDefinition))
+		err = cache.Upsert(obj.TrimForCache(ResRoleDefinition))
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
@@ -230,11 +230,11 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 }
 
 // Deletes a role definition as defined by given object
-func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
+func DeleteResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	roleName, firstScope := ValidateResRoleDefinitionObject(obj, z)
 
 	// Check if role definition exists
-	id, _, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
+	id, _ := GetAzureResRoleDefinitionByScopeAndName(firstScope, roleName, z)
 	if !utl.ValidUuid(id) {
 		utl.Die("Role definition %s doesn't exist\n", utl.Red(roleName))
 	} else {
@@ -242,7 +242,7 @@ func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
 	}
 
 	// Display the role definition and prompt for delete confirmation
-	PrintRbacDefinition(obj, z)
+	PrintResRoleDefinition(obj, z)
 	if !force {
 		msg := "Delete above role definition? y/n"
 		if utl.PromptMsg(utl.Yel(msg)) != 'y' {
@@ -259,7 +259,7 @@ func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
 		fmt.Printf("%s\n", utl.Gre(msg))
 
 		// Also remove from local cache
-		cache, err := GetCache(RbacDefinition, z)
+		cache, err := GetCache(ResRoleDefinition, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
@@ -276,10 +276,10 @@ func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
 	}
 }
 
-// Returns id:name map of all Azure RBAC role definitions
+// Returns id:name map of all Azure resource role definitions
 func GetIdMapRoleDefs(z *Config) (nameMap map[string]string) {
 	nameMap = make(map[string]string)
-	roles := GetMatchingRbacDefinitions("", false, z) // false = get from cache, not Azure
+	roles := GetMatchingResRoleDefinitions("", false, z) // false = get from cache, not Azure
 	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
 
 	for i := range roles {
@@ -305,9 +305,9 @@ func GetIdMapRoleDefs(z *Config) (nameMap map[string]string) {
 // Counts all role definitions. If fromAzure is true, the definitions are sourced
 // directly from Azure; otherwise, they are read from the local cache. It returns
 // separate counts for custom and built-in roles.
-func CountRbacDefinitions(fromAzure bool, z *Config) (customCount, builtinCount int64) {
+func CountResRoleDefinitions(fromAzure bool, z *Config) (customCount, builtinCount int64) {
 	customCount, builtinCount = 0, 0
-	definitions := GetMatchingRbacDefinitions("", fromAzure, z)
+	definitions := GetMatchingResRoleDefinitions("", fromAzure, z)
 	for _, role := range definitions {
 		if props := utl.Map(role["properties"]); props != nil {
 			if roleType := utl.Str(props["type"]); roleType != "" {
@@ -323,11 +323,11 @@ func CountRbacDefinitions(fromAzure bool, z *Config) (customCount, builtinCount 
 }
 
 // Gets all role definitions matching on 'filter'. Returns entire list if filter is empty ""
-func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list AzureObjectList) {
+func GetMatchingResRoleDefinitions(filter string, force bool, z *Config) (list AzureObjectList) {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
 	// quick Azure lookup for the specific object.
 	if utl.ValidUuid(filter) {
-		singleRole := GetAzureRbacDefinitionById(filter, z)
+		singleRole := GetAzureResRoleDefinitionById(filter, z)
 		if singleRole != nil {
 			// If found, return a list containing just this object.
 			return AzureObjectList{singleRole}
@@ -335,7 +335,7 @@ func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list Azur
 	}
 
 	// Get current cache, or initialize a new cache for this type
-	cache, err := GetCache(RbacDefinition, z)
+	cache, err := GetCache(ResRoleDefinition, z)
 	if err != nil {
 		utl.Die("Error: %v\n", err)
 	}
@@ -349,7 +349,7 @@ func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list Azur
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureRbacDefinitions(cache, true, z) // true = be verbose
+		CacheAzureResRoleDefinitions(cache, true, z) // true = be verbose
 	}
 
 	// Filter the objects based on the provided filter
@@ -375,9 +375,9 @@ func GetMatchingRbacDefinitions(filter string, force bool, z *Config) (list Azur
 	return matchingList
 }
 
-// Retrieves all Azure resource RBAC definition objects in current tenant and saves them
+// Retrieves all Azure resource role definition objects in current tenant and saves them
 // to local cache. Note that we are updating the cache via its pointer, so no return values.
-func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
+func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 	list := AzureObjectList{} // List of role definitions to cache
 	ids := utl.StringSet{}    // Keep track of unique IDs to eliminate duplicate objects
 	callCount := 1            // Track number of API calls for verbose output
@@ -391,8 +391,8 @@ func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
 		subscriptionIdMap = GetIdMapSubscriptions(z)
 	}
 
-	// Search in each resource RBAC scope
-	scopes := GetAzureRbacScopes(z)
+	// Search in each resource scope
+	scopes := GetAzureResRoleScopes(z)
 
 	// Collate every unique role definition in each scope
 	params := map[string]string{"api-version": "2022-04-01"}
@@ -408,7 +408,7 @@ func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
 				id := utl.Str(role["name"])
 				if ids.Exists(id) {
 					continue
-					// Skip this repeated one. This can happen because of the way Azure RBAC
+					// Skip this repeated one. This can happen because of the way Azure resource
 					// hierarchy inheritance works, and the same role is seen from multiple places.
 				}
 				list = append(list, role) // Add object to the list
@@ -436,7 +436,7 @@ func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
 	// Trim and prepare all objects for caching
 	for i := range list {
 		// Directly modify the object in the original list
-		list[i] = list[i].TrimForCache(RbacDefinition)
+		list[i] = list[i].TrimForCache(ResRoleDefinition)
 	}
 
 	// Update the cache with the entire list of definitions
@@ -448,41 +448,29 @@ func CacheAzureRbacDefinitions(cache *Cache, verbose bool, z *Config) {
 	}
 }
 
-// Retrieves role definition with given name at given scope, and returns
-// the ID, the object, and any error.
-func GetAzureRbacDefinitionByNameAndScope(roleName, scope string, z *Config) (string, AzureObject, error) {
+// Retrieves resource role definition by scope and name
+func GetAzureResRoleDefinitionByScopeAndName(scope, roleName string, z *Config) (string, AzureObject) {
 	params := map[string]string{
 		"api-version": "2022-04-01",
 		"$filter":     "roleName eq '" + roleName + "'",
 	}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-	resp, statCode, _ := ApiGet(apiUrl, z, params)
-	if statCode != 200 {
-		return "", nil, fmt.Errorf("http %d: %s", statCode, ApiErrorMsg(resp))
-	} else {
-		sliceArray := utl.Slice(resp["value"]) // The response is a 'value' slice array
-		if sliceArray == nil {
-			return "", nil, fmt.Errorf("error asserting response value to slice type")
-		} else {
-			if len(sliceArray) == 1 {
-				obj := utl.Map(sliceArray[0]) // Assert single object entry as a map
-				if obj == nil {
-					return "", nil, fmt.Errorf("error asserting array entry 0 to map type")
-				} else {
-					role := AzureObject(obj)
-					id := utl.Str(role["name"])
-					return id, role, nil
-				}
-			}
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	roles := utl.Slice(resp["value"]) // Cast to a slice
+	if len(roles) == 1 {
+		// rolenNames are all unique within each scope, so a single entry means we found it
+		if role := utl.Map(roles[0]); role != nil {
+			id := utl.Str(role["name"])
+			return id, role
 		}
 	}
-	return "", nil, fmt.Errorf("role '%s' not found at scope '%s'", roleName, scope)
+	return "", nil
 }
 
-// Retrieves all role definitions with given roleName from the Azure resource RBAC hierarchy.
-func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
+// Retrieves all role definitions with given roleName from the Azure resource hierarchy.
+func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectList {
 	// Get all the scopes in the tenant hierarchy
-	scopes := GetAzureRbacScopes(z)
+	scopes := GetAzureResRoleScopes(z)
 
 	// NOTE: It is possible for a role with the same roleName to exist in multiple scopes
 	// within the Azure ARM API. That is the reason why a list of matchingRoles is required.
@@ -507,7 +495,7 @@ func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
 				id := utl.Str(role["name"])
 				if ids.Exists(id) {
 					continue
-					// Skip this repeated one. This can happen because of the way Azure RBAC
+					// Skip this repeated one. This can happen because of the way Azure resource
 					// hierarchy inherantance works, and the same role is seen from multiple places.
 				}
 				matchingRoles = append(matchingRoles, AzureObject(role)) // Append unique role
@@ -518,10 +506,10 @@ func GetAzureRbacDefinitionsByName(roleName string, z *Config) AzureObjectList {
 	return matchingRoles
 }
 
-// Retrieves a role definition by its unique ID from the Azure resource RBAC hierarchy.
-func GetAzureRbacDefinitionById(targetId string, z *Config) AzureObject {
+// Retrieves a role definition by its unique ID from the Azure resource hierarchy.
+func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 	// Get all the scopes in the tenant hierarchy
-	scopes := GetAzureRbacScopes(z)
+	scopes := GetAzureResRoleScopes(z)
 
 	// NOTE: Microsoft documentation explicitly states that a role definition UUID
 	// cannot be repeated across different scopes in the hierarchy. This is why we

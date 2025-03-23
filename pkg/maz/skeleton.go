@@ -16,7 +16,7 @@ func CreateSkeletonFile(mazType string) {
 	}
 	fileName, fileContent := "init-file-name.extension", []byte("init-file-content\n")
 	switch mazType {
-	case RbacDefinition:
+	case ResRoleDefinition:
 		fileName = "rbac-definition.yaml"
 		fileContent = []byte("properties:\n" +
 			"  roleName: My RBAC Role\n" +
@@ -34,7 +34,7 @@ func CreateSkeletonFile(mazType string) {
 			"        - Microsoft.KeyVault/vaults/secrets/*\n" +
 			"      notDataActions:\n" +
 			"        - Microsoft.CognitiveServices/accounts/LUIS/apps/delete\n")
-	case RbacAssignment:
+	case ResRoleAssignment:
 		fileName = "rbac-assignment.yaml"
 		fileContent = []byte("properties:\n" +
 			"  principalId: 65c6427a-1111-5555-7777-274d26531314  # Group = \"My Special Group\"\n" +

@@ -24,7 +24,7 @@ func PrintUser(obj map[string]interface{}, z *Config) {
 	// Print app role assignment members and the specific role assigned
 	//apiUrl := ConstMgUrl + "/v1.0/users/" + id + "/appRoleAssignments"
 	apiUrl := ConstMgUrl + "/beta/users/" + id + "/appRoleAssignments"
-	appRoleAssignments := GetAzAllPages(apiUrl, z)
+	appRoleAssignments := GetAzureAllPages(apiUrl, z)
 	PrintAppRoleAssignmentsOthers(appRoleAssignments, z)
 
 	// Print all groups and roles it is a member of

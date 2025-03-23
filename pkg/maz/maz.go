@@ -35,8 +35,8 @@ const (
 	JsonFormat = "json"
 
 	// Maz object type strings
-	RbacDefinition    = "d"  // Azure resource role definition
-	RbacAssignment    = "a"  // Azure resource role assignment
+	ResRoleDefinition = "d"  // Azure resource role definition
+	ResRoleAssignment = "a"  // Azure resource role assignment
 	Subscription      = "s"  // Azure resource subscription
 	ManagementGroup   = "m"  // Azure resource management group
 	DirectoryUser     = "u"  // Azure directory user
@@ -50,8 +50,8 @@ const (
 
 var (
 	MazTypes = []string{
-		RbacDefinition,
-		RbacAssignment,
+		ResRoleDefinition,
+		ResRoleAssignment,
 		Subscription,
 		ManagementGroup,
 		DirectoryUser,
@@ -62,8 +62,8 @@ var (
 		DirRoleAssignment,
 	}
 	MazTypeNames = map[string]string{
-		RbacDefinition:    "resource role definition",
-		RbacAssignment:    "resource role assignment",
+		ResRoleDefinition: "resource role definition",
+		ResRoleAssignment: "resource role assignment",
 		Subscription:      "resource subscription",
 		ManagementGroup:   "resource management group",
 		DirectoryUser:     "directory user",
@@ -74,8 +74,8 @@ var (
 		DirRoleAssignment: "directory role assignment",
 	}
 	CacheSuffix = map[string]string{
-		RbacDefinition:    "_res-role-defs",
-		RbacAssignment:    "_res-role-asgns",
+		ResRoleDefinition: "_res-role-defs",
+		ResRoleAssignment: "_res-role-asgns",
 		Subscription:      "_res-subs",
 		ManagementGroup:   "_res-mgmt-groups",
 		DirectoryUser:     "_dir-users",
@@ -86,8 +86,8 @@ var (
 		DirRoleAssignment: "_dir-role-asgns",
 	}
 	ApiEndpoint = map[string]string{
-		RbacDefinition:    "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
-		RbacAssignment:    "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
+		ResRoleDefinition: "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
+		ResRoleAssignment: "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
 		Subscription:      "/subscriptions",
 		ManagementGroup:   "/providers/Microsoft.Management/managementGroups",
 		DirectoryUser:     "/v1.0/users",
