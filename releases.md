@@ -1,5 +1,12 @@
 ## Releases
 
+### v0.5.0
+Release Date: 2025-mar-23
+- Renamed to GetAzureRbacDefinitionByScopeAndName(), and it doesn't really need to return error
+- Renamed a number of functions with 'Rbac' to 'ResRole'
+- Converted all previous mazType magic strings to their constant values
+- Changed the 'RBAC' reference to 'resource' wherever possible
+
 ### v0.4.1
 Release Date: 2025-mar-23
 - UpsertAzureResRoleDefinition() now pretty prints what's to be added/remove using DiffRoleDefinitionSpecfileVsAzure()

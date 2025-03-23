@@ -9,7 +9,7 @@ import (
 	"github.com/queone/utl"
 )
 
-// Prints RBAC role definition object in YAML-like format
+// Prints resource role assignment object in YAML-like format
 func PrintResRoleAssignment(obj AzureObject, z *Config) {
 	id := utl.Str(obj["name"])
 	if id == "" {
@@ -67,14 +67,14 @@ func PrintResRoleAssignment(obj AzureObject, z *Config) {
 }
 
 // Prints a human-readable report of all Azure resource role assignments in the tenant
-func PrintRbacAssignmentReport(z *Config) {
+func PrintResRoleAssignmentReport(z *Config) {
 	roleNameMap := GetIdMapRoleDefs(z)                    // Get all role definition id:name pairs
 	subNameMap := GetIdMapSubscriptions(z)                // Get all subscription id:name pairs
 	groupNameMap := GetIdMapDirObjects(DirectoryGroup, z) // Get all groups id:name pairs
 	userNameMap := GetIdMapDirObjects(DirectoryUser, z)   // Get all users id:name pairs
 	spNameMap := GetIdMapDirObjects(ServicePrincipal, z)  // Get all SPs id:name pairs
 
-	assignments := GetMatchingRbacAssignments("", false, z) // Get all the assignments. false = quietly
+	assignments := GetMatchingResRoleAssignments("", false, z) // Get all the assignments. false = quietly
 
 	for i := range assignments {
 		assignment := assignments[i]               // No need to cast; should already be AzureObject type
@@ -171,16 +171,15 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + id
 	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
 	if statCode == 200 || statCode == 201 {
-		fmt.Printf("%s\n", utl.Gre("Successfully CREATED role definition!"))
+		fmt.Printf("%s\n", utl.Gre("Successfully CREATED role assignment!"))
 		azObj := AzureObject(resp) // Cast newly created assignment object to our standard type
-		utl.PrintYamlColor(azObj)
 
 		// Upsert object in local cache also
-		cache, err := GetCache(RbacAssignment, z)
+		cache, err := GetCache(ResRoleAssignment, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
-		err = cache.Upsert(azObj.TrimForCache(RbacAssignment))
+		err = cache.Upsert(azObj.TrimForCache(ResRoleAssignment))
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
@@ -211,6 +210,7 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	}
 
 	// Delete the assignment by scope and 'name' (stand-alone UUID)
+	// https://learn.microsoft.com/en-us/rest/api/authorization/role-assignments/delete
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + azureId
 	resp, statCode, _ := ApiDelete(apiUrl, z, params)
@@ -218,7 +218,7 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 		fmt.Printf("%s\n", utl.Gre("Successfully DELETED role assignment!"))
 
 		// Also remove from local cache
-		cache, err := GetCache(RbacAssignment, z)
+		cache, err := GetCache(ResRoleAssignment, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
@@ -235,38 +235,18 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	}
 }
 
-// Deletes an Azure resource role assignment by its fully qualified object Id
-// Example of a fully qualified Id string (note it's one long line):
-//
-//	/providers/Microsoft.Management/managementGroups/33550b0b-2929-4b4b-adad-cccc66664444 \
-//	  /providers/Microsoft.Authorization/roleAssignments/5d586a7b-3f4b-4b5c-844a-3fa8efe49ab3
-func DeleteRbacAssignmentByFqid(fqid string, z *Config) map[string]interface{} {
-	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
-	apiUrl := ConstAzUrl + fqid
-	resp, statCode, _ := ApiDelete(apiUrl, z, params)
-	if statCode != 200 {
-		if statCode == 204 {
-			fmt.Println("Role assignment already deleted or does not exist. Give Azure a minute to flush it out.")
-		} else {
-			msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
-			fmt.Printf("%s\n", utl.Red(msg))
-		}
-	}
-	return nil
-}
-
 // Calculates count of all role assignment objects in Azure
 func RoleAssignmentsCountAzure(z *Config) int64 {
-	list := GetMatchingRbacAssignments("", false, z) // false = quiet
+	list := GetMatchingResRoleAssignments("", false, z) // false = quiet
 	return int64(len(list))
 }
 
-// Gets all RBAC role assignments matching on 'filter'. Return entire list if filter is empty ""
-func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list AzureObjectList) {
+// Gets all resource role assignments matching on 'filter'. Return entire list if filter is empty ""
+func GetMatchingResRoleAssignments(filter string, force bool, z *Config) (list AzureObjectList) {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
 	// quick Azure lookup for the specific object.
 	if utl.ValidUuid(filter) {
-		singleAssignment := GetAzureRbacAssignmentById(filter, z)
+		singleAssignment := GetAzureResRoleAssignmentById(filter, z)
 		if singleAssignment != nil {
 			// If found, return a list containing just this object.
 			return AzureObjectList{singleAssignment}
@@ -274,7 +254,7 @@ func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list Azur
 	}
 
 	// Get current cache, or initialize a new cache for this type
-	cache, err := GetCache(RbacAssignment, z)
+	cache, err := GetCache(ResRoleAssignment, z)
 	if err != nil {
 		utl.Die("Error: %v\n", err)
 	}
@@ -288,7 +268,7 @@ func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list Azur
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureRbacAssignments(cache, true, z) // true = be verbose
+		CacheAzureResRoleAssignments(cache, true, z) // true = be verbose
 	}
 
 	// Filter the objects based on the provided filter
@@ -327,9 +307,9 @@ func GetMatchingRbacAssignments(filter string, force bool, z *Config) (list Azur
 	return matchingList
 }
 
-// Retrieves all Azure resource RBAC assignments in current tenant and saves them
+// Retrieves all Azure resource role assignments in current tenant and saves them
 // to local cache. Note that we are updating the cache via its pointer, so no return values.
-func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
+func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 	list := AzureObjectList{} // List of role assignments to cache
 	ids := utl.StringSet{}    // Keep track of unique resourceIds (API SPs)
 	callCount := 1            // Track number of API calls for verbose output
@@ -343,8 +323,8 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 		subNameMap = GetIdMapSubscriptions(z)
 	}
 
-	// Search in each resource RBAC scope
-	scopes := GetAzureRbacScopes(z)
+	// Search in each resource scope
+	scopes := GetAzureResRoleScopes(z)
 
 	// Collate every unique role assignment object in each scope
 	params := map[string]string{"api-version": "2022-04-01"}
@@ -371,7 +351,7 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 			id := utl.Str(assignment["name"])
 			if ids.Exists(id) {
 				continue // Skip this entry if it's a repeat
-				// Skip this repeated one. This can happen because of the way Azure RBAC
+				// Skip this repeated one. This can happen because of the way Azure resource
 				// hierarchy inheritance works, and the same role is seen from multiple places.
 			}
 			list = append(list, assignment)
@@ -399,10 +379,10 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 	// Trim and prepare all objects for caching
 	for i := range list {
 		// Directly modify the object in the original list
-		list[i] = list[i].TrimForCache(RbacAssignment)
+		list[i] = list[i].TrimForCache(ResRoleAssignment)
 	}
 
-	// Update the cache with the entire list of definitions
+	// Update the cache with the entire list of assignments
 	cache.data = list
 
 	// Save the cache
@@ -446,16 +426,15 @@ func GetAzureResRoleAssignmentBy3Args(targetRoleDefinitionId, targetPrincipalId,
 	return "", nil
 }
 
-// Retrieves a role assignment by its unique ID from the Azure resource RBAC hierarchy.
-func GetAzureRbacAssignmentById(id string, z *Config) AzureObject {
-	// Get all the scopes in the tenant hierarchy
-	scopes := GetAzureRbacScopes(z)
+// Retrieves a role assignment by its unique ID from the Azure resource hierarchy.
+func GetAzureResRoleAssignmentById(id string, z *Config) AzureObject {
+	// Get all the scopes in the tenant resource hierarchy
+	scopes := GetAzureResRoleScopes(z)
 
 	// NOTE: Microsoft documentation explicitly states that a role assignment UUID
 	// cannot be repeated across different scopes in the hierarchy. This is why we
 	// return immediately upon a successful match in any of the scopes.
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
 
 	// Search each of the tenant scopes
 	params := map[string]string{"api-version": "2022-04-01"}

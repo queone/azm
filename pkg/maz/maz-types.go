@@ -59,7 +59,7 @@ func (obj AzureObject) HasString(filter string) bool {
 func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 	// We restrict caching to only certain fields to make this library more performant.
 	switch mazType {
-	case RbacDefinition:
+	case ResRoleDefinition:
 		// Trim the AzureObject to retain only specific fields for role definitions.
 		if props := utl.Map(obj["properties"]); props != nil {
 			trimmed = AzureObject{
@@ -80,7 +80,7 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 				"name": obj["name"],
 			}
 		}
-	case RbacAssignment:
+	case ResRoleAssignment:
 		// Trim the AzureObject to retain only specific fields for role definitions.
 		if props := utl.Map(obj["properties"]); props != nil {
 			trimmed = AzureObject{
@@ -210,8 +210,8 @@ func (list *AzureObjectList) Replace(newObj AzureObject) bool {
 	// Iterate through the list to find an object with a matching key
 	for j := range *list {
 		obj := &(*list)[j] // Access the element directly via pointer
-		// Most objects use 'id' for their unique key, but RBAC role definitions
-		// and assignments, and Subscriptions use different keys.
+		// Most objects use 'id' for their unique key, but resource role
+		// definitions and assignments, and Subscriptions use different keys.
 		if (id != "" && (*obj)["id"] == id) ||
 			(name != "" && (*obj)["name"] == name) ||
 			(subscriptionId != "" && (*obj)["subscriptionId"] == subscriptionId) {
@@ -229,8 +229,8 @@ func (list *AzureObjectList) DeleteById(targetId string) bool {
 	}
 	for j := range *list {
 		obj := &(*list)[j] // Access the element directly via pointer
-		// Most objects use 'id' for their unique key, but RBAC role definitions
-		// and assignments, and Subscriptions use different keys.
+		// Most objects use 'id' for their unique key, but resource role
+		// definitions and assignments, and Subscriptions use different keys.
 		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
 			// Modify the slice in-place by removing the matched element
 			*list = append((*list)[:j], (*list)[j+1:]...)
@@ -284,8 +284,8 @@ func (list AzureObjectList) FindById(targetId string) *AzureObject {
 	}
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
-		// Most objects use 'id' for their unique key, but RBAC role definitions
-		// and assignments, and Subscriptions use different keys.
+		// Most objects use 'id' for their unique key, but resource role
+		// definitions and assignments, and Subscriptions use different keys.
 		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
 			return obj // Return pointer to the matching object
 		}
@@ -332,8 +332,8 @@ func (list AzureObjectList) ExistsById(targetId string) bool {
 	}
 	for i := range list {
 		obj := &list[i] // Access the element directly via pointer
-		// Most objects use 'id' for their unique key, but RBAC role definitions
-		// and assignments, and Subscriptions use different keys.
+		// Most objects use 'id' for their unique key, but resource role
+		// definitions and assignments, and Subscriptions use different keys.
 		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
 			return true
 		}

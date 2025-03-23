@@ -42,7 +42,7 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print app role assignment members and the specific role assigned
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/appRoleAssignments"
-	appRoleAssignments := GetAzAllPages(apiUrl, z)
+	appRoleAssignments := GetAzureAllPages(apiUrl, z)
 	PrintAppRoleAssignmentsOthers(appRoleAssignments, z)
 
 	// Print all groups and roles it is a member of
@@ -114,7 +114,7 @@ func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string,
 }
 
 // Creates or updates an Azure directory group from given specfile.
-func UpsertGroupFromFile(force bool, specfile string, z *Config) {
+func UpsertGroupFromSpecfile(force bool, specfile string, z *Config) {
 	// Abort if specfile is not YAML
 	formatType, mazType, mapObj := GetObjectFromFile(specfile)
 	obj := AzureObject(mapObj)

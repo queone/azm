@@ -63,7 +63,7 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print app role assignment members and the specific role assigned
 	apiUrl = ConstMgUrl + "/beta/servicePrincipals/" + id + "/appRoleAssignedTo"
-	appRoleAssignedTo := GetAzAllPages(apiUrl, z)
+	appRoleAssignedTo := GetAzureAllPages(apiUrl, z)
 	PrintAppRoleAssignmentsSp(roleNameMap, appRoleAssignedTo) // roleNameMap is used here
 
 	// Print all groups and roles it is a member of
@@ -299,7 +299,7 @@ func PrintSp(x AzureObject, z *Config) {
 // Retrieves counts of all SPs in local cache, 2 values: Native ones to this tenant, and all others.
 func SpsCountLocal(z *Config) (native, others int64) {
 	// Load all service principals from the cache
-	cache, err := GetCache("sp", z)
+	cache, err := GetCache(ServicePrincipal, z)
 	if err != nil {
 		return 0, 0 // If the cache cannot be loaded, return 0
 	}
@@ -320,7 +320,7 @@ func SpsCountLocal(z *Config) (native, others int64) {
 func SpsCountAzure(z *Config) (native, others int64) {
 	// First, get total number of SPs in native tenant
 	z.AddMgHeader("ConsistencyLevel", "eventual")
-	apiUrl := ConstMgUrl + ApiEndpoint["sp"] + "/$count"
+	apiUrl := ConstMgUrl + ApiEndpoint[ServicePrincipal] + "/$count"
 	resp, _, _ := ApiGet(apiUrl, z, nil)
 	all := utl.Int64(resp["value"])
 
@@ -329,7 +329,7 @@ func SpsCountAzure(z *Config) (native, others int64) {
 		"$filter": "appOwnerOrganizationId eq " + z.TenantId,
 		"$count":  "true",
 	}
-	apiUrl = ConstMgUrl + ApiEndpoint["sp"]
+	apiUrl = ConstMgUrl + ApiEndpoint[ServicePrincipal]
 	resp, _, _ = ApiGet(apiUrl, z, params)
 	native = utl.Int64(resp["@odata.count"].(float64))
 

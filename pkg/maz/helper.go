@@ -12,18 +12,20 @@ import (
 func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 	_, mazType, obj := GetObjectFromFile(specfile)
 	switch mazType {
-	case RbacDefinition:
+	case ResRoleDefinition:
 		UpsertAzureResRoleDefinition(force, obj, z)
-	case RbacAssignment:
+	case ResRoleAssignment:
 		CreateAzureResRoleAssignment(force, obj, z)
 
 	// Refocus below target functions, renaming 'FromFile' to simply
 	// 'UpsertOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
-	// object extraction
+	// object extraction - to eliminate the DEDUNDANCY
+
 	case Application, ServicePrincipal:
-		//UpsertAppSpFromFile(force bool, specfile string, z *Config)
+		UpsertAppSpFromSpecfile(force, specfile, z)
+
 	case DirectoryGroup:
-		//UpsertGroupFromFile(force bool, specfile string, z *Config)
+		UpsertGroupFromSpecfile(force, specfile, z)
 
 	default:
 		utl.Die("Unsupported specfile type. Only resource role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
@@ -35,20 +37,23 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 	_, mazType, obj := GetObjectFromFile(specfile)
 	switch mazType {
-	case RbacDefinition:
-		DeleteRbacDefinition(force, obj, z)
-	case RbacAssignment:
+	case ResRoleDefinition:
+		DeleteResRoleDefinition(force, obj, z)
+	case ResRoleAssignment:
 		DeleteAzureResRoleAssignment(force, obj, z)
 
-	// Refocus below target functions, renaming 'ByIdentifier' & 'FromFile' to simply
-	// 'DeleteOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
-	// object extraction
 	case Application, ServicePrincipal:
-		//DeleteAppSpByIdentifier(force bool, identifier string, z *Config) -- THIS MAY BE FINE
-	case DirectoryGroup:
-		//DeleteDirObject
+		displayName := utl.Str(obj["displayName"])
+		DeleteAppSp(force, displayName, z)
+
+	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
+		displayName := utl.Str(obj["displayName"])
+		err := DeleteDirObject(force, displayName, mazType, z)
+		msg := fmt.Sprintf("%v", err)
+		utl.Die("%s\n", utl.Red(msg))
+
 	default:
-		utl.Die("Unsupported specfile type. Only RBAC role definitions and assignment;" +
+		utl.Die("Unsupported specfile type. Only resource role definitions and assignment;" +
 			" groups; and AppSP specfiles are allowed.\n")
 	}
 	os.Exit(0)
@@ -75,24 +80,20 @@ func DeleteObjectById(force bool, targetId string, z *Config) {
 
 	// Single out the object
 	targetObj := AzureObject(list[0])
-
 	mazType := utl.Str(targetObj["maz_type"])
 	switch mazType {
-	case RbacDefinition:
-		DeleteRbacDefinition(force, targetObj, z)
-
-	case RbacAssignment:
-		DeleteRbacAssignmentByFqid(targetId, z)
-
+	case ResRoleDefinition:
+		DeleteResRoleDefinition(force, targetObj, z)
+	case ResRoleAssignment:
+		DeleteAzureResRoleAssignment(force, targetObj, z)
 	case Application, ServicePrincipal:
-		DeleteAppSpByIdentifier(force, targetId, z)
+		DeleteAppSp(force, targetId, z)
 	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
 		err := DeleteDirObject(force, targetId, mazType, z)
 		msg := fmt.Sprintf("%v", err)
 		utl.Die("%s\n", utl.Red(msg))
 	default:
-		msg := fmt.Sprintf("Utility does not support deleting %s objects.",
-			MazTypeNames[mazType])
+		msg := fmt.Sprintf("Deleting %s objects by ID is not supported.", MazTypeNames[mazType])
 		utl.Die("%s\n", utl.Red(msg))
 	}
 }
@@ -118,11 +119,11 @@ func DeleteObjectByName(force bool, name string, z *Config) {
 	// Process for the single object with this name
 	for targetId, mazType := range idMap {
 		switch mazType {
-		case RbacDefinition:
-			targetObj := GetAzureRbacDefinitionById(targetId, z)
-			DeleteRbacDefinition(force, targetObj, z)
+		case ResRoleDefinition:
+			targetObj := GetAzureResRoleDefinitionById(targetId, z)
+			DeleteResRoleDefinition(force, targetObj, z)
 		case Application, ServicePrincipal:
-			DeleteAppSpByIdentifier(force, targetId, z)
+			DeleteAppSp(force, targetId, z)
 		case DirectoryGroup, DirRoleDefinition:
 			err := DeleteDirObject(force, targetId, mazType, z)
 			msg := fmt.Sprintf("%v", err)
@@ -142,14 +143,14 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 	// Set up the map to collect the set id:mazType objects that share this name
 	idMap := make(map[string]string)
 
-	// Get any RBAC role definitions with that name and add them to our growing list
-	rbacDefinitions := GetAzureRbacDefinitionsByName(name, z)
+	// Get any resource role definitions with that name and add them to our growing list
+	rbacDefinitions := GetAzureResRoleDefinitionsByName(name, z)
 	if len(rbacDefinitions) > 0 {
 		for i := range rbacDefinitions {
 			obj := rbacDefinitions[i]
 			id := utl.Str(obj["name"])
 			if id != "" {
-				idMap[id] = RbacDefinition
+				idMap[id] = ResRoleDefinition
 			}
 		}
 	}
@@ -198,10 +199,10 @@ func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 // Retrieves Azure object by mazType and object ID
 func GetAzureObjectById(mazType, id string, z *Config) AzureObject {
 	switch mazType {
-	case RbacDefinition:
-		return GetAzureRbacDefinitionById(id, z)
-	case RbacAssignment:
-		return GetAzureRbacAssignmentById(id, z)
+	case ResRoleDefinition:
+		return GetAzureResRoleDefinitionById(id, z)
+	case ResRoleAssignment:
+		return GetAzureResRoleAssignmentById(id, z)
 	case Subscription:
 		return GetAzureSubscriptionById(id, z)
 	case ManagementGroup:
@@ -211,14 +212,13 @@ func GetAzureObjectById(mazType, id string, z *Config) AzureObject {
 		return GetObjectFromAzureById(mazType, id, z)
 	default:
 		return nil
-		//return GetObjectFromAzureById(t, id, z)
 	}
 }
 
-// Gets all Azure RBAC scopes in the tenant's resource hierarchy, starting with the
+// Gets all Azure resource scopes in the tenant's resource hierarchy, starting with the
 // Tenant Root Group, then all management groups, and finally all subscription scopes.
-func GetAzureRbacScopes(z *Config) (scopes []string) {
-	// Collect all resource management groups and subscription RBAC scopes
+func GetAzureResRoleScopes(z *Config) (scopes []string) {
+	// Collect all resource management groups and subscription resource scopes
 	scopes = nil
 	mgmtGroupIds := GetAzureMgmtGroupsIds(z) // Includes the Tenant Root Group
 	scopes = append(scopes, mgmtGroupIds...)
@@ -238,10 +238,10 @@ func GetAzureRbacScopes(z *Config) (scopes []string) {
 // of the objects of this particular type. Works accross MS Graph and ARM objects.
 func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObjectList {
 	switch mazType {
-	case RbacDefinition:
-		return GetMatchingRbacDefinitions(filter, force, z)
-	case RbacAssignment:
-		return GetMatchingRbacAssignments(filter, force, z)
+	case ResRoleDefinition:
+		return GetMatchingResRoleDefinitions(filter, force, z)
+	case ResRoleAssignment:
+		return GetMatchingResRoleAssignments(filter, force, z)
 	case Subscription:
 		return GetMatchingAzureSubscriptions(filter, force, z)
 	case ManagementGroup:
@@ -254,7 +254,7 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 }
 
 // Returns all Azure pages for given API URL call
-func GetAzAllPages(apiUrl string, z *Config) (list []interface{}) {
+func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	list = nil
 	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {
@@ -276,7 +276,7 @@ func GetAzAllPages(apiUrl string, z *Config) (list []interface{}) {
 	return list
 }
 
-// Processes given specfile and returns the format type, the maz object type code, and the object.
+// Processes given specfile and returns the format type, the mazType, and the object.
 func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject) {
 	// Load specfile and capture the raw object, the format, and any error
 	rawObj, format, err := utl.LoadFileAuto(specfile)
@@ -301,9 +301,9 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 		roleName := utl.Str(props["roleName"])
 		principalId := utl.Str(props["principalId"])
 		if roleName != "" {
-			return format, RbacDefinition, obj
+			return format, ResRoleDefinition, obj
 		} else if principalId != "" {
-			return format, RbacAssignment, obj
+			return format, ResRoleAssignment, obj
 		}
 	}
 
@@ -335,16 +335,16 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 	}
 
 	switch mazType {
-	case RbacDefinition:
+	case ResRoleDefinition:
 		roleName, firstScope := ValidateResRoleDefinitionObject(obj, z)
-		_, azureObj, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
+		_, azureObj := GetAzureResRoleDefinitionByScopeAndName(firstScope, roleName, z)
 		if azureObj == nil {
 			fmt.Printf("Role %s, as defined in specfile, does %s exist in Azure.\n", utl.Mag(roleName), utl.Red("not"))
 		} else {
 			fmt.Printf("Role definition in specfile %s exists in Azure:\n", utl.Gre("already"))
 			DiffRoleDefinitionSpecfileVsAzure(obj, azureObj)
 		}
-	case RbacAssignment:
+	case ResRoleAssignment:
 		roleDefinitionId, principalId, scope := ValidateResRoleAssignmentObject(obj, z)
 		_, azureObj := GetAzureResRoleAssignmentBy3Args(roleDefinitionId, principalId, scope, z)
 		if azureObj == nil {

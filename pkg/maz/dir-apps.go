@@ -215,13 +215,13 @@ func PrintApp(x AzureObject, z *Config) {
 // Checks to see whether the App and SP objects exist. Another preprocessing helper function.
 func CheckAppSpExistence(identifier string, z *Config) (app, sp AzureObject, code int) {
 	// Check if the App exists
-	app = PreFetchAzureObject("ap", identifier, z)
+	app = PreFetchAzureObject(Application, identifier, z)
 	if app != nil {
 		// App exists
 		appId := utl.Str(app["appId"])
 
 		// Use appId/ClientID to check if the corresponding SP exists
-		sp = PreFetchAzureObject("sp", appId, z)
+		sp = PreFetchAzureObject(ServicePrincipal, appId, z)
 		if sp != nil {
 			return app, sp, BothExist // Both exist
 		}
@@ -229,11 +229,11 @@ func CheckAppSpExistence(identifier string, z *Config) (app, sp AzureObject, cod
 	}
 
 	// App does not exist, check if SP exists
-	sp = PreFetchAzureObject("sp", identifier, z)
+	sp = PreFetchAzureObject(ServicePrincipal, identifier, z)
 	if sp != nil {
 		// SP exists, check if its associated App exists using its appId/ClientID
 		appId := utl.Str(sp["appId"])
-		app = PreFetchAzureObject("ap", appId, z)
+		app = PreFetchAzureObject(Application, appId, z)
 		if app != nil {
 			return app, sp, BothExist // Both exist
 		}
@@ -266,13 +266,13 @@ func CreateAppSpByName(force bool, displayName string, z *Config) error {
 			fmt.Println("Creating App/SP pair with above parameters...")
 		}
 
-		app, err := CreateDirObjectInAzure("ap", obj, z)
+		app, err := CreateDirObjectInAzure(Application, obj, z)
 		if err != nil {
 			utl.Die("%s\n", err.Error())
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
-		_, err = CreateDirObjectInAzure("sp", spObj, z)
+		_, err = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if err != nil {
 			utl.Die("%s\n", err.Error())
 		}
@@ -294,7 +294,7 @@ func CreateAppSpByName(force bool, displayName string, z *Config) error {
 			fmt.Println("Creating corresponding SP...")
 		}
 		spObj := AzureObject{"appId": appId}
-		_, err := CreateDirObjectInAzure("sp", spObj, z)
+		_, err := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if err != nil {
 			utl.Die("%s\n", err.Error())
 		}
@@ -310,8 +310,8 @@ func CreateAppSpByName(force bool, displayName string, z *Config) error {
 	return nil
 }
 
-// Deletes Azure AppSP pair from given command-line arguments.
-func DeleteAppSpByIdentifier(force bool, identifier string, z *Config) {
+// Deletes Azure AppSP pair from given indentifier
+func DeleteAppSp(force bool, identifier string, z *Config) {
 	app, sp, state := CheckAppSpExistence(identifier, z)
 	switch state {
 	case NeitherExists:
@@ -319,7 +319,7 @@ func DeleteAppSpByIdentifier(force bool, identifier string, z *Config) {
 	case OnlySPExists:
 		// Delete SP only
 		// Confirmation prompt
-		utl.PrintYamlColor(sp.TrimForCache("sp"))
+		utl.PrintYamlColor(sp.TrimForCache(ServicePrincipal))
 		if !force {
 			msg := utl.Yel("Delete above SP? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
@@ -329,11 +329,11 @@ func DeleteAppSpByIdentifier(force bool, identifier string, z *Config) {
 			fmt.Println("Deleting above SP...")
 		}
 		idSp := utl.Str(sp["id"])
-		DeleteDirObjectInAzure("sp", idSp, z)
+		DeleteDirObjectInAzure(ServicePrincipal, idSp, z)
 	case OnlyAppExists:
 		// Delete App only
 		// Confirmation prompt
-		utl.PrintYamlColor(app.TrimForCache("ap"))
+		utl.PrintYamlColor(app.TrimForCache(Application))
 		if !force {
 			msg := utl.Yel("Delete above App? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
@@ -343,12 +343,12 @@ func DeleteAppSpByIdentifier(force bool, identifier string, z *Config) {
 			fmt.Println("Deleting above App...")
 		}
 		idApp := utl.Str(app["id"])
-		DeleteDirObjectInAzure("ap", idApp, z)
+		DeleteDirObjectInAzure(Application, idApp, z)
 	case BothExist:
 		// Delete both
-		utl.PrintYamlColor(app.TrimForCache("ap"))
+		utl.PrintYamlColor(app.TrimForCache(Application))
 		fmt.Println(utl.Gra("and corresponding SP..."))
-		utl.PrintYamlColor(sp.TrimForCache("sp"))
+		utl.PrintYamlColor(sp.TrimForCache(ServicePrincipal))
 		if !force {
 			msg := utl.Yel("Delete above App/SP pair? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
@@ -359,8 +359,8 @@ func DeleteAppSpByIdentifier(force bool, identifier string, z *Config) {
 		}
 		idSp := utl.Str(sp["id"])
 		idApp := utl.Str(app["id"])
-		DeleteDirObjectInAzure("sp", idSp, z)
-		DeleteDirObjectInAzure("ap", idApp, z)
+		DeleteDirObjectInAzure(ServicePrincipal, idSp, z)
+		DeleteDirObjectInAzure(Application, idApp, z)
 	default:
 		utl.Die("Unexpected App/SP existence state.\n")
 	}
@@ -387,7 +387,7 @@ func RenameAppSp(force bool, identifier, newName string, z *Config) {
 			fmt.Println("Renaming SP...")
 		}
 		obj := AzureObject{"displayName": newName}
-		if err := UpdateDirObjectInAzure("sp", idSp, obj, z); err != nil {
+		if err := UpdateDirObjectInAzure(ServicePrincipal, idSp, obj, z); err != nil {
 			utl.Die("%s", err.Error())
 		}
 	case OnlyAppExists:
@@ -404,7 +404,7 @@ func RenameAppSp(force bool, identifier, newName string, z *Config) {
 			fmt.Println("Renaming App...")
 		}
 		obj := AzureObject{"displayName": newName}
-		if err := UpdateDirObjectInAzure("ap", idApp, obj, z); err != nil {
+		if err := UpdateDirObjectInAzure(Application, idApp, obj, z); err != nil {
 			utl.Die("%s", err.Error())
 		}
 	case BothExist:
@@ -423,10 +423,10 @@ func RenameAppSp(force bool, identifier, newName string, z *Config) {
 			fmt.Println("Renaming App/SP pair...")
 		}
 		obj := AzureObject{"displayName": newName}
-		if err := UpdateDirObjectInAzure("ap", idApp, obj, z); err != nil {
+		if err := UpdateDirObjectInAzure(Application, idApp, obj, z); err != nil {
 			utl.Die("%s", err.Error())
 		}
-		if err := UpdateDirObjectInAzure("sp", idSp, obj, z); err != nil {
+		if err := UpdateDirObjectInAzure(ServicePrincipal, idSp, obj, z); err != nil {
 			utl.Die("%s", err.Error())
 		}
 	default:
@@ -435,7 +435,7 @@ func RenameAppSp(force bool, identifier, newName string, z *Config) {
 }
 
 // Creates or updates an Azure App/SP pair from given specfile.
-func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
+func UpsertAppSpFromSpecfile(force bool, filePath string, z *Config) {
 	// Abort if specfile is not YAML or does not have a valid AppSP defininition
 	formatType, t, mapObj := GetObjectFromFile(filePath)
 	if formatType != YamlFormat {
@@ -450,7 +450,7 @@ func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
 	if obj == nil {
 		utl.Die("Specfile does not contain a valid App/SP definition.\n")
 	}
-	if t != "ap" {
+	if t != Application {
 		utl.Die("Object defined in specfile is not an App/SP pair.\n")
 	}
 
@@ -480,13 +480,13 @@ func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
 			fmt.Println("Creating App/SP pair with above parameters...")
 		}
 
-		app, err := CreateDirObjectInAzure("ap", obj, z)
+		app, err := CreateDirObjectInAzure(Application, obj, z)
 		if err != nil {
 			utl.Die("%s\n", err.Error())
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
-		_, err = CreateDirObjectInAzure("sp", spObj, z)
+		_, err = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if err != nil {
 			utl.Die("%s\n", err.Error())
 		}
@@ -504,8 +504,8 @@ func UpsertAppSpFromFile(force bool, filePath string, z *Config) {
 		// So let's update them both
 		idApp := utl.Str(app["id"])
 		idSp := utl.Str(sp["id"])
-		UpdateDirObject(force, idApp, obj, "ap", z)
-		UpdateDirObject(force, idSp, obj, "sp", z)
+		UpdateDirObject(force, idApp, obj, Application, z)
+		UpdateDirObject(force, idSp, obj, ServicePrincipal, z)
 	default:
 		utl.Die("Unexpected App/SP existence state.\n")
 	}

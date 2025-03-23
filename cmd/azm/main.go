@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.4.1"
+	program_version = "0.5.0"
 )
 
 func printUsage(extended bool) {
@@ -28,7 +28,7 @@ func printUsage(extended bool) {
 		"  This utility simplifies the querying and management of various Azure IAM-related objects.\n"+
 		"  In many options %s is a placeholder for a 1-2 character code that specifies the type of\n"+
 		"  Azure object to act on. The available codes are:\n\n"+
-		"    %s = Resource RBAC Definitions     %s = Resource RBAC Assignments\n"+
+		"    %s = Resource Role Definitions     %s = Resource Role Assignments\n"+
 		"    %s = Resource Subscriptions        %s = Resource Management Groups\n"+
 		"    %s = Directory Users               %s = Directory Groups\n"+
 		"    %s = Directory Applications        %s = Directory Service Principals\n"+
@@ -40,9 +40,9 @@ func printUsage(extended bool) {
 		"  %s -id                                      To display the currently configured login values\n"+
 		"  %s -ap                                      To list all directory applications registered in\n"+
 		"                                               current tenant\n"+
-		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource RBAC definition with this\n"+
+		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource Role definition with this\n"+
 		"                                               given UUID\n"+
-		"  %s -d Reader                                To show all resource RBAC definitions with\n"+
+		"  %s -d Reader                                To show all resource Role definitions with\n"+
 		"                                               'Reader' in their names\n"+
 		"  %s -g MyGroup                               To show any directory group with the filter\n"+
 		"                                               'MyGroup' in its attributes\n"+
@@ -58,7 +58,7 @@ func printUsage(extended bool) {
 		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
 		"                                   If the result is a single object, it is printed in more detail.\n"+
 		"  -vs SPECFILE                     Compare YAML specfile to what's in Azure. Only for certain objects.\n"+
-		"  -ar                              RBAC assignment report with resolved attribute names\n"+
+		"  -ar                              Resource role assignment report with resolved attribute names\n"+
 		"  -mt                              List Management Group and subscriptions tree\n"+
 		"  -pags                            List all Azure AD Privileged Access Groups\n"+
 		"  -st                              Show count of all objects in local cache and Azure tenant\n"+
@@ -152,7 +152,7 @@ func main() {
 			mazType := arg1[2:]
 			maz.CreateSkeletonFile(mazType)
 		case "-ar":
-			maz.PrintRbacAssignmentReport(z)
+			maz.PrintResRoleAssignmentReport(z)
 		case "-mt":
 			maz.PrintAzureMgmtGroupTree(z)
 		case "-pags":
@@ -227,21 +227,21 @@ func main() {
 			}
 			maz.RenameAppSp(force, arg2, arg3, z)
 		case "-apas":
-			maz.AddAppSpSecret("ap", arg2, arg3, "", z)
+			maz.AddAppSpSecret(maz.Application, arg2, arg3, "", z)
 		case "-aprs", "-aprsf":
 			force := false
 			if arg1 == "-aprsf" {
 				force = true
 			}
-			maz.RemoveAppSpSecret("ap", arg2, arg3, force, z)
+			maz.RemoveAppSpSecret(maz.Application, arg2, arg3, force, z)
 		case "-spas":
-			maz.AddAppSpSecret("sp", arg2, arg3, "", z)
+			maz.AddAppSpSecret(maz.ServicePrincipal, arg2, arg3, "", z)
 		case "-sprs", "-sprsf":
 			force := false
 			if arg1 == "-sprsf" {
 				force = true
 			}
-			maz.RemoveAppSpSecret("sp", arg2, arg3, force, z)
+			maz.RemoveAppSpSecret(maz.ServicePrincipal, arg2, arg3, force, z)
 		default:
 			printUnknownCommandError()
 		}
@@ -260,9 +260,9 @@ func main() {
 		maz.SetupApiTokens(z)
 		switch arg1 {
 		case "-apas":
-			maz.AddAppSpSecret("ap", arg2, arg3, arg4, z)
+			maz.AddAppSpSecret(maz.Application, arg2, arg3, arg4, z)
 		case "-spas":
-			maz.AddAppSpSecret("sp", arg2, arg3, arg4, z)
+			maz.AddAppSpSecret(maz.ServicePrincipal, arg2, arg3, arg4, z)
 		default:
 			printUnknownCommandError()
 		}
