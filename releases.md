@@ -1,5 +1,10 @@
 ## Releases
 
+### v0.4.1
+Release Date: 2025-mar-23
+- UpsertAzureResRoleDefinition() now pretty prints what's to be added/remove using DiffRoleDefinitionSpecfileVsAzure()
+- CreateAzureResRoleAssignment() and DeleteAzureResRoleAssignment() now work as expected
+
 ### v0.4.0
 Release Date: 2025-mar-22
 - Completed role assignments; now all objects follow new model

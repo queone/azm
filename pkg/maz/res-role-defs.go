@@ -125,9 +125,9 @@ func PrintRbacDefinition(obj AzureObject, z *Config) {
 	}
 }
 
-// Validates given object to ensure if conforms to the format of a Azure resource
-// RBAC role definition, and if valid, returns the roleName and the firstScope.
-func ValidateRbacDefinition(obj AzureObject, z *Config) (string, string) {
+// Validates given object to ensure if conforms to the format of an Azure resource
+// role definition. If it is valid, return the roleName and the firstScope.
+func ValidateResRoleDefinitionObject(obj AzureObject, z *Config) (string, string) {
 	props := utl.Map(obj["properties"])
 	if props == nil {
 		utl.Die("Error. Object 'properties' is not a map, but a %T\n", obj["properties"])
@@ -171,16 +171,16 @@ func ValidateRbacDefinition(obj AzureObject, z *Config) (string, string) {
 	return roleName, firstScope
 }
 
-// Creates or updates an Azure resource RBAC role definition as defined by given object
-func UpsertRbacDefinition(force bool, obj AzureObject, z *Config) {
-	roleName, firstScope := ValidateRbacDefinition(obj, z)
+// Creates or updates an Azure resource role definition as defined by given object
+func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
+	roleName, firstScope := ValidateResRoleDefinitionObject(obj, z)
 
 	// Add the required 'type' to the object. Below assertion works because we have
 	// already validated that 'properties' is indeed part of the object's structure.
 	obj["properties"].(map[string]interface{})["type"] = "CustomRole"
 
 	// Check if role definition already exists
-	id, _, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
+	id, azureObj, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
 	promptType := "CREATE"
 	deployType := "CREATED"
 	if utl.ValidUuid(id) { // A valid UUID means the role already exists
@@ -189,10 +189,15 @@ func UpsertRbacDefinition(force bool, obj AzureObject, z *Config) {
 	} else {
 		id = uuid.New().String() // Does not exist, so we will create anew
 	}
-	obj["name"] = id
+	obj["name"] = id // Update inputted object with corresponding ID
 
 	// Prompt to create/update
-	PrintRbacDefinition(obj, z)
+	if promptType == "UPDATE" {
+		DiffRoleDefinitionSpecfileVsAzure(obj, azureObj)
+	} else {
+		PrintRbacDefinition(obj, z)
+	}
+
 	if !force {
 		msg := fmt.Sprintf("%s above role definition? y/n", promptType)
 		if utl.PromptMsg(utl.Yel(msg)) != 'y' {
@@ -200,8 +205,8 @@ func UpsertRbacDefinition(force bool, obj AzureObject, z *Config) {
 		}
 	}
 
-	// Call API
-	payload := obj // Obviously using x object as the payload
+	// Call API to create or update definition
+	payload := obj // Obviously using the inputed object as the payload
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + firstScope + "/providers/Microsoft.Authorization/roleDefinitions/" + id
 	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
@@ -226,9 +231,9 @@ func UpsertRbacDefinition(force bool, obj AzureObject, z *Config) {
 
 // Deletes a role definition as defined by given object
 func DeleteRbacDefinition(force bool, obj AzureObject, z *Config) {
-	roleName, firstScope := ValidateRbacDefinition(obj, z)
+	roleName, firstScope := ValidateResRoleDefinitionObject(obj, z)
 
-	// Check if role definition already exists
+	// Check if role definition exists
 	id, _, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
 	if !utl.ValidUuid(id) {
 		utl.Die("Role definition %s doesn't exist\n", utl.Red(roleName))

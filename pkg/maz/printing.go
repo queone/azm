@@ -162,7 +162,7 @@ func PrintObject(mazType string, x AzureObject, z *Config) {
 	case RbacDefinition:
 		PrintRbacDefinition(x, z)
 	case RbacAssignment:
-		PrintRbacAssignment(x, z)
+		PrintResRoleAssignment(x, z)
 	case Subscription:
 		PrintSubscription(x)
 	case ManagementGroup:
