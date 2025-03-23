@@ -13,10 +13,9 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 	_, mazType, obj := GetObjectFromFile(specfile)
 	switch mazType {
 	case RbacDefinition:
-		UpsertRbacDefinition(force, obj, z)
-
+		UpsertAzureResRoleDefinition(force, obj, z)
 	case RbacAssignment:
-		CreateRbacAssignment(obj, z)
+		CreateAzureResRoleAssignment(force, obj, z)
 
 	// Refocus below target functions, renaming 'FromFile' to simply
 	// 'UpsertOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
@@ -38,9 +37,8 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 	switch mazType {
 	case RbacDefinition:
 		DeleteRbacDefinition(force, obj, z)
-
 	case RbacAssignment:
-		DeleteRbacAssignment(force, obj, z)
+		DeleteAzureResRoleAssignment(force, obj, z)
 
 	// Refocus below target functions, renaming 'ByIdentifier' & 'FromFile' to simply
 	// 'DeleteOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
@@ -326,19 +324,19 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 // Compares object in specfile to what is in Azure. This is only for certain mazType objects.
 func CompareSpecfileToAzure(specfile string, z *Config) {
 	if !utl.FileUsable(specfile) {
-		utl.Die("File does not exist, or is zero size\n")
+		utl.Die("That specfile doesn't exist, or is zero size\n")
 	}
 	format, mazType, obj := GetObjectFromFile(specfile)
-	if format != JsonFormat && format != YamlFormat {
-		utl.Die("File is neither JSON nor YAML\n")
+	if format != YamlFormat {
+		utl.Die("Specfile is not in YAML format\n")
 	}
 	if obj == nil {
-		utl.Die("Invalid map object found in %s specfile.\n", format)
+		utl.Die("Object in specfile is not valid\n")
 	}
 
 	switch mazType {
 	case RbacDefinition:
-		roleName, firstScope := ValidateRbacDefinition(obj, z)
+		roleName, firstScope := ValidateResRoleDefinitionObject(obj, z)
 		_, azureObj, _ := GetAzureRbacDefinitionByNameAndScope(roleName, firstScope, z)
 		if azureObj == nil {
 			fmt.Printf("Role %s, as defined in specfile, does %s exist in Azure.\n", utl.Mag(roleName), utl.Red("not"))
@@ -347,12 +345,13 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 			DiffRoleDefinitionSpecfileVsAzure(obj, azureObj)
 		}
 	case RbacAssignment:
-		azureObj := GetRbacAssignmentByObject(obj, z)
+		roleDefinitionId, principalId, scope := ValidateResRoleAssignmentObject(obj, z)
+		_, azureObj := GetAzureResRoleAssignmentBy3Args(roleDefinitionId, principalId, scope, z)
 		if azureObj == nil {
 			fmt.Printf("Role assignment defined in specfile does %s exist in Azure.\n", utl.Red("not"))
 		} else {
 			fmt.Printf("Role assignment defined in specfile %s exists in Azure:\n", utl.Gre("already"))
-			PrintRbacAssignment(azureObj, z)
+			PrintResRoleAssignment(azureObj, z)
 		}
 	case DirectoryGroup:
 		displayName := utl.Str(obj["displayName"])

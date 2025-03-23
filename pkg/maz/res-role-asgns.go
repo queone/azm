@@ -10,7 +10,7 @@ import (
 )
 
 // Prints RBAC role definition object in YAML-like format
-func PrintRbacAssignment(obj AzureObject, z *Config) {
+func PrintResRoleAssignment(obj AzureObject, z *Config) {
 	id := utl.Str(obj["name"])
 	if id == "" {
 		return
@@ -112,37 +112,78 @@ func PrintRbacAssignmentReport(z *Config) {
 	}
 }
 
-// Creates a role assignment as defined by give object
-func CreateRbacAssignment(x AzureObject, z *Config) {
-	if x == nil {
-		return
+// Checks if object conforms to an Azure resource role assignment format. If it's valid,
+// return the three key values: roleDefinitionId, principalId, and scope.
+func ValidateResRoleAssignmentObject(obj AzureObject, z *Config) (string, string, string) {
+	props := utl.Map(obj["properties"])
+	if props == nil {
+		utl.Die("Error with object's %s map\n", utl.Red("properties"))
 	}
-	props := utl.Map(x["properties"])
-	roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"])) // Note we only care about the UUID
+
+	roleDefinitionId := utl.Str(props["roleDefinitionId"])
+	roleDefinitionId = path.Base(roleDefinitionId) // Standardize to standalone UUID
 	principalId := utl.Str(props["principalId"])
 	scope := utl.Str(props["scope"])
+
 	if roleDefinitionId == "" || principalId == "" || scope == "" {
 		utl.Die("Specfile is missing required attributes. Need at least:\n\n" +
 			"properties:\n" +
 			"    roleDefinitionId: <UUID or fully_qualified_roleDefinitionId>\n" +
-			"    principalId: <UUID>\n" +
-			"    scope: <resource_path_scope>\n\n" +
+			"    principalId:      <UUID>\n" +
+			"    scope:            <resource_path_scope>\n\n" +
 			"See utility '-k*' options to create properly formatted sample files.\n")
 	}
 
-	// Note, there is no need to pre-check if assignment exists, since call will simply let us know
-	newUuid := uuid.New().String() // Generate a new global UUID in string format
+	return roleDefinitionId, principalId, scope
+}
+
+// Creates an Azure resource role assignment as defined by give object
+func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
+	roleDefinitionId, principalId, scope := ValidateResRoleAssignmentObject(obj, z)
+
+	// Check if role assignment already exists
+	id, _ := GetAzureResRoleAssignmentBy3Args(roleDefinitionId, principalId, scope, z)
+	if id == "" {
+		// Does not exist, let's generate a new UUID to try to create below
+		id = uuid.New().String()
+	} else {
+		utl.Die("This role assignment %s exists with ID %s\n", utl.Yel("already"), utl.Yel(id))
+	}
+	obj["name"] = id // So Print function can print it and we can see it in below prompt
+
+	// Prompt to create
+	PrintResRoleAssignment(obj, z)
+	if !force {
+		msg := "CREATE above role assignment? y/n"
+		if utl.PromptMsg(utl.Yel(msg)) != 'y' {
+			utl.Die("Aborted.\n")
+		}
+	}
+
+	// Call API to create assignment
 	payload := map[string]interface{}{
 		"properties": map[string]string{
 			"roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/" + roleDefinitionId,
 			"principalId":      principalId,
 		},
 	}
-	params := map[string]string{"api-version": "2022-04-01"} // roleAssignments
-	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + newUuid
+	params := map[string]string{"api-version": "2022-04-01"}
+	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + id
 	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
 	if statCode == 200 || statCode == 201 {
-		utl.PrintYaml(resp)
+		fmt.Printf("%s\n", utl.Gre("Successfully CREATED role definition!"))
+		azObj := AzureObject(resp) // Cast newly created assignment object to our standard type
+		utl.PrintYamlColor(azObj)
+
+		// Upsert object in local cache also
+		cache, err := GetCache(RbacAssignment, z)
+		if err != nil {
+			utl.Die("Error: %v\n", err)
+		}
+		err = cache.Upsert(azObj.TrimForCache(RbacAssignment))
+		if err != nil {
+			utl.Die("Error: %v\n", err)
+		}
 	} else {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
 		fmt.Printf("%s\n", utl.Red(msg))
@@ -150,7 +191,48 @@ func CreateRbacAssignment(x AzureObject, z *Config) {
 }
 
 // Deletes an Azure resource role assignment as defined by given object
-func DeleteRbacAssignment(force bool, obj AzureObject, z *Config) {
+func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
+	roleDefinitionId, principalId, scope := ValidateResRoleAssignmentObject(obj, z)
+
+	// Check if role assignment exists
+	azureId, _ := GetAzureResRoleAssignmentBy3Args(roleDefinitionId, principalId, scope, z)
+	if azureId == "" {
+		utl.Die("This role assignment does %s exist in Azure\n", utl.Yel("not"))
+	}
+	obj["name"] = azureId // So Print function can print it and we can see it in below prompt
+
+	// Prompt to delete
+	PrintResRoleAssignment(obj, z)
+	if !force {
+		msg := "DELETE above role assignment? y/n"
+		if utl.PromptMsg(utl.Yel(msg)) != 'y' {
+			utl.Die("Aborted.\n")
+		}
+	}
+
+	// Delete the assignment by scope and 'name' (stand-alone UUID)
+	params := map[string]string{"api-version": "2022-04-01"}
+	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + azureId
+	resp, statCode, _ := ApiDelete(apiUrl, z, params)
+	if statCode == 200 {
+		fmt.Printf("%s\n", utl.Gre("Successfully DELETED role assignment!"))
+
+		// Also remove from local cache
+		cache, err := GetCache(RbacAssignment, z)
+		if err != nil {
+			utl.Die("Error: %v\n", err)
+		}
+		err = cache.Delete(azureId)
+		if err != nil {
+			utl.Die("Error: %v\n", err)
+		}
+	} else if statCode == 204 {
+		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+		utl.Die("%s\n", utl.Yel(msg))
+	} else {
+		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
+		utl.Die("%s\n", utl.Red(msg))
+	}
 }
 
 // Deletes an Azure resource role assignment by its fully qualified object Id
@@ -329,19 +411,12 @@ func CacheAzureRbacAssignments(cache *Cache, verbose bool, z *Config) {
 	}
 }
 
-// Gets Azure resource role assignment object by matching on roleId, principalId,
-// and scope (the 3 parameters which make a role assignment unique)
-func GetRbacAssignmentByObject(targetObj AzureObject, z *Config) AzureObject {
-	// First, validate that the target role assignment object is correct
-	targetProps := utl.Map(targetObj["properties"])
-	if targetObj == nil || targetProps == nil {
-		return nil
-	}
-	targetRoleDefinitionId := path.Base(utl.Str(targetProps["roleDefinitionId"]))
-	targetPrincipalId := utl.Str(targetProps["principalId"])
-	targetScope := utl.Str(targetProps["scope"])
+// Retrieves Azure resource role assignment by matching on the three values that
+// make up a unique assignment: roleDefinitionId, principalId, and scope
+func GetAzureResRoleAssignmentBy3Args(targetRoleDefinitionId, targetPrincipalId, targetScope string, z *Config) (string, AzureObject) {
+	// Validate input
 	if targetScope == "" || targetPrincipalId == "" || targetRoleDefinitionId == "" {
-		return nil
+		return "", nil
 	}
 
 	// Get all role assignments for targetPrincipalId under targetScope
@@ -350,30 +425,25 @@ func GetRbacAssignmentByObject(targetObj AzureObject, z *Config) AzureObject {
 		"$filter":     "principalId eq '" + targetPrincipalId + "'",
 	}
 	apiUrl := ConstAzUrl + targetScope + "/providers/Microsoft.Authorization/roleAssignments"
-	resp, statCode, _ := ApiGet(apiUrl, z, params)
-	assignments := utl.Slice(resp["value"]) // Try asserting value as an object of slice type
-
-	// Check if the API call wasn't successful or returned value is invalid
-	if statCode != 200 || assignments == nil {
-		return nil // If so, return nil
-	}
-
-	// Inspect all qualifying assignments for this principalId
-	for i := range assignments {
-		assignment := utl.Map(assignments[i])      // Try casting assigment object to a map
-		props := utl.Map(assignment["properties"]) // Try casting its properties to a map
-		if assignment == nil || props == nil {
-			continue // Skip this entry if neither is a valid map
-		}
-		// Compare this entry to the target we're looking for
-		scope := utl.Str(props["scope"])
-		roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
-		if scope == targetScope && roleDefinitionId == targetRoleDefinitionId {
-			return AzureObject(assignment) // If they match, return immediately
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	assignments := utl.Slice(resp["value"])
+	if len(assignments) > 0 { // Inspect all qualifying assignments for this principalId
+		for i := range assignments {
+			element := assignments[i]
+			assignment := utl.Map(element)             // Try casting object to a map
+			props := utl.Map(assignment["properties"]) // Try casting its properties to a map
+			if assignment == nil || props == nil {
+				continue // Skip this entry if neither is a valid map
+			}
+			// Compare this entry to the target we're looking for
+			id := utl.Str(assignment["name"])
+			roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
+			if roleDefinitionId == targetRoleDefinitionId {
+				return id, AzureObject(assignment) // If they match, return immediately
+			}
 		}
 	}
-
-	return nil
+	return "", nil
 }
 
 // Retrieves a role assignment by its unique ID from the Azure resource RBAC hierarchy.
