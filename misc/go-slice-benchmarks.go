@@ -118,3 +118,5 @@ func main() {
 	// 1. These 2 methods yield essentially the same performace results.
 	// 2. The index-based loops seems cleaner and easier to read, and it thefore recommended.
 }
+
+// Test with: go run FILE

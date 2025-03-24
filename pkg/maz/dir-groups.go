@@ -113,27 +113,12 @@ func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string,
 	}
 }
 
-// Creates or updates an Azure directory group from given specfile.
-func UpsertGroupFromSpecfile(force bool, specfile string, z *Config) {
-	// Abort if specfile is not YAML
-	formatType, mazType, mapObj := GetObjectFromFile(specfile)
-	obj := AzureObject(mapObj)
-	if formatType != YamlFormat {
-		utl.Die("File is not YAML\n")
-	}
-	// Abort if specfile object isn't valid
-	if obj == nil {
-		utl.Die("Specfile does not contain a valid directory group definition.\n")
-	}
-	if mazType != DirectoryGroup {
-		utl.Die("Object defined in specfile is not a directory group.\n")
-	}
-
-	// Cannot continue without at least a displayName from that specfile
+// Creates or updates an Azure directory group from given object
+func UpsertGroup(force bool, obj AzureObject, z *Config) {
+	// Cannot continue without at least a displayName from that object
 	displayName := utl.Str(obj["displayName"])
-	msg := "Specfile object is missing"
 	if displayName == "" {
-		utl.Die("%s %s\n", msg, utl.Red("displayName"))
+		utl.Die("Object is missing %s\n", utl.Red("displayName"))
 	}
 
 	x := PreFetchAzureObject(DirectoryGroup, displayName, z)
@@ -144,13 +129,13 @@ func UpsertGroupFromSpecfile(force bool, specfile string, z *Config) {
 		// Create if group does not exist
 		// Set up obj with the minimally required attributes to create a group
 		if obj["mailEnabled"] == nil {
-			utl.Die("%s %s\n", msg, utl.Red("mailEnabled"))
+			utl.Die("Object is missing %s\n", utl.Red("mailEnabled"))
 		}
 		if obj["mailNickname"] == nil {
-			utl.Die("%s %s\n", msg, utl.Red("mailNickname"))
+			utl.Die("Object is missing %s\n", utl.Red("mailNickname"))
 		}
 		if obj["securityEnabled"] == nil {
-			utl.Die("%s %s\n", msg, utl.Red("securityEnabled"))
+			utl.Die("Object is missing %s\n", utl.Red("securityEnabled"))
 		}
 		CreateDirObject(force, obj, DirectoryGroup, z)
 	}
@@ -158,9 +143,26 @@ func UpsertGroupFromSpecfile(force bool, specfile string, z *Config) {
 
 // Helper function to check if the object is a directory group
 func IsDirectoryGroup(obj AzureObject) bool {
-	displayName := utl.Str(obj["displayName"])
-	mailEnabled := utl.Str(obj["mailEnabled"])
-	mailNickname := utl.Str(obj["mailNickname"])
-	securityEnabled := utl.Str(obj["securityEnabled"])
-	return displayName != "" && mailEnabled != "" && mailNickname != "" && securityEnabled != ""
+	// Check if 'displayName' exists and is a non-empty string
+	if utl.Str(obj["displayName"]) == "" {
+		return false
+	}
+
+	// Check if 'mailEnabled' exists
+	if obj["mailEnabled"] == nil {
+		return false
+	}
+
+	// Check if 'mailNickname' exists and is a non-empty string
+	if utl.Str(obj["mailNickname"]) == "" {
+		return false
+	}
+
+	// Check if 'securityEnabled' exists
+	if obj["securityEnabled"] == nil {
+		return false
+	}
+
+	// If all checks pass, it's a valid directory group object
+	return true
 }

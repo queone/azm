@@ -331,7 +331,7 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint[ServicePrincipal]
 	resp, _, _ = ApiGet(apiUrl, z, params)
-	native = utl.Int64(resp["@odata.count"].(float64))
+	native = utl.Int64(resp["@odata.count"])
 
 	others = all - native
 
