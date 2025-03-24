@@ -42,8 +42,10 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
 		displayName := utl.Str(obj["displayName"])
 		err := DeleteDirObject(force, displayName, mazType, z)
-		msg := fmt.Sprintf("%v", err)
-		utl.Die("%s\n", utl.Red(msg))
+		if err != nil {
+			msg := fmt.Sprintf("%v", err)
+			utl.Die("%s\n", utl.Red(msg))
+		}
 	default:
 		utl.Die("Option only available for resource role definitions and" +
 			" assignments, directory groups, and directory AppSPs. This specfile" +

@@ -102,6 +102,13 @@ func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string,
 		// It exists, let's update
 		// Note: At the moment, via CLI args, the *only* UPDATEable field is 'description'
 		UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z)
+		// TODO: Have above return obj and/or err or both?
+		// if azObj, err := UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z); err :=1 nil {
+		// 	fmt.Printf("%s\n", err)
+		// 	if azObj == nil {
+		// 		fmt.Println("The object was still updated.")
+		// 	}
+		// }
 	} else {
 		// Doesn't exist, let's create
 		// Initialize the object with the minimum required attributes for creation.
@@ -109,7 +116,12 @@ func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string,
 		obj["mailEnabled"] = false
 		obj["mailNickname"] = "NotSet"
 		obj["securityEnabled"] = true
-		CreateDirObject(force, obj, DirectoryGroup, z)
+		if azObj, err := CreateDirObject(force, obj, DirectoryGroup, z); err != nil {
+			fmt.Printf("%s\n", err)
+			if azObj == nil {
+				fmt.Println("The object was still created.")
+			}
+		}
 	}
 }
 
@@ -125,6 +137,13 @@ func UpsertGroup(force bool, obj AzureObject, z *Config) {
 	if x != nil {
 		// Update if group exists
 		UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z)
+		// TODO: Have above return obj and/or err or both?
+		// if azObj, err := UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z); err :=1 nil {
+		// 	fmt.Printf("%s\n", err)
+		// 	if azObj == nil {
+		// 		fmt.Println("The object was still updated.")
+		// 	}
+		// }
 	} else {
 		// Create if group does not exist
 		// Set up obj with the minimally required attributes to create a group
@@ -137,7 +156,12 @@ func UpsertGroup(force bool, obj AzureObject, z *Config) {
 		if obj["securityEnabled"] == nil {
 			utl.Die("Object is missing %s\n", utl.Red("securityEnabled"))
 		}
-		CreateDirObject(force, obj, DirectoryGroup, z)
+		if azObj, err := CreateDirObject(force, obj, DirectoryGroup, z); err != nil {
+			fmt.Printf("%s\n", err)
+			if azObj == nil {
+				fmt.Println("The object was still created.")
+			}
+		}
 	}
 }
 
