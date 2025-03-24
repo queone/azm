@@ -336,24 +336,27 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 			fmt.Printf("Role assignment defined in specfile %s exists in Azure:\n", utl.Gre("already"))
 			PrintResRoleAssignment(azureObj, z)
 		}
-	case DirectoryGroup:
+	case DirectoryGroup, Application, ServicePrincipal:
+		// Above call to GetObjectFromFile() guarantees below exists
 		displayName := utl.Str(obj["displayName"])
-		if displayName == "" {
-			utl.Die("Specfile object is missing %s. Cannot continue.\n", utl.Red("displayName"))
-		}
-		azureObj := GetObjectFromAzureByName("g", displayName, z)
-		// Note that there could be more than one group with same name
+
+		azureObj := GetObjectFromAzureByName(mazType, displayName, z)
+		// Note that there could be more than one object with same name
 		count := len(azureObj)
 		if count < 1 {
-			fmt.Printf("Group defined in specfile does %s exist in Azure.\n", utl.Red("not"))
+			fmt.Printf("The %s defined in specfile does %s exist in Azure.\n",
+				MazTypeNames[mazType], utl.Red("not"))
 		} else if count > 1 {
-			fmt.Printf("Found multiple Azure directory groups named %s. Cannot continue.\n", utl.Red(displayName))
+			fmt.Printf("Found multiple %s named %s. Cannot continue.\n",
+				MazTypeNames[mazType], utl.Red(displayName))
 		} else {
-			fmt.Printf("Group defined in specfile %s exists in Azure:\n", utl.Gre("already"))
-			PrintGroup(azureObj[0], z)
+			fmt.Printf("The %s defined in specfile %s exists in Azure:\n",
+				MazTypeNames[mazType], utl.Gre("already"))
+			PrintObject(mazType, azureObj[0], z)
 		}
 	default:
-		utl.Die("Unsupported %s object type found in %s specfile.\n", utl.Red(mazType), format)
+		utl.Die("This is a %s (%s) specfile, which is not currently supported.\n",
+			MazTypeNames[mazType], utl.Red(mazType))
 	}
 	os.Exit(0)
 }

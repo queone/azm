@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.6.1"
+	program_version = "0.7.0"
 )
 
 func printUsage(extended bool) {
