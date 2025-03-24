@@ -1,7 +1,11 @@
 ## Releases
 
+### v0.6.1
+Release Date: 2025-mar-24
+- Fixed in previous version: Removed float assertion in SpsCountAzure() which caused a runtime panic.
+
 ### v0.6.0
-Release Date: 2025-mar-23
+Release Date: 2025-mar-24
 - Renamed UpsertAppSpFromSpecfile() to UpsertAppSp() and simplified logic now that we have a generic GetObjectFromFile() function
 - Same for UpsertGroupFromSpecfile() to UpsertGroup()
 - Added IsResRoleDefinition() and IsResRoleAssignment() functions, and also standardized the code for AppSp and groups ones
