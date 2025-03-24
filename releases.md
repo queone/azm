@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.6.0
+Release Date: 2025-mar-23
+- Renamed UpsertAppSpFromSpecfile() to UpsertAppSp() and simplified logic now that we have a generic GetObjectFromFile() function
+- Same for UpsertGroupFromSpecfile() to UpsertGroup()
+- Added IsResRoleDefinition() and IsResRoleAssignment() functions, and also standardized the code for AppSp and groups ones
+
 ### v0.5.0
 Release Date: 2025-mar-23
 - Renamed to GetAzureRbacDefinitionByScopeAndName(), and it doesn't really need to return error

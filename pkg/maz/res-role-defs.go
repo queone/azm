@@ -125,6 +125,42 @@ func PrintResRoleDefinition(obj AzureObject, z *Config) {
 	}
 }
 
+// Helper function to check if the object is a resource role definition
+func IsResRoleDefinition(obj AzureObject) bool {
+	// Check if 'properties' exists and is a map
+	props := utl.Map(obj["properties"])
+	if props == nil {
+		return false
+	}
+
+	// Check if 'roleName' exists and is non-empty
+	if roleName := utl.Str(props["roleName"]); roleName == "" {
+		return false
+	}
+
+	// Check if 'assignableScopes' exists, is a slice, and has at least one entry
+	assignableScopes := utl.Slice(props["assignableScopes"])
+	if len(assignableScopes) == 0 {
+		return false
+	}
+
+	// Check if 'permissions' exists, is a slice, and has at least one entry
+	permissions := utl.Slice(props["permissions"])
+	if len(permissions) == 0 {
+		return false
+	}
+
+	// Check that each entry in 'permissions' is a valid map
+	for _, perm := range permissions {
+		if utl.Map(perm) == nil {
+			return false
+		}
+	}
+
+	// If all checks pass, it's a valid resource role definition
+	return true
+}
+
 // Validates given object to ensure if conforms to the format of an Azure resource
 // role definition. If it is valid, return the roleName and the firstScope.
 func ValidateResRoleDefinitionObject(obj AzureObject, z *Config) (string, string) {
@@ -205,21 +241,23 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 		}
 	}
 
+	mazType := ResRoleDefinition
+
 	// Call API to create or update definition
 	payload := obj // Obviously using the inputed object as the payload
 	params := map[string]string{"api-version": "2022-04-01"}
-	apiUrl := ConstAzUrl + firstScope + "/providers/Microsoft.Authorization/roleDefinitions/" + id
+	apiUrl := ConstAzUrl + firstScope + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
 	if statCode == 201 {
-		msg := fmt.Sprintf("Successfully %s role definition!", deployType)
+		msg := fmt.Sprintf("Successfully %s %s!", deployType, MazTypeNames[mazType])
 		fmt.Printf("%s\n", utl.Gre(msg))
 
 		// Upsert object in local cache also
-		cache, err := GetCache(ResRoleDefinition, z)
+		cache, err := GetCache(mazType, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
-		err = cache.Upsert(obj.TrimForCache(ResRoleDefinition))
+		err = cache.Upsert(obj.TrimForCache(mazType))
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
@@ -250,16 +288,18 @@ func DeleteResRoleDefinition(force bool, obj AzureObject, z *Config) {
 		}
 	}
 
+	mazType := ResRoleDefinition
+
 	// Delete the object
 	params := map[string]string{"api-version": "2022-04-01"}
-	apiUrl := ConstAzUrl + firstScope + "/providers/Microsoft.Authorization/roleDefinitions/" + id
+	apiUrl := ConstAzUrl + firstScope + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiDelete(apiUrl, z, params)
 	if statCode == 200 {
-		msg := "Successfully DELETED role definition!"
+		msg := fmt.Sprintf("Successfully DELETED %s!", MazTypeNames[mazType])
 		fmt.Printf("%s\n", utl.Gre(msg))
 
 		// Also remove from local cache
-		cache, err := GetCache(ResRoleDefinition, z)
+		cache, err := GetCache(mazType, z)
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}

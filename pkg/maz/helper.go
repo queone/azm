@@ -16,19 +16,14 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 		UpsertAzureResRoleDefinition(force, obj, z)
 	case ResRoleAssignment:
 		CreateAzureResRoleAssignment(force, obj, z)
-
-	// Refocus below target functions, renaming 'FromFile' to simply
-	// 'UpsertOBJECT_TYPE()' since above 'GetObjectFromFile' does the specfile
-	// object extraction - to eliminate the DEDUNDANCY
-
 	case Application, ServicePrincipal:
-		UpsertAppSpFromSpecfile(force, specfile, z)
-
+		UpsertAppSp(force, obj, z)
 	case DirectoryGroup:
-		UpsertGroupFromSpecfile(force, specfile, z)
-
+		UpsertGroup(force, obj, z)
 	default:
-		utl.Die("Unsupported specfile type. Only resource role definitions and assignment; groups; and AppSP specfiles are allowed.\n")
+		utl.Die("Option only available for resource role definitions and" +
+			" assignments, directory groups, and directory AppSPs. This specfile" +
+			" doesn't contain any of those types of objects.\n")
 	}
 	os.Exit(0)
 }
@@ -41,20 +36,18 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 		DeleteResRoleDefinition(force, obj, z)
 	case ResRoleAssignment:
 		DeleteAzureResRoleAssignment(force, obj, z)
-
 	case Application, ServicePrincipal:
 		displayName := utl.Str(obj["displayName"])
 		DeleteAppSp(force, displayName, z)
-
 	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
 		displayName := utl.Str(obj["displayName"])
 		err := DeleteDirObject(force, displayName, mazType, z)
 		msg := fmt.Sprintf("%v", err)
 		utl.Die("%s\n", utl.Red(msg))
-
 	default:
-		utl.Die("Unsupported specfile type. Only resource role definitions and assignment;" +
-			" groups; and AppSP specfiles are allowed.\n")
+		utl.Die("Option only available for resource role definitions and" +
+			" assignments, directory groups, and directory AppSPs. This specfile" +
+			" doesn't contain any of those types of objects.\n")
 	}
 	os.Exit(0)
 }
@@ -293,31 +286,21 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 		utl.Die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
 	}
 
-	obj = AzureObject(specfileObj) // Convert to AzureObject type
+	obj = AzureObject(specfileObj) // Cast to our standard AzureObject type
 
-	// Determine object type based on properties
-	// TODO: Move these to Is* functions like groups and AppSP below, with more checks
-	if props := utl.Map(obj["properties"]); props != nil {
-		roleName := utl.Str(props["roleName"])
-		principalId := utl.Str(props["principalId"])
-		if roleName != "" {
-			return format, ResRoleDefinition, obj
-		} else if principalId != "" {
-			return format, ResRoleAssignment, obj
-		}
+	// Determine object type
+	if IsResRoleDefinition(obj) {
+		return format, ResRoleDefinition, obj
 	}
-
-	// Check if it's a directory group
+	if IsResRoleAssignment(obj) {
+		return format, ResRoleAssignment, obj
+	}
 	if IsDirectoryGroup(obj) {
 		return format, DirectoryGroup, obj
 	}
-
-	// Check if it's an App Service Principal
 	if IsAppSp(obj) {
 		return format, Application, obj
 	}
-
-	// If no known type is found, return unknown
 	return format, UnknownObject, obj
 }
 

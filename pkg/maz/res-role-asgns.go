@@ -66,6 +66,33 @@ func PrintResRoleAssignment(obj AzureObject, z *Config) {
 	}
 }
 
+// Helper function to check if the object is a resource role assignment
+func IsResRoleAssignment(obj AzureObject) bool {
+	// Check if 'properties' exists and is a map
+	props := utl.Map(obj["properties"])
+	if props == nil {
+		return false
+	}
+
+	// Check if 'roleDefinitionId' exists and is a non-empty string
+	if roleDefinitionId := utl.Str(props["roleDefinitionId"]); roleDefinitionId == "" {
+		return false
+	}
+
+	// Check if 'principalId' exists and is a non-empty string
+	if principalId := utl.Str(props["principalId"]); principalId == "" {
+		return false
+	}
+
+	// Check if 'scope' exists and is a non-empty string
+	if scope := utl.Str(props["scope"]); scope == "" {
+		return false
+	}
+
+	// If all checks pass, it's a valid resource role assignment
+	return true
+}
+
 // Prints a human-readable report of all Azure resource role assignments in the tenant
 func PrintResRoleAssignmentReport(z *Config) {
 	roleNameMap := GetIdMapRoleDefs(z)                    // Get all role definition id:name pairs

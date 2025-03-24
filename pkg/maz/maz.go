@@ -86,8 +86,8 @@ var (
 		DirRoleAssignment: "_dir-role-asgns",
 	}
 	ApiEndpoint = map[string]string{
-		ResRoleDefinition: "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleDefinitions",
-		ResRoleAssignment: "/subscriptions/{subscriptionId}/providers/Microsoft.Authorization/roleAssignments",
+		ResRoleDefinition: "/providers/Microsoft.Authorization/roleDefinitions",
+		ResRoleAssignment: "/providers/Microsoft.Authorization/roleAssignments",
 		Subscription:      "/subscriptions",
 		ManagementGroup:   "/providers/Microsoft.Management/managementGroups",
 		DirectoryUser:     "/v1.0/users",
