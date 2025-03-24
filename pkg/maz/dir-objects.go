@@ -324,7 +324,6 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
-
 	if statCode == 204 {
 		msg := fmt.Sprintf("Successfully DELETED %s!", mazTypeName)
 		fmt.Printf("%s\n", utl.Gre(msg))
@@ -334,10 +333,13 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to get cache for %s: %w", mazTypeName, err)
 		}
-		err = cache.Delete(id)
-		if err != nil {
-			return fmt.Errorf("failed to delete object with ID %s: %w", id, err)
-		}
+		cache.Delete(id)
+		// Ignoring the error for now, because many time it just doesn exist,
+		// which is not an error. We'll need to revisit this code:
+		// err = cache.Delete(id)
+		// if err != nil {
+		// 	return fmt.Errorf("failed to delete object with ID %s: %w", id, err)
+		// }
 	} else {
 		return fmt.Errorf("http %d: %s", statCode, ApiErrorMsg(resp))
 	}
@@ -367,7 +369,7 @@ func DeleteDirObject(force bool, id, mazType string, z *Config) error {
 	id = utl.Str(obj["id"])
 	err := DeleteDirObjectInAzure(mazType, id, z)
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("issue with delete: %w", err)
 	}
 
 	return nil
@@ -375,35 +377,32 @@ func DeleteDirObject(force bool, id, mazType string, z *Config) error {
 
 // Creates directory object of given type in Azure, and updates local cache.
 func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureObject, error) {
+	mazTypeName := MazTypeNames[mazType]
+
 	// Creates object in Azure using obj as payload
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 	payload := obj
 	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
 	if statCode == 201 {
-		msg := fmt.Sprintf("Successfully CREATED %s!", MazTypeNames[mazType])
+		msg := fmt.Sprintf("Successfully CREATED %s!", mazTypeName)
 		fmt.Printf("%s\n", utl.Gre(msg))
 
 		azObj := AzureObject(resp) // Newly created object
+		id := utl.Str(azObj["id"])
 
-		// Add object to local cache
+		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			fmt.Printf("Warning: Failed to load cache: %v\n", err)
-			// TODO: Should we panic here instead of warn?
+			return azObj, fmt.Errorf("failed to get cache for %s: %w", mazTypeName, err)
 		}
-		if cache != nil {
-			cache.Upsert(azObj.TrimForCache(mazType))
-			if err := cache.Save(); err != nil {
-				fmt.Printf("Warning: Failed to save updated cache: %v\n", err)
-				// TODO: Should we panic here instead of warn?
-			}
+		err = cache.Upsert(azObj.TrimForCache(mazType))
+		if err != nil {
+			return azObj, fmt.Errorf("failed to upsert object with ID %s: %w", id, err)
 		}
 		return azObj, nil
 	} else {
-		if errDetails := ApiErrorMsg(resp); errDetails != "" {
-			return nil, fmt.Errorf("error: %s", errDetails)
-		}
-		return nil, fmt.Errorf("error: failed to create %s", MazTypeNames[mazType])
+		return nil, fmt.Errorf("http %d: filed to create %s:%s", statCode,
+			mazTypeName, ApiErrorMsg(resp))
 	}
 }
 
@@ -424,7 +423,7 @@ func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) (Az
 	var azObj AzureObject
 	var err error
 	if azObj, err = CreateDirObjectInAzure(mazType, obj, z); err != nil {
-		return nil, fmt.Errorf("%s", err.Error())
+		return azObj, fmt.Errorf("%s", err)
 	}
 
 	return azObj, nil
@@ -436,7 +435,7 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	payload := obj
 	resp, statCode, _ := ApiPatch(apiUrl, z, payload, nil)
-	if statCode != 204 {
+	if statCode == 204 {
 		msg := fmt.Sprintf("Successfully UPDATED %s!", mazTypeName)
 		fmt.Printf("%s\n", utl.Gre(msg))
 

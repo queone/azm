@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.6.3
+Release Date: 2025-mar-24
+- Fixed bug with adding a new dir object
+
 ### v0.6.2
 Release Date: 2025-mar-24
 - Updated -vs option flow to now compare appsp specfiles also
