@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.6.2
+Release Date: 2025-mar-24
+- Updated -vs option flow to now compare appsp specfiles also
+
 ### v0.6.1
 Release Date: 2025-mar-24
 - Fixed in previous version: Removed float assertion in SpsCountAzure() which caused a runtime panic.
