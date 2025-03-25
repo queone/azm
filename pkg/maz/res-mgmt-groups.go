@@ -19,8 +19,8 @@ func PrintMgmtGroup(group AzureObject) {
 		displayName := utl.Str(props["displayName"])
 		tenantId := utl.Str(props["tenantId"])
 		fmt.Printf("%-12s: %s\n", utl.Blu("id"), utl.Gre(id))
-		fmt.Printf("%-12s: %s\n", utl.Blu("display_name"), utl.Gre(displayName))
-		fmt.Printf("%-12s: %s\n", utl.Blu("tenant_id"), utl.Gre(tenantId))
+		fmt.Printf("%-12s: %s\n", utl.Blu("displayName"), utl.Gre(displayName))
+		fmt.Printf("%-12s: %s\n", utl.Blu("tenantId"), utl.Gre(tenantId))
 	}
 }
 

@@ -14,9 +14,9 @@ func PrintDirRoleDefinition(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	fmt.Printf("%s\n", utl.Gra("# Directory Role Definition"))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(utl.Str(x["displayName"])))
+	fmt.Printf("%s\n", utl.Gra("# Directory role definition"))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
 	fmt.Printf("%s: %s\n", utl.Blu("description"), utl.Gre(utl.Str(x["description"])))
 
 	// List permissions

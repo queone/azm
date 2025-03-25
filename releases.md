@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.6.5
+Release Date: 2025-mar-25
+- When printing objects, now back to using attribute names, for example displayName instead of display_name
+- Enhanced -k* option with skeleton specfile functions to now take a name for the object, which is also used for the filename
+- Brought in misc/group-benchmark.go from azgrp for future benchmarking
+
 ### v0.6.4
 Release Date: 2025-mar-24
 - More bug fixes: Typo, message 'The object was still created' had wrong check
