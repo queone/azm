@@ -8,6 +8,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/queone/azm v0.0.0-00010101000000-000000000000
 	github.com/queone/utl v1.3.8
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -19,10 +21,8 @@ require (
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
-	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/queone/azm => ./

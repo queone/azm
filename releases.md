@@ -1,5 +1,10 @@
 ## Releases
 
+### v0.6.6
+Release Date: 2025-mar-25
+- Added stand-alone script (not yet building to exec) cmd/raf.go utility to help create resource role definition specfile names
+- Prepping main.go to support future options from azapp and azgrp
+
 ### v0.6.5
 Release Date: 2025-mar-25
 - When printing objects, now back to using attribute names, for example displayName instead of display_name

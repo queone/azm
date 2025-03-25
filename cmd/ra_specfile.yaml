@@ -1,0 +1,4 @@
+properties:
+  roleDefinitionId: 868e9928-164a-40e1-b102-510afe6e18ff # Role 'Role Administrator'
+  principalId: 41d57099-debd-48d7-9420-963614461f4f # User 'Joe Schmo'
+  scope: /subscriptions/e3695348-fbe6-4923-8d19-e48b1ad0eb72  # Subscription 'sub37'

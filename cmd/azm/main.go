@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.6.5"
+	program_version = "0.6.6"
 )
 
 func printUsage(extended bool) {
@@ -52,7 +52,7 @@ func printUsage(extended bool) {
 		utl.Red("d "), utl.Red("a "), utl.Red("s "), utl.Red("m "), utl.Red("u "),
 		utl.Red("g "), utl.Red("ap"), utl.Red("sp"), utl.Red("dr"), utl.Red("da"), X,
 		utl.Whi2("Quick Examples"), n, n, n, n, n, n, n)
-	usageExtended := fmt.Sprintf("\n%s (allow reading and querying Azure objects)\n"+
+	usageExtended := fmt.Sprintf("\n%s (allow reading Azure objects)\n"+
 		"  UUID                             Show all Azure objects associated with the given UUID\n"+
 		"  -%s[j] [FILTER]                   List all %s objects tersely; optional JSON output; optional\n"+
 		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
@@ -66,18 +66,21 @@ func printUsage(extended bool) {
 		"  -taz                             Display current Azure Resource API access token\n"+
 		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
 		"\n"+
-		"%s (allow creating and managing Azure objects)\n"+
-		"  -k%s [NAME]                        Generate a YAML skeleton file for object type %s. Only\n"+
+		"%s (allow managing Azure objects)\n"+
+		"  -k%s [NAME]                       Generate a YAML skeleton file for object type %s. Only\n"+
 		"                                   certain objects are currently supported; optional name for both\n"+
-		"                                   the group and the basis for the specfile name"+
-		"  -up[f] SPECFILE|NAME             Create or update object by given SPECFILE (only for certain\n"+
-		"                                   objects); create with given name (again, only some objects); use\n"+
-		"                                   the 'f' option to suppress the confirmation prompt\n"+
-		"  -rm[f] SPECFILE|ID|NAME          Delete object by given SPECFILE (only for certain objects);\n"+
-		"                                   delete by given NAME or ID (by name is only supported on some\n"+
+		"                                   the group and the basis for the specfile name\n"+
+
+		"  -up[f] SPECFILE                  Create or update object by given SPECFILE (only for certain\n"+
 		"                                   objects); use 'f' to suppress confirmation\n"+
+		"  -rm[f] SPECFILE|ID               Delete object by given SPECFILE (only for certain objects);\n"+
+		"                                   delete by given ID; use 'f' to suppress confirmation\n"+
 		"  -rn[f] NAME|ID NEWNAME           Rename object with given NAME or ID to NEWNAME (not all objects\n"+
 		"                                   are supported); use 'f' to suppress confirmation\n"+
+		// Need versions of above for named groups
+		// Need versions of above for named appsp
+		// Need versions of above for named res role def
+
 		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
 		"                                   date (YYYY-MM-DD) or in X number of days\n"+
 		"  -aprs[f] ID SECRET_ID            Remove a secret from an App with the given ID\n"+
