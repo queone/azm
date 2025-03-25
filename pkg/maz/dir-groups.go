@@ -112,16 +112,11 @@ func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string,
 	} else {
 		// Doesn't exist, let's create
 		// Initialize the object with the minimum required attributes for creation.
-		obj["displayName"] = id // So id is actually the displayName
+		obj["displayName"] = id // Note that 'id' in this case is actually the displayName
 		obj["mailEnabled"] = false
 		obj["mailNickname"] = "NotSet"
 		obj["securityEnabled"] = true
-		if azObj, err := CreateDirObject(force, obj, DirectoryGroup, z); err != nil {
-			fmt.Printf("%s\n", err)
-			if azObj == nil {
-				fmt.Println("The object was still created.")
-			}
-		}
+		CreateDirObject(force, obj, DirectoryGroup, z)
 	}
 }
 
@@ -156,12 +151,7 @@ func UpsertGroup(force bool, obj AzureObject, z *Config) {
 		if obj["securityEnabled"] == nil {
 			utl.Die("Object is missing %s\n", utl.Red("securityEnabled"))
 		}
-		if azObj, err := CreateDirObject(force, obj, DirectoryGroup, z); err != nil {
-			fmt.Printf("%s\n", err)
-			if azObj == nil {
-				fmt.Println("The object was still created.")
-			}
-		}
+		CreateDirObject(force, obj, DirectoryGroup, z)
 	}
 }
 
