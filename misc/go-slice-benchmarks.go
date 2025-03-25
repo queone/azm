@@ -119,4 +119,4 @@ func main() {
 	// 2. The index-based loops seems cleaner and easier to read, and it thefore recommended.
 }
 
-// Test with: go run FILE
+// Test with: go run THIS_GO_FILE
