@@ -1,5 +1,12 @@
 ## Releases
 
+### v0.6.7
+Release Date: 2025-mar-25
+- Moved raf to its own prper folder cmd/raf/
+- Updated build script to also build and install raf
+- Created a raf.py
+- 
+
 ### v0.6.6
 Release Date: 2025-mar-25
 - Added stand-alone script (not yet building to exec) cmd/raf.go utility to help create resource role definition specfile names

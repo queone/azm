@@ -8,12 +8,16 @@ A Go utility that generates standardized filenames for Azure role assignment YAM
 - Prevents duplicate filenames
 - Lightweight with no external dependencies
 
-## Installation
+## Installation and Usage
+1. Compile with:
 ```bash
-go install github.com/yourusername/raf@latest
+git clone github.com/queone/azm
+cd cmd/raf
+go build -o raf raf.go
+# copy result binary to somewhere in your PATH
 ```
 
-## Usage
+Then run as:
 ```bash
 export AZ_TOKEN="your_azure_access_token"
 raf <input-yaml-file>
@@ -22,7 +26,27 @@ raf <input-yaml-file>
 Example:
 ```bash
 raf assignment.yaml
-# Output: sub-prod-01__jane-doe__contributor.yaml
+# Output: sub-prod-01_jane-doe_contributor.yaml
+```
+
+2. You can also just run as a Go script with:
+```bash
+git clone github.com/queone/azm
+cd cmd/raf
+go run raf.go <input-yaml-file>
+```
+
+3. Or run the Python script with:
+```bash
+python3 raf.py <input-yaml-file>
+```
+
+## Input Requirements
+```bash
+properties:
+  roleDefinitionId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Role ID
+  principalId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"       # User/Group/SP ID
+  scope: "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Scope path
 ```
 
 ## Specfile Name Format
@@ -30,11 +54,10 @@ The utility generates standardized filenames following this strict format:
 
 `<scope>__<principal>__<role>.yaml`
 
-
 ### Naming Rules
 1. **File Extension**: Always ends with `.yaml`
 2. **Case**: Entire filename is lowercase
-3. **Structure**: Three components separated by double underscores (`__`)
+3. **Structure**: Three components separated by underscores (`_`)
 4. **Uniqueness**: Errors if filename exists
 
 ### Component Breakdown
@@ -72,18 +95,3 @@ Key improvements:
 7. Added examples for each component type
 
 The formatting uses standard Markdown that will render nicely on GitHub/GitLab. Would you like me to adjust any part of this structure?
-
-## Input Requirements
-```bash
-properties:
-  roleDefinitionId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Role ID
-  principalId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"       # User/Group/SP ID
-  scope: "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Scope path
-```
-
-## Building From Source
-```bash
-git clone https://github.com/yourusername/raf.git
-cd raf
-go build -o raf main.go
-```
