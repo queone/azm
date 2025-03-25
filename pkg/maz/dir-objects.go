@@ -396,10 +396,9 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 	payload := obj
 	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
 	if statCode == 201 {
-		printf("Successfully %s %s!\n", utl.Gre("CREATED"), mazTypeName)
-
-		azObj = AzureObject(resp) // Grab the newly created object
+		azObj = AzureObject(resp) // Cast newly created object to our standard type
 		id := utl.Str(azObj["id"])
+		printf("Successfully %s %s with new ID %s\n", utl.Gre("CREATED"), mazTypeName, id)
 
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)

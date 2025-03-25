@@ -14,12 +14,12 @@ func PrintUser(obj map[string]interface{}, z *Config) {
 	}
 
 	// Print the most important attributes first
-	fmt.Printf("%s\n", utl.Gra("# Directory User"))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(utl.Str(obj["displayName"])))
-	fmt.Printf("%s: %s\n", utl.Blu("user_principal_name"), utl.Gre(utl.Str(obj["userPrincipalName"])))
-	fmt.Printf("%s: %s\n", utl.Blu("on_premises_sam_account_name"), utl.Gre(utl.Str(obj["onPremisesSamAccountName"])))
-	fmt.Printf("%s: %s\n", utl.Blu("on_premises_domain_ame"), utl.Gre(utl.Str(obj["onPremisesDomainName"])))
+	fmt.Printf("%s\n", utl.Gra("# Directory user"))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(obj["displayName"])))
+	fmt.Printf("%s: %s\n", utl.Blu("userPrincipalName"), utl.Gre(utl.Str(obj["userPrincipalName"])))
+	fmt.Printf("%s: %s\n", utl.Blu("onPremisesSamAccountName"), utl.Gre(utl.Str(obj["onPremisesSamAccountName"])))
+	fmt.Printf("%s: %s\n", utl.Blu("onPremisesDomainName"), utl.Gre(utl.Str(obj["onPremisesDomainName"])))
 
 	// Print app role assignment members and the specific role assigned
 	//apiUrl := ConstMgUrl + "/v1.0/users/" + id + "/appRoleAssignments"

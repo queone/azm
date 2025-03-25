@@ -15,11 +15,11 @@ func PrintSp(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	spDisplayName := utl.Str(x["displayName"])
+	displayName := utl.Str(x["displayName"])
 	fmt.Printf("%s\n", utl.Gra("# Service Principal"))
-	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(spDisplayName))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(x["appId"])))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(displayName))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
 
 	// Print certificates keys
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
@@ -50,13 +50,13 @@ func PrintSp(x AzureObject, z *Config) {
 		for _, item := range appRoles {
 			if appRole := utl.Map(item); appRole != nil {
 				rId := utl.Str(appRole["id"])
-				displayName := utl.Str(appRole["displayName"])
-				roleNameMap[rId] = displayName // Update growing list of roleNameMap
-				if len(displayName) >= 60 {
-					displayName = displayName[:57] + "..." // Shorten displayName for nicer printout
+				roleName := utl.Str(appRole["displayName"])
+				roleNameMap[rId] = roleName // Update growing list of roleNameMap
+				if len(roleName) >= 60 {
+					roleName = roleName[:57] + "..." // Shorten roleName for nicer printout
 				}
 				fmt.Printf("  %s  %-50s  %-60s\n", utl.Gre(rId),
-					utl.Gre(utl.Str(appRole["value"])), utl.Gre(displayName))
+					utl.Gre(utl.Str(appRole["value"])), utl.Gre(roleName))
 			}
 		}
 	}
@@ -202,7 +202,7 @@ func PrintSp(x AzureObject, z *Config) {
 				if utl.Str(scope["isEnabled"]) == "true" {
 					enabledStat = "Enabled"
 				}
-				apiName := spDisplayName
+				apiName := displayName
 				scopeType := "Delegated"
 				scopeValue := utl.Str(scope["value"])
 				fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",

@@ -14,10 +14,10 @@ func PrintSubscription(x AzureObject) {
 		return
 	}
 	fmt.Printf("%s\n", utl.Gra("# Subscription"))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(utl.Str(x["displayName"])))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
 	fmt.Printf("%s: %s\n", utl.Blu("state"), utl.Gre(utl.Str(x["state"])))
-	fmt.Printf("%s: %s\n", utl.Blu("tenant_id"), utl.Gre(utl.Str(x["tenantId"])))
+	fmt.Printf("%s: %s\n", utl.Blu("tenantId"), utl.Gre(utl.Str(x["tenantId"])))
 }
 
 // Gets the full ID, i.e. "/subscriptions/UUID", of all subscription currently in cache.

@@ -23,11 +23,11 @@ func PrintApp(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	appDisplayName := utl.Str(x["displayName"])
 	fmt.Printf("%s\n", utl.Gra("# Application"))
-	fmt.Printf("%s: %s\n", utl.Blu("display_name"), utl.Gre(appDisplayName))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("client_id"), utl.Gre(utl.Str(x["appId"])))
+	displayName := utl.Str(x["displayName"])
+	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(displayName))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
 
 	// Print certificates keys
 	keyCredentials := utl.Slice(x["keyCredentials"]) // Cast to a slice
@@ -88,7 +88,7 @@ func PrintApp(x AzureObject, z *Config) {
 					if utl.Str(scope["isEnabled"]) == "true" {
 						enabledStat = "Enabled"
 					}
-					apiName := appDisplayName
+					apiName := displayName
 					scopeType := "Delegated"
 					scopeValue := utl.Str(scope["value"])
 					scopeValueMap[scopeId] = scopeValue // Keep building scopeValueMap (to be used for preAuthApp below)

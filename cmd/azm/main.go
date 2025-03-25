@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.6.4"
+	program_version = "0.6.5"
 )
 
 func printUsage(extended bool) {
@@ -67,8 +67,9 @@ func printUsage(extended bool) {
 		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
 		"\n"+
 		"%s (allow creating and managing Azure objects)\n"+
-		"  -k%s                              Generate a YAML skeleton file for object type %s. Only\n"+
-		"                                   certain objects are currently supported.\n"+
+		"  -k%s [NAME]                        Generate a YAML skeleton file for object type %s. Only\n"+
+		"                                   certain objects are currently supported; optional name for both\n"+
+		"                                   the group and the basis for the specfile name"+
 		"  -up[f] SPECFILE|NAME             Create or update object by given SPECFILE (only for certain\n"+
 		"                                   objects); create with given name (again, only some objects); use\n"+
 		"                                   the 'f' option to suppress the confirmation prompt\n"+
@@ -150,7 +151,7 @@ func main() {
 			maz.PrintMatchingObjects(specifier, "", z)
 		case "-kd", "-ka", "-kg", "-kap":
 			mazType := arg1[2:]
-			maz.CreateSkeletonFile(mazType)
+			maz.CreateSkeletonFile(mazType, "")
 		case "-ar":
 			maz.PrintResRoleAssignmentReport(z)
 		case "-mt":
@@ -175,6 +176,9 @@ func main() {
 		arg2 := os.Args[2]
 		maz.SetupApiTokens(z)
 		switch arg1 {
+		case "-kd", "-ka", "-kg", "-kap":
+			mazType := arg1[2:]
+			maz.CreateSkeletonFile(mazType, arg2)
 		case "-tc":
 			maz.DecodeJwtToken(arg2)
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
