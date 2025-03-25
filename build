@@ -6,9 +6,9 @@ Gre='\e[1;32m' Red='\e[1;31m' Mag='\e[1;35m' Yel='\e[1;33m' Blu='\e[1;34m' Rst='
 
 Prg=`head -1 go.mod | awk -F'/' '{print $NF}' | awk '{print $NF}'`
 case "$OSTYPE" in
-    "linux-gnu"* ) printf "==> Linux\n" && BIN=$GOPATH/bin/${Prg} ;;
-    "darwin"* )    printf "==> macOS\n" && BIN=$GOPATH/bin/${Prg} ;;
-    "msys"* )      printf "==> Windows with GitBASH\n" && BIN=$GOPATH/bin/${Prg}.exe ;;
+    "linux-gnu"* ) printf "==> Linux\n" && BINDIR=$GOPATH/bin && EXT="" ;;
+    "darwin"* )    printf "==> macOS\n" && BINDIR=$GOPATH/bin && EXT="" ;;
+    "msys"* )      printf "==> Windows with GitBASH\n" && BINDIR=$GOPATH/bin && EXT=".exe" ;;
     * )            printf "==> Unknown OS '$OSTYPE'. Aborting.\n" && exit 1 ;;
 esac
 
@@ -23,21 +23,30 @@ go install honnef.co/go/tools/cmd/staticcheck@latest
 printf "\n==> Analyze Go code for potential issues\nstaticcheck ./...\n"
 staticcheck ./...
 
-printf "\n==> Compile required packages\ngo build -o /dev/null ./pkg/maz\n"
+printf "\n==> Compile the maz package library: go build -o /dev/null ./pkg/maz\n"
 go build -o /dev/null ./pkg/maz
 
-MainGo=cmd/azm/main.go
-printf "\n==> Build ${Gre}$Prg${Rst}\ngo build -ldflags \"-s -w\" -o $BIN $MainGo\n"
-go build -ldflags "-s -w" -o $BIN $MainGo
-printf "${Gre}$(ls -l $BIN | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
+UTIL=raf
+printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
+(
+  set -x  # Print commands as they execute
+  go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "./cmd/${UTIL}"
+)
+
+UTIL=azm
+printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
+(
+  set -x
+  go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "./cmd/${UTIL}"
+)
+
 # OPTIONAL: Examples to cross-compile for other OSes/archs:
-# GOOS=darwin  GOARCH=arm64       go build -ldflags "-s -w" -o ${Prg}
-# GOOS=windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}.exe
-# GOOS=linux   GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${Prg}
+# GOOS=darwin|linux|windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${BINDIR}/azm${EXT} 
 
-ProgramVersion=$(grep 'prgver.*=' $MainGo || grep 'program_version.*=' $MainGo | cut -d'"' -f2)
-printf "\n==> New program version = ${Gre}$ProgramVersion${Rst}\n"
-
+# Additional processing for azm utility and overall repo maintenance
+ProgramVersion=$(grep 'prgver.*=' cmd/azm/main.go || grep 'program_version.*=' cmd/azm/main.go | cut -d'"' -f2)
+printf "\n==> azm program version = ${Gre}$ProgramVersion${Rst}\n"
+printf "${Gre}$(ls -l ${BINDIR}/${UTIL}${EXT} | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
 printf "\n==> Warn on any 'replace' in go.mod\n${Red}$(grep replace go.mod)${Rst}\n"
 printf "==> Last 5 tags = $(git tag | sort -V | tail -5 | tr '\n' ', ' | sed 's/,/  /g')\n"
 CurrentTag=`git tag | sort -V | tail -1`
