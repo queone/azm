@@ -319,64 +319,76 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	return deltaSet, deltaLinkMap
 }
 
+// Deletes directory object of given type in Azure, with a confirmation prompt.
+func DeleteDirObject(force bool, id, mazType string, z *Config) {
+	// Note that 'id' may be a UUID or a displayName
+
+	mazTypeName := MazTypeNames[mazType]
+	obj := PreFetchAzureObject(mazType, id, z)
+	if obj == nil {
+		die("No %s with identifier %s\n", utl.Yel(mazTypeName), utl.Yel(id))
+	}
+
+	// Confirmation prompt
+	printf("Deleting below %s:\n", utl.Yel(mazTypeName))
+	PrintObject(mazType, obj, z)
+	if !force {
+		msg := fmt.Sprintf("%s %s? y/n ", utl.Yel("Delete"), mazTypeName)
+		if utl.PromptMsg(msg) != 'y' {
+			die("Operation aborted by user.\n")
+		}
+	}
+
+	// Delete object in Azure
+	id = utl.Str(obj["id"])
+	DeleteDirObjectInAzure(mazType, id, z)
+}
+
 // Deletes directory object of given type in Azure, and updates local cache.
 func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
 	if statCode == 204 {
-		msg := fmt.Sprintf("Successfully DELETED %s!", mazTypeName)
-		fmt.Printf("%s\n", utl.Gre(msg))
+		printf("Successfully %s %s!\n", utl.Gre("DELETED"), mazTypeName)
 
 		// Also remove from local cache
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			return fmt.Errorf("failed to get cache for %s: %w", mazTypeName, err)
+			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
-		cache.Delete(id)
-		// Ignoring the error for now, because many time it just doesn exist,
-		// which is not an error. We'll need to revisit this code:
-		// err = cache.Delete(id)
-		// if err != nil {
-		// 	return fmt.Errorf("failed to delete object with ID %s: %w", id, err)
-		// }
+		err = cache.Delete(id)
+		if err != nil {
+			Log("Failed to delete object with ID %s: %w\n", id, err)
+		}
 	} else {
-		return fmt.Errorf("http %d: %s", statCode, ApiErrorMsg(resp))
+		printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
 	return nil
 }
 
-// Deletes directory object of given type in Azure, with a confirmation prompt.
-func DeleteDirObject(force bool, id, mazType string, z *Config) error {
-	// Note that 'id' may be a UUID or a displayName
-
+// Creates directory object of given type in Azure, with a confirmation prompt.
+func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) AzureObject {
+	// Present confirmation prompt if force isn't set
 	mazTypeName := MazTypeNames[mazType]
-	obj := PreFetchAzureObject(mazType, id, z)
-	if obj == nil {
-		return fmt.Errorf("no %s with identifier '%s'", mazTypeName, id)
-	}
-
-	// Confirmation prompt
-	PrintObject(mazType, obj, z)
+	printf("Creating new %s with below attributes:\n", utl.Yel(mazTypeName))
+	utl.PrintYamlColor(obj)
 	if !force {
-		msg := utl.Yel("Delete " + mazTypeName + "? y/n ")
+		msg := fmt.Sprintf("%s %s ? y/n ", utl.Yel("Create"), mazTypeName)
 		if utl.PromptMsg(msg) != 'y' {
-			return fmt.Errorf("operation aborted by user")
+			die("Operation aborted by user.\n")
 		}
 	}
 
-	// Delete object in Azure
-	id = utl.Str(obj["id"])
-	err := DeleteDirObjectInAzure(mazType, id, z)
-	if err != nil {
-		return fmt.Errorf("issue with delete: %w", err)
-	}
+	// Create the object in Azure, and return result
+	azObj := CreateDirObjectInAzure(mazType, obj, z)
 
-	return nil
+	return azObj
 }
 
 // Creates directory object of given type in Azure, and updates local cache.
-func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureObject, error) {
+func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObject {
+	azObj := AzureObject{}
 	mazTypeName := MazTypeNames[mazType]
 
 	// Creates object in Azure using obj as payload
@@ -384,49 +396,42 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) (AzureOb
 	payload := obj
 	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
 	if statCode == 201 {
-		msg := fmt.Sprintf("Successfully CREATED %s!", mazTypeName)
-		fmt.Printf("%s\n", utl.Gre(msg))
+		printf("Successfully %s %s!\n", utl.Gre("CREATED"), mazTypeName)
 
-		azObj := AzureObject(resp) // Newly created object
+		azObj = AzureObject(resp) // Grab the newly created object
 		id := utl.Str(azObj["id"])
 
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			return azObj, fmt.Errorf("failed to get cache for %s: %w", mazTypeName, err)
+			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Upsert(azObj.TrimForCache(mazType))
 		if err != nil {
-			return azObj, fmt.Errorf("failed to upsert object with ID %s: %w", id, err)
+			Log("Failed to upsert object with ID %s: %w\n", id, err)
 		}
-		return azObj, nil
 	} else {
-		return nil, fmt.Errorf("http %d: filed to create %s:%s", statCode,
-			mazTypeName, ApiErrorMsg(resp))
+		printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
+	return azObj
 }
 
-// Creates directory object of given type in Azure, with a confirmation prompt.
-func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) (AzureObject, error) {
-	// Present confirmation prompt if force isn't set
+// Updates directory object of given type in Azure, with a confirmation prompt.
+func UpdateDirObject(force bool, id string, obj AzureObject, mazType string, z *Config) {
 	mazTypeName := MazTypeNames[mazType]
-	fmt.Printf("%s\n", utl.Yel("Creating new "+mazTypeName+" with below attributes:"))
+
+	// Present confirmation prompt if force isn't set
+	printf("Update exiting %s with below attributes:\n", utl.Yel(mazTypeName))
 	utl.PrintYamlColor(obj)
 	if !force {
-		msg := utl.Yel("Create " + mazTypeName + "? y/n ")
+		msg := fmt.Sprintf("%s %s ? y/n ", utl.Yel("Update"), mazTypeName)
 		if utl.PromptMsg(msg) != 'y' {
-			return nil, fmt.Errorf("operation aborted by user")
+			die("Operation aborted by user.\n")
 		}
 	}
 
-	// Create the object in Azure
-	var azObj AzureObject
-	var err error
-	if azObj, err = CreateDirObjectInAzure(mazType, obj, z); err != nil {
-		return azObj, fmt.Errorf("%s", err)
-	}
-
-	return azObj, nil
+	// Update the object in Azure
+	UpdateDirObjectInAzure(mazType, id, obj, z)
 }
 
 // Updates directory object of given type in Azure, and updates local cache.
@@ -436,8 +441,7 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 	payload := obj
 	resp, statCode, _ := ApiPatch(apiUrl, z, payload, nil)
 	if statCode == 204 {
-		msg := fmt.Sprintf("Successfully UPDATED %s!", mazTypeName)
-		fmt.Printf("%s\n", utl.Gre(msg))
+		printf("Successfully %s %s!\n", utl.Gre("UPDATED"), mazTypeName)
 
 		// Above API patch call does NOT return the updated object, so to update
 		// the local cache we have to re-use our original item.
@@ -446,37 +450,16 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			return fmt.Errorf("failed to get cache for %s: %w", mazTypeName, err)
+			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Upsert(obj.TrimForCache(mazType))
 		if err != nil {
-			return fmt.Errorf("failed to upsert object with ID %s: %w", id, err)
+			Log("Failed to upsert object with ID %s: %w\n", id, err)
 		}
 	} else {
-		return fmt.Errorf("http %d: %s", statCode, ApiErrorMsg(resp))
+		printf("HTTP %d: Error updating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
 	return nil
-}
-
-// Updates directory object of given type in Azure, with a confirmation prompt.
-func UpdateDirObject(force bool, id string, obj AzureObject, mazType string, z *Config) {
-	mazTypeName := MazTypeNames[mazType]
-
-	// Present confirmation prompt if force isn't set
-	fmt.Printf("%s\n", utl.Yel("Update "+mazTypeName+" with below attributes:"))
-	utl.PrintYamlColor(obj)
-	if !force {
-		msg := utl.Yel("Update " + mazTypeName + "? y/n ")
-		if utl.PromptMsg(msg) != 'y' {
-			utl.Die("Aborted.\n")
-		}
-	}
-
-	// Update the object in Azure
-	err := UpdateDirObjectInAzure(mazType, id, obj, z)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 // Renames directory object of given type in Azure.

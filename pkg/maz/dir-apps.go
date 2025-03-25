@@ -245,7 +245,7 @@ func CheckAppSpExistence(identifier string, z *Config) (app, sp AzureObject, cod
 }
 
 // Creates an App/SP object pair by name, if they don't already exist.
-func CreateAppSpByName(force bool, displayName string, z *Config) error {
+func CreateAppSpByName(force bool, displayName string, z *Config) {
 	app, sp, state := CheckAppSpExistence(displayName, z)
 	switch state {
 	case NeitherExists:
@@ -260,54 +260,54 @@ func CreateAppSpByName(force bool, displayName string, z *Config) error {
 		if !force {
 			msg := utl.Yel("Create App/SP pair with above parameters? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
-				utl.Die("%s\n", "Operation aborted by user")
+				die("%s\n", "Operation aborted by user")
 			}
 		} else {
-			fmt.Println("Creating App/SP pair with above parameters...")
+			printf("Creating App/SP pair with above parameters...")
 		}
 
-		app, err := CreateDirObjectInAzure(Application, obj, z)
-		if err != nil {
-			utl.Die("%s\n", err.Error())
+		app := CreateDirObjectInAzure(Application, obj, z)
+		if app == nil {
+			die("%s creating the App object.\n", utl.Red("Error"))
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
-		_, err = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
-		if err != nil {
-			utl.Die("%s\n", err.Error())
+		sp := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
+		if sp == nil {
+			die("%s creating the SP object.\n", utl.Red("Error"))
 		}
 	case OnlySPExists:
 		idSp := utl.Str(sp["id"])
 		appId := utl.Str(sp["appId"])
-		utl.Die("SP (%s) named '%s' exists, and the associated AppID/ClientID is %s.\n",
-			idSp, displayName, appId)
+		die("SP (%s) named '%s' exists, and the associated AppID/ClientID is %s.\n",
+			idSp, utl.Yel(displayName), appId)
 	case OnlyAppExists:
 		idApp := utl.Str(app["id"])
 		appId := utl.Str(app["appId"])
-		fmt.Printf("App (%s) named '%s' exists, its AppID/ClientID is %s.\n", idApp, displayName, appId)
+		printf("App (%s) named '%s' exists, its AppID/ClientID is %s.\n", idApp,
+			utl.Yel(displayName), appId)
 		if !force {
 			msg := utl.Yel("Create corresponding SP? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
-				utl.Die("%s\n", "Operation aborted by user")
+				die("Operation aborted by user.\n")
 			}
 		} else {
 			fmt.Println("Creating corresponding SP...")
 		}
 		spObj := AzureObject{"appId": appId}
-		_, err := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
-		if err != nil {
-			utl.Die("%s\n", err.Error())
+		sp := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
+		if sp == nil {
+			die("Error creating the SP\n")
 		}
 	case BothExist:
 		idApp := utl.Str(app["id"])
 		appId := utl.Str(app["appId"])
 		idSp := utl.Str(sp["id"])
-		utl.Die("Both App (%s) and SP (%s) named '%s' exist. They share appId '%s'.\n", idApp, idSp, displayName, appId)
+		die("Both App (%s) and SP (%s) named '%s' exist. They share appId '%s'.\n",
+			idApp, idSp, utl.Yel(displayName), appId)
 	default:
-		return fmt.Errorf("unexpected app/sp existence state")
+		die("Unexpected app/sp existence state")
 	}
-
-	return nil
 }
 
 // Deletes Azure AppSP pair from given indentifier
@@ -459,10 +459,10 @@ func UpsertAppSp(force bool, obj AzureObject, z *Config) {
 	displayName := utl.Str(obj["displayName"])
 	signInAudience := utl.Str(obj["displayName"])
 	if displayName == "" {
-		utl.Die("Object is missing %s\n", utl.Red("displayName"))
+		die("Object is missing %s\n", utl.Red("displayName"))
 	}
 	if signInAudience == "" {
-		utl.Die("Object is missing %s\n", utl.Red("signInAudience"))
+		die("Object is missing %s\n", utl.Red("signInAudience"))
 	}
 
 	// Check if either the App or the SP exist and process accordingly
@@ -472,34 +472,34 @@ func UpsertAppSp(force bool, obj AzureObject, z *Config) {
 		// So let's create them both
 		utl.PrintYamlColor(obj)
 		if !force {
-			msg := utl.Yel("Create App/SP pair with above parameters? y/n ")
+			msg := fmt.Sprintf("%s App/SP pair with above parameters? y/n", utl.Yel("Create"))
 			if utl.PromptMsg(msg) != 'y' {
-				utl.Die("%s\n", "Operation aborted by user")
+				die("Operation aborted by user.\n")
 			}
 		} else {
-			fmt.Println("Creating App/SP pair with above parameters...")
+			printf("Creating App/SP pair with above parameters...\n")
 		}
 
-		app, err := CreateDirObjectInAzure(Application, obj, z)
-		if err != nil {
-			utl.Die("%s\n", err.Error())
+		appObj := CreateDirObjectInAzure(Application, obj, z)
+		if appObj == nil {
+			die("Error creating App object\n")
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
-		_, err = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
-		if err != nil {
-			utl.Die("%s\n", err.Error())
+		spObj = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
+		if spObj == nil {
+			die("Error creating SP object\n")
 		}
 	case OnlySPExists:
 		// So let's update the SP and create the App?
 		idSp := utl.Str(sp["id"])
-		fmt.Printf("There's an existing SP (%s) named '%s'.\n", idSp, displayName)
-		utl.Die("%s\n", "This condition is not supported. Aborting.")
+		printf("There's an existing SP (%s) named '%s'.\n", idSp, utl.Yel(displayName))
+		die("This condition is not supported. Aborting.\n")
 	case OnlyAppExists:
 		// So let's update the App and create the SP
 		idApp := utl.Str(app["id"])
-		fmt.Printf("There's an existing App (%s) named '%s'.\n", idApp, displayName)
-		utl.Die("%s\n", "This condition is not supported. Aborting.")
+		printf("There's an existing App (%s) named '%s'.\n", idApp, utl.Yel(displayName))
+		die("This condition is not supported. Aborting.\n")
 	case BothExist:
 		// So let's update them both
 		idApp := utl.Str(app["id"])

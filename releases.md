@@ -1,5 +1,12 @@
 ## Releases
 
+### v0.6.4
+Release Date: 2025-mar-24
+- More bug fixes: Typo, message 'The object was still created' had wrong check
+- Added Log() function to help debugging by setting MAZ_LOG environment variable
+- Added die() and printf to maz pkg for more readable code
+- Starting to remove error returns for many functions, because they have a definitive purpose and can just die() with a message
+
 ### v0.6.3
 Release Date: 2025-mar-24
 - Fixed bug with adding a new dir object

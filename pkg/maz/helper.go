@@ -41,11 +41,7 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 		DeleteAppSp(force, displayName, z)
 	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
 		displayName := utl.Str(obj["displayName"])
-		err := DeleteDirObject(force, displayName, mazType, z)
-		if err != nil {
-			msg := fmt.Sprintf("%v", err)
-			utl.Die("%s\n", utl.Red(msg))
-		}
+		DeleteDirObject(force, displayName, mazType, z)
 	default:
 		utl.Die("Option only available for resource role definitions and" +
 			" assignments, directory groups, and directory AppSPs. This specfile" +
@@ -84,9 +80,7 @@ func DeleteObjectById(force bool, targetId string, z *Config) {
 	case Application, ServicePrincipal:
 		DeleteAppSp(force, targetId, z)
 	case DirectoryGroup, DirRoleDefinition, DirRoleAssignment:
-		err := DeleteDirObject(force, targetId, mazType, z)
-		msg := fmt.Sprintf("%v", err)
-		utl.Die("%s\n", utl.Red(msg))
+		DeleteDirObject(force, targetId, mazType, z)
 	default:
 		msg := fmt.Sprintf("Deleting %s objects by ID is not supported.", MazTypeNames[mazType])
 		utl.Die("%s\n", utl.Red(msg))
@@ -120,9 +114,7 @@ func DeleteObjectByName(force bool, name string, z *Config) {
 		case Application, ServicePrincipal:
 			DeleteAppSp(force, targetId, z)
 		case DirectoryGroup, DirRoleDefinition:
-			err := DeleteDirObject(force, targetId, mazType, z)
-			msg := fmt.Sprintf("%v", err)
-			utl.Die("%s\n", utl.Red(msg))
+			DeleteDirObject(force, targetId, mazType, z)
 		default:
 			msg := fmt.Sprintf("Utility does not support deleting %s objects by name.",
 				MazTypeNames[mazType])

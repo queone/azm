@@ -404,3 +404,33 @@ func SetupApiTokens(z *Config) {
 	z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")
 	z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
 }
+
+// isLoggingEnabled returns true if MAZ_LOG is set to a truthy value (1, true, yes).
+func isLoggingEnabled() bool {
+	val := os.Getenv("MAZ_LOG")
+	truthyValues := map[string]bool{
+		"1":    true,
+		"true": true,
+		"yes":  true,
+	}
+	return truthyValues[strings.ToLower(val)]
+}
+
+// Log prints the message only if MAZ_LOG is enabled.
+func Log(format string, args ...interface{}) {
+	if isLoggingEnabled() {
+		prefix := utl.Mag("[MAZ] ")
+		fmt.Printf(prefix+format, args...)
+	}
+}
+
+// Shorthand printf function
+func printf(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+}
+
+// Same as regular Printf function but always exits with a return code of 1
+func die(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+	os.Exit(1)
+}
