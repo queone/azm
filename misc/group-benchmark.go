@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/queone/maz"
 	"github.com/queone/utl"
 	"golang.org/x/exp/rand"
 )
@@ -35,7 +34,7 @@ func GenerateDummyGroupsJson(count int, filePath string) ([]interface{}, string)
 
 	commatized := utl.Int2StrWithCommas(count)
 	if len(groups) < 1 {
-		utl.Die("==> Failed to generate" + commatized + " groups.\n")
+		utl.Die("==> Failed to generate %s groups.\n", commatized)
 	}
 
 	utl.SaveFileJson(groups, filePath, false) // false = without compression
@@ -48,40 +47,40 @@ func GenerateDummyGroupsJson(count int, filePath string) ([]interface{}, string)
 	return groups, randomGroup["id"].(string)
 }
 
-// Generates dummy typed groups for testing.
-func GenerateDummyGroupsTyped(count int, filePath string) (maz.DirGroupList, string) {
-	rand.Seed(uint64(time.Now().UnixNano())) // Seed random number generator
-	groups := make(maz.DirGroupList, count)
-	for i := 0; i < count; i++ {
-		id := uuid.New().String()
-		displayName := fmt.Sprintf("group-%05d", i+1)
-		description := fmt.Sprintf("group %s", utl.GenerateRandomString(20))
-		isAssignableToRole := rand.Intn(2) == 1
-		group := maz.DirGroup{
-			Id:                 id,
-			DisplayName:        displayName,
-			Description:        description,
-			IsAssignableToRole: isAssignableToRole,
-		}
-		groups[i] = &group
-	}
+// // Generates dummy typed groups for testing.
+// func GenerateDummyGroupsTyped(count int, filePath string) (maz.DirGroupList, string) {
+// 	rand.Seed(uint64(time.Now().UnixNano())) // Seed random number generator
+// 	groups := make(maz.DirGroupList, count)
+// 	for i := 0; i < count; i++ {
+// 		id := uuid.New().String()
+// 		displayName := fmt.Sprintf("group-%05d", i+1)
+// 		description := fmt.Sprintf("group %s", utl.GenerateRandomString(20))
+// 		isAssignableToRole := rand.Intn(2) == 1
+// 		group := maz.DirGroup{
+// 			Id:                 id,
+// 			DisplayName:        displayName,
+// 			Description:        description,
+// 			IsAssignableToRole: isAssignableToRole,
+// 		}
+// 		groups[i] = &group
+// 	}
 
-	commatized := utl.Int2StrWithCommas(count)
-	if len(groups) < 1 {
-		utl.Die("==> Failed to generate" + commatized + " groups.\n")
-	}
+// 	commatized := utl.Int2StrWithCommas(count)
+// 	if len(groups) < 1 {
+// 		utl.Die("==> Failed to generate" + commatized + " groups.\n")
+// 	}
 
-	if err := maz.SaveDirGroupsToCache(filePath, groups); err != nil {
-		utl.Die("==> Failed to save groups to cache.\n")
-	}
+// 	if err := maz.SaveDirGroupsToCache(filePath, groups); err != nil {
+// 		utl.Die("==> Failed to save groups to cache.\n")
+// 	}
 
-	fmt.Printf("==> Generated %s maz.DirGroup groups and saved them to cache file %s\n",
-		utl.Blu(commatized), utl.Blu(filePath))
+// 	fmt.Printf("==> Generated %s maz.DirGroup groups and saved them to cache file %s\n",
+// 		utl.Blu(commatized), utl.Blu(filePath))
 
-	// Return the generated groups and one random group's UUID
-	randomIndex := rand.Intn(count)
-	return groups, groups[randomIndex].Id
-}
+// 	// Return the generated groups and one random group's UUID
+// 	randomIndex := rand.Intn(count)
+// 	return groups, groups[randomIndex].Id
+// }
 
 // Run directory group benchmarks
 // func runBenchmark() {
