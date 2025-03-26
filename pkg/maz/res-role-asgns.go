@@ -210,6 +210,9 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 		if err != nil {
 			utl.Die("Error: %v\n", err)
 		}
+		if err := cache.Save(); err != nil {
+			Log("Failed to save cache: %v", err)
+		}
 	} else {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
 		fmt.Printf("%s\n", utl.Red(msg))
@@ -250,8 +253,11 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 			utl.Die("Error: %v\n", err)
 		}
 		err = cache.Delete(azureId)
+		if err == nil { // Only save if deletion succeeded
+			err = cache.Save()
+		}
 		if err != nil {
-			utl.Die("Error: %v\n", err)
+			die("Error: %v\n", err)
 		}
 	} else if statCode == 204 {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
