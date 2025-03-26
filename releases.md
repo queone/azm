@@ -1,11 +1,36 @@
 ## Releases
 
+### v0.7.0
+Release Date: 2025-mar-26
+- Important FetchDirObjectsDelta() and RefreshLocalCacheWithAzure() function updates:
+  1. Delta vs. Full Sync Optimization:
+    - Use regular pagination (?$top=999) for initial syncs (faster)
+    - Use delta queries (/delta) only for updates
+  2. Throttling Retries:
+    - Added exponential backoff for HTTP 429 responses
+  3. Delta Token Resilience:
+    - Fall back to full sync if delta token fails to load/save
+  4. Consistent Pagination Handling:
+    - Reused retry logic for @odata.nextLink requests
+  5. Parallelization uses Worker Pool Pattern:
+    - 5 concurrent workers process URLs
+    - Buffered channels prevent blocking
+  6. Non-Blocking Result Processing:
+    - Uses select with default to interleave:
+      - Result processing
+      - Pagination control
+  7. Graceful Shutdown:
+    - Proper channel closing
+    - Drains remaining results before return
+  8. Progress Reporting:
+    - Maintains verbose output
+    - Updates every 100 items
+
 ### v0.6.7
 Release Date: 2025-mar-25
 - Moved raf to its own prper folder cmd/raf/
 - Updated build script to also build and install raf
 - Created a raf.py
-- 
 
 ### v0.6.6
 Release Date: 2025-mar-25

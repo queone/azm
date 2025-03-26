@@ -2,6 +2,8 @@ package maz
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/queone/utl"
 )
@@ -158,7 +160,6 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 			// If found, return a list containing just this object.
 			return AzureObjectList{x}
 		}
-		// If not found, then filter will be used below in obj.HasString()
 	}
 
 	// Get current cache data, or initialize a new cache for this type
@@ -209,56 +210,73 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 // Retrieves all directory objects of given type from Azure and syncs them to local cache.
 // Note that we are updating the cache via its pointer. Shows progress if verbose = true.
 func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose bool) {
-	// Setup REST API URL for the specific type
-	apiUrl := ConstMgUrl + ApiEndpoint[mazType] // e.g., 'https://graph.microsoft.com/v1.0/groups'
+	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 
-	// Setup select criteria for each object type: what fields will trigger delta updates upon changing
-	switch mazType {
-	case DirectoryUser:
-		apiUrl += "/delta?$select=id,displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
-	case DirectoryGroup:
-		apiUrl += "/delta?$select=id,displayName,description,isAssignableToRole,createdDateTime&$top=999"
-	case Application:
-		apiUrl += "?$select=id,displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
-	case ServicePrincipal:
-		apiUrl += "?$select=id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
-	case DirRoleDefinition, DirRoleAssignment:
-		//No additional adjustment required
-	}
-
-	if len(cache.data) < 1 {
-		// These headers are only needed on the initial cache run
-		z.AddMgHeader("Prefer", "return=minimal") // Focus on $select attributes deltas
-		z.AddMgHeader("deltaToken", "latest")
-	}
-
-	// Prep to do a delta query if it is possible
-	deltaLinkMap, err := cache.LoadDeltaLink() // Attempt to load a valid delta link
-	if err != nil {
-		utl.Die("Error loading delta link: %s\n", err.Error())
-	}
-	if deltaLinkMap != nil {
-		// Try using delta link for the API call
-		if deltaLink := utl.Str(deltaLinkMap["@odata.deltaLink"]); deltaLink != "" {
-			apiUrl = deltaLink // Use delta link for the API call
+	// Use regular pagination for initial sync, delta for updates
+	if cache.Count() == 0 {
+		// Full sync (faster)
+		switch mazType {
+		case DirectoryUser:
+			apiUrl += "?$select=id,displayName,userPrincipalName,onPremisesSamAccountName&$top=999"
+		case DirectoryGroup:
+			apiUrl += "?$select=id,displayName,description,isAssignableToRole,createdDateTime&$top=999"
+		case Application:
+			apiUrl += "?$select=id,displayName,appId,requiredResourceAccess,passwordCredentials&$top=999"
+		case ServicePrincipal:
+			apiUrl += "?$select=id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
+		case DirRoleDefinition:
+			apiUrl += "?$top=999"
+		case DirRoleAssignment:
+			apiUrl += "?$top=999"
+		}
+	} else {
+		// Delta sync (efficient updates)
+		switch mazType {
+		case DirectoryUser:
+			apiUrl += "/delta?$select=id,displayName,userPrincipalName,onPremisesSamAccountName"
+		case DirectoryGroup:
+			apiUrl += "/delta?$select=id,displayName,description,isAssignableToRole,createdDateTime"
 		}
 	}
 
-	// Fetch Azure objects using the updated URL (either a full or a delta query)
-	var deltaSet AzureObjectList
-	deltaSet, deltaLinkMap = FetchDirObjectsDelta(apiUrl, z, verbose)
-
-	// Save the new delta link for future calls
-	if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
-		utl.Die("Error saving delta link: %s\n", err.Error())
+	if len(cache.data) < 1 {
+		z.AddMgHeader("Prefer", "return=minimal")
+		z.AddMgHeader("deltaToken", "latest")
 	}
 
-	// Merge the deltaSet with the cache
-	cache.Normalize(mazType, deltaSet)
+	deltaLinkMap, err := cache.LoadDeltaLink()
+	if err != nil {
+		// Fall back to full sync if delta token fails
+		Log("Delta token load failed, falling back to full sync: %v", err)
+		apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "?$select=" +
+			map[string]string{
+				DirectoryUser:     "id,displayName,userPrincipalName,onPremisesSamAccountName",
+				DirectoryGroup:    "id,displayName,description,isAssignableToRole,createdDateTime",
+				Application:       "id,displayName,appId,requiredResourceAccess,passwordCredentials",
+				ServicePrincipal:  "id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials",
+				DirRoleDefinition: "",
+				DirRoleAssignment: "",
+			}[mazType] + "&$top=999"
+	} else if deltaLinkMap != nil {
+		if deltaLink := utl.Str(deltaLinkMap["@odata.deltaLink"]); deltaLink != "" {
+			apiUrl = deltaLink
+		}
+	}
 
-	// Save the updated cache back to file
+	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, z, verbose)
+
+	// Retry delta token save once before dying
+	if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
+		Log("Delta token save failed, retrying once: %v", err)
+		time.Sleep(1 * time.Second)
+		if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
+			die("Error saving delta link after retry: %v", err)
+		}
+	}
+
+	cache.Normalize(mazType, deltaSet)
 	if err := cache.Save(); err != nil {
-		utl.Die("Error saving updated cache: %s\n", err.Error())
+		utl.Die("Error saving cache: %v", err)
 	}
 }
 
@@ -266,57 +284,107 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
 // described at https://docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectList, AzureObject) {
-	callCount := 1 // Track number of API calls
+	callCount := 1
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
-	for {
-		if verbose && statCode != 200 {
-			msg := fmt.Sprintf("%sHTTP %d: %s: Continuing to try...", rUp, statCode, ApiErrorMsg(resp))
-			fmt.Printf("%s", utl.Yel(msg))
-		}
-		// Infinite for-loop until deltaLink appears (meaning we're done getting current delta set)
-		objCount := 0
-		thisBatch := utl.Slice(resp["value"]) // Try casting value as a slice
-		if thisBatch != nil {
-			// If its a valid slice
-			objCount = len(thisBatch)
-			for i := range thisBatch {
-				objMap := utl.Map(thisBatch[i]) // Try casting element as a map
-				if objMap == nil {
-					continue // Skip this entry if not a map
+	// Parallel fetching setup
+	const (
+		workerCount   = 5
+		resultBufSize = 1000
+	)
+	workQueue := make(chan string, 10)
+	results := make(chan AzureObject, resultBufSize)
+	var wg sync.WaitGroup
+
+	// Launch workers
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for url := range workQueue {
+				resp, _ := apiGetWithRetry(url, z, verbose, 3)
+				if value := utl.Slice(resp["value"]); value != nil {
+					for _, item := range value {
+						if obj := utl.Map(item); obj != nil {
+							results <- AzureObject(obj)
+						}
+					}
 				}
-				deltaSet = append(deltaSet, AzureObject(objMap))
 			}
-		}
+		}()
+	}
 
-		if verbose {
-			// Progress count indicator. Using global var rUp to overwrite last line. Defer newline until done
-			fmt.Printf("%sCall %05d : count %05d", rUp, callCount, objCount)
-		}
+	// Close results channel when all workers finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
-		// Return immediately when deltaLink appears
-		if deltaLinkMap := utl.Map(resp["@odata.deltaLink"]); deltaLinkMap != nil {
+	workQueue <- apiUrl
+
+	// Process results and handle pagination
+	processRemaining := false
+	for {
+		if processRemaining {
+			// Drain remaining results after work completion
+			for obj := range results {
+				deltaSet = append(deltaSet, obj)
+			}
 			if verbose {
-				fmt.Print(rUp) // Go up to overwrite progress line
+				fmt.Print(rUp)
 			}
 			return deltaSet, deltaLinkMap
 		}
 
-		// Get nextLink value
-		nextLink := utl.Str(resp["@odata.nextLink"])
-		if nextLink != "" {
-			resp, statCode, _ = ApiGet(nextLink, z, nil) // Get next batch
-			callCount++
-		} else {
-			if verbose {
-				fmt.Print(rUp) // Go up to overwrite progress line
+		select {
+		case obj, ok := <-results:
+			if !ok {
+				processRemaining = true
+				continue
 			}
-			break // If nextLink is empty, we can break out of the loop
+			deltaSet = append(deltaSet, obj)
+			if verbose && len(deltaSet)%100 == 0 {
+				printf("%sCall %05d : count %05d", rUp, callCount, len(deltaSet))
+			}
+
+		default:
+			resp, _ := apiGetWithRetry(apiUrl, z, verbose, 3) // statCode intentionally ignored
+
+			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
+				deltaLinkMap = deltaLink
+				close(workQueue)
+				processRemaining = true
+				continue
+			}
+
+			if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
+				workQueue <- nextLink
+				callCount++
+				apiUrl = nextLink
+			} else {
+				close(workQueue)
+				processRemaining = true
+			}
 		}
 	}
-	return deltaSet, deltaLinkMap
+}
+
+func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (AzureObject, error) {
+	var resp AzureObject
+	var err error
+
+	for i := 0; i < maxRetries; i++ {
+		resp, _, err = ApiGet(url, z, nil) // statCode intentionally ignored
+		if err == nil {
+			return resp, nil
+		}
+		if verbose {
+			printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
+		}
+		time.Sleep(time.Second * time.Duration(1<<i))
+	}
+	return resp, err
 }
 
 // Deletes directory object of given type in Azure, with a confirmation prompt.
