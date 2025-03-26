@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/queone/utl"
 )
@@ -13,6 +14,7 @@ type Cache struct {
 	filePath      string
 	deltaLinkFile string
 	data          AzureObjectList
+	mu            sync.Mutex
 }
 
 // Initializes a Cache instance for a given type.
@@ -124,6 +126,11 @@ func (c *Cache) Load() error {
 // Save cache to file
 func (c *Cache) Save() error {
 	// TODO: Maybe take 'compressed' boolean option?
+
+	// Lock during in-memory operations only
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	return SaveFileBinaryList(c.filePath, c.data, 0600, false)
 }
 
@@ -132,22 +139,37 @@ func (c *Cache) Count() int64 {
 	return int64(len(c.data))
 }
 
-// Removes an object by its ID from the cache and saves the updated cache to disk.
+// Removes an object by its ID from the in-memory cache.
 func (c *Cache) Delete(id string) error {
+	// Note: You must call Save() separately to persist changes to disk.
+
+	// Lock during in-memory operations only
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Attempt to delete the object from the cache data
 	if !c.data.DeleteById(id) {
 		return fmt.Errorf("failed to delete object %s from cache", id)
 	}
-
-	// Save the updated cache back to the file
-	if err := c.Save(); err != nil {
-		return fmt.Errorf("failed to save updated cache: %w", err)
-	}
-
 	return nil
 }
 
+// DeleteById removes a single object
+func (c *Cache) DeleteById(id string) {
+	newData := make(AzureObjectList, 0, len(c.data))
+	for _, obj := range c.data {
+		if utl.Str(obj["id"]) != id {
+			newData = append(newData, obj)
+		}
+	}
+	c.data = newData
+}
+
 func (c *Cache) Upsert(obj AzureObject) error {
+	// Lock during in-memory operations only
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	id := utl.Str(obj["id"])
 	if id == "" {
 		id = utl.Str(obj["name"]) // Some objects use 'name' for ID
@@ -168,12 +190,18 @@ func (c *Cache) Upsert(obj AzureObject) error {
 		c.data = append(c.data, obj) // Add the new object to the cache
 	}
 
-	// Save the updated cache to ensure persistence
-	if err := c.Save(); err != nil {
-		return fmt.Errorf("failed to save updated cache: %w", err)
-	}
-
 	return nil
+}
+
+// BatchDeleteByIds removes multiple objects in one pass (O(n) instead of O(n*m))
+func (c *Cache) BatchDeleteByIds(ids utl.StringSet) {
+	newData := make(AzureObjectList, 0, len(c.data))
+	for _, obj := range c.data {
+		if _, deleted := ids[utl.Str(obj["id"])]; !deleted {
+			newData = append(newData, obj)
+		}
+	}
+	c.data = newData
 }
 
 // Recursively merges the keys from AzureObject a into b. Existing object b attributes
@@ -195,43 +223,65 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 	}
 }
 
+func (c *Cache) upsertLocked(obj AzureObject) error {
+	id := utl.Str(obj["id"])
+	if id == "" {
+		id = utl.Str(obj["name"])
+		if id == "" {
+			id = utl.Str(obj["subscriptionId"])
+			if id == "" {
+				return fmt.Errorf("object with blank ID not added to cache")
+			}
+		}
+	}
+
+	if existingObj := c.data.FindById(id); existingObj != nil {
+		MergeAzureObjects(obj, *existingObj)
+	} else {
+		c.data = append(c.data, obj)
+	}
+	return nil
+}
+
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
-	deletedIds := utl.StringSet{} // Track IDs to delete
-	uniqueIds := utl.StringSet{}  // Track unique IDs in the deltaSet
-	mergeSet := AzureObjectList{} // List for new/updated objects in deltaSet
+	// Process changes under single lock
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// 1. Process deltaSet to build mergeSet and track deleted IDs
-	for i := range deltaSet {
-		obj := deltaSet[i]
+	// 1. Process deltaSet to track changes
+	deletedIds := make(utl.StringSet)                   // Track IDs to delete
+	uniqueIds := make(utl.StringSet)                    // Track unique IDs in the deltaSet
+	mergeSet := make(AzureObjectList, 0, len(deltaSet)) // List for new/updated objects in deltaSet
 
+	for _, obj := range deltaSet {
 		id := utl.Str(obj["id"])
 		if id == "" {
-			continue // Skip items without a valid "id"
+			continue
 		}
 
-		if obj["@removed"] == nil && obj["members@delta"] == nil {
-			// New or updated object
-			if !uniqueIds.Exists(id) {
-				mergeSet = append(mergeSet, obj)
-				uniqueIds.Add(id)
-			}
-		} else {
-			// Deleted object
-			deletedIds.Add(id)
+		// Check for deletions first (most delta sets are <5% deletions)
+		if obj["@removed"] != nil || obj["members@delta"] != nil {
+			deletedIds[id] = struct{}{}
+			continue
+		}
+
+		// Dedupe in mergeSet
+		if _, exists := uniqueIds[id]; !exists {
+			uniqueIds[id] = struct{}{}
+			mergeSet = append(mergeSet, obj)
 		}
 	}
 
-	// 2. Remove deleted objects from the cache
-	for id := range deletedIds {
-		c.data.DeleteById(id) // Use the DeleteById method to remove objects
+	// 2. Batch deletion optimized for AzureObjectList
+	if len(deletedIds) > 0 {
+		c.BatchDeleteByIds(deletedIds)
 	}
 
-	// 3. Add new entries from mergeSet to the cache
-	for i := range mergeSet {
-		obj := mergeSet[i]
-		if err := c.Upsert(obj); err != nil {
-			fmt.Printf("WARNING: Failed to upsert cache object with ID '%s': %v\n", obj["id"], err)
+	// 3. Sequential upsert
+	for _, obj := range mergeSet {
+		if err := c.upsertLocked(obj); err != nil {
+			fmt.Printf("WARNING: %v\n", err)
 		}
 	}
 }

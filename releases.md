@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.7.1
+Release Date: 2025-mar-26
+- Optimized Normalize() cache function, included new BatchDeleteByIds() method for AzureObjectList type
+- Previous Cache code was open to lock contention, so we now have lock during in-memory operations
+- Cache.Delete() and Cache.Upsert() methods no longer do a Save(); this is now forced on the caller
+
 ### v0.7.0
 Release Date: 2025-mar-26
 - Important FetchDirObjectsDelta() and RefreshLocalCacheWithAzure() function updates:

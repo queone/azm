@@ -19,8 +19,6 @@ func init() {
 	gob.Register([]interface{}{})
 }
 
-// ==== AzureObject methods and functions
-
 // Checks if the filter string is found anywhere within the AzureObject.
 func (obj AzureObject) HasString(filter string) bool {
 	for i := range obj {
@@ -179,18 +177,6 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 	return trimmed
 }
 
-// ==== AzureObjectList methods and functions
-
-/*
-This package provides a set of methods and functions for managing lists of Azure objects, represented as `AzureObject` (a `map[string]interface{}`) and `AzureObjectList` (a slice of `AzureObject`). The methods are designed to efficiently manipulate and query these lists, with a focus on performance and memory optimization. A key optimization technique used throughout this package is the use of **pointers** to access and modify elements in the list directly, avoiding unnecessary copying of data.
-
-The use of pointers is particularly important in methods like `Replace`, `DeleteById`, `DeleteByName`, and `Delete`, where elements in the list are modified or removed. By accessing elements via pointers (e.g., `obj := &(*list)[j]`), the code avoids creating temporary copies of the objects, which can be costly for large lists or deeply nested structures. Instead, it directly references the underlying data in the slice, enabling in-place modifications. This approach reduces memory overhead and improves performance, especially when dealing with large datasets.
-
-For methods that query the list, such as `FindById`, `FindByName`, and `Find`, pointers are also used to return references to the matching objects rather than copying them. This allows callers to interact with the original data in the list without duplicating it. Similarly, methods like `ExistsById`, `ExistsByName`, and `Exists` leverage pointers to efficiently check for the presence of objects without unnecessary data copying.
-
-While the use of pointers introduces some syntactic complexity (e.g., dereferencing with `(*obj)`), it provides significant performance benefits. The trade-off is justified in scenarios where the lists are large or the operations are performance-critical. This design ensures that the package remains efficient and scalable while providing a clean and consistent API for managing Azure objects.
-*/
-
 // Add appends an AzureObject to the AzureObjectList.
 func (list *AzureObjectList) Add(obj AzureObject) {
 	*list = append(*list, obj) // Append the new object to the list
@@ -222,22 +208,65 @@ func (list *AzureObjectList) Replace(newObj AzureObject) bool {
 	return false // Return false if no object with a matching key was found
 }
 
-// Deletes an object from the list by matching on its ID.
+// Optimized AzureObjectList methods
 func (list *AzureObjectList) DeleteById(targetId string) bool {
 	if targetId == "" {
 		return false
 	}
-	for j := range *list {
-		obj := &(*list)[j] // Access the element directly via pointer
-		// Most objects use 'id' for their unique key, but resource role
-		// definitions and assignments, and Subscriptions use different keys.
-		if (*obj)["id"] == targetId || (*obj)["name"] == targetId || (*obj)["subscriptionId"] == targetId {
+
+	for i := 0; i < len(*list); i++ {
+		obj := (*list)[i] // Access the element directly via pointer
+		if matchId(obj, targetId) {
 			// Modify the slice in-place by removing the matched element
-			*list = append((*list)[:j], (*list)[j+1:]...)
+			*list = append((*list)[:i], (*list)[i+1:]...)
 			return true // Return true after successful deletion
 		}
 	}
-	return false // Return false if no match is found
+	return false
+}
+
+// Helper function
+func matchId(obj AzureObject, targetId string) bool {
+	// Most objects use 'id' for their unique key, but resource role
+	// definitions and assignments, and Subscriptions use different keys.
+	return obj["id"] == targetId ||
+		obj["name"] == targetId ||
+		obj["subscriptionId"] == targetId
+}
+
+// Helper function
+func matchAnyId(obj AzureObject, ids utl.StringSet) bool {
+	if _, exists := ids[utl.Str(obj["id"])]; exists {
+		return true
+	}
+	if _, exists := ids[utl.Str(obj["name"])]; exists {
+		return true
+	}
+	if _, exists := ids[utl.Str(obj["subscriptionId"])]; exists {
+		return true
+	}
+	return false
+}
+
+// New batch deletion method
+func (list *AzureObjectList) BatchDeleteByIds(ids utl.StringSet) int {
+	if len(ids) == 0 {
+		return 0
+	}
+
+	count := 0
+	newList := make(AzureObjectList, 0, len(*list))
+
+	for _, obj := range *list {
+		if !matchAnyId(obj, ids) {
+			newList = append(newList, obj)
+		} else {
+			count++
+		}
+	}
+
+	*list = newList
+	return count
 }
 
 // Deletes an object from the list by matching on its displayName.

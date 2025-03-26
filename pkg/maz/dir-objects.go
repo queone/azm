@@ -100,6 +100,9 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 		return obj // Return the fetched object even if cache update fails
 	}
 	cache.Upsert(obj.TrimForCache(mazType))
+	if err := cache.Save(); err != nil {
+		Log("Failed to save cache: %v", err)
+	}
 
 	return obj // Return the found object or nil
 }
@@ -276,7 +279,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 
 	cache.Normalize(mazType, deltaSet)
 	if err := cache.Save(); err != nil {
-		utl.Die("Error saving cache: %v", err)
+		die("Error saving cache: %v", err)
 	}
 }
 
@@ -426,6 +429,9 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Delete(id)
+		if err == nil { // Only save if deletion succeeded
+			err = cache.Save()
+		}
 		if err != nil {
 			Log("Failed to delete object with ID %s: %w\n", id, err)
 		}
@@ -477,6 +483,9 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 		if err != nil {
 			Log("Failed to upsert object with ID %s: %w\n", id, err)
 		}
+		if err := cache.Save(); err != nil {
+			Log("Failed to save cache: %v", err)
+		}
 	} else {
 		printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
@@ -522,6 +531,9 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 		err = cache.Upsert(obj.TrimForCache(mazType))
 		if err != nil {
 			Log("Failed to upsert object with ID %s: %w\n", id, err)
+		}
+		if err := cache.Save(); err != nil {
+			Log("Failed to save cache: %v", err)
 		}
 	} else {
 		printf("HTTP %d: Error updating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
