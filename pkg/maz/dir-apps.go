@@ -510,7 +510,7 @@ func UpsertAppSp(force bool, obj AzureObject, z *Config) {
 }
 
 // Helper function to check if the object is an App / Service Principal
-func IsAppSp(obj AzureObject) bool {
+func IsDirAppSp(obj AzureObject) bool {
 	// Check if 'displayName' exists and is a non-empty string
 	if utl.Str(obj["displayName"]) == "" {
 		return false

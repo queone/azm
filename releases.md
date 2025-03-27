@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.7.2
+Release Date: 2025-mar-27
+- Added azm utility -iX and -nX options and supporting functions, to print ID or name given the other
+- Also added -sfn option to generate a recommended specfile name, just the name, given a specfile or an object ID
+- Fixed bug within RefreshLocalCacheWithAzure() and FetchDirObjectsDelta() in dir-objects.go that prevented -dr option from working; Related to $top filter
+
 ### v0.7.1
 Release Date: 2025-mar-26
 - Optimized Normalize() cache function, included new BatchDeleteByIds() method for AzureObjectList type

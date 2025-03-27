@@ -429,6 +429,11 @@ func printf(format string, args ...interface{}) {
 	fmt.Printf(format, args...)
 }
 
+// Shorthand sprintf function
+func sprintf(format string, args ...interface{}) string {
+	return fmt.Sprintf(format, args...)
+}
+
 // Same as regular Printf function but always exits with a return code of 1
 func die(format string, args ...interface{}) {
 	fmt.Printf(format, args...)

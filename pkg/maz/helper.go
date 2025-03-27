@@ -268,16 +268,16 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	// Load specfile and capture the raw object, the format, and any error
 	rawObj, format, err := utl.LoadFileAuto(specfile)
 	if err != nil {
-		utl.Die("Error loading specfile %s: %v\n", utl.Yel(specfile), err)
+		die("Error loading specfile %s: %v\n", utl.Yel(specfile), err)
 	}
-	if format != YamlFormat {
-		utl.Die("Error. File %s is not in YAML format\n", utl.Yel(specfile))
+	if format != YamlFormat && format != JsonFormat {
+		die("Error. File %s is not in YAML format\n", utl.Yel(specfile))
 	}
 
 	// Attempt to unpack the object
 	specfileObj := utl.Map(rawObj)
 	if specfileObj == nil {
-		utl.Die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
+		die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
 	}
 
 	obj = AzureObject(specfileObj) // Cast to our standard AzureObject type
@@ -289,10 +289,10 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	if IsResRoleAssignment(obj) {
 		return format, ResRoleAssignment, obj
 	}
-	if IsDirectoryGroup(obj) {
+	if IsDirGroup(obj) {
 		return format, DirectoryGroup, obj
 	}
-	if IsAppSp(obj) {
+	if IsDirAppSp(obj) {
 		return format, Application, obj
 	}
 	return format, UnknownObject, obj
@@ -353,4 +353,74 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 			MazTypeNames[mazType], utl.Red(mazType))
 	}
 	os.Exit(0)
+}
+
+// Retrieves Azure object display name, given its mazType and ID
+func GetObjectNameFromId(mazType, targetId string, z *Config) string {
+	switch mazType {
+	case ResRoleDefinition:
+		obj := GetAzureResRoleDefinitionById(targetId, z)
+		props := utl.Map(obj["properties"])
+		return utl.Str(props["roleName"])
+	case Subscription:
+		obj := GetAzureSubscriptionById(targetId, z)
+		return utl.Str(obj["displayName"])
+	case ManagementGroup:
+		obj := GetAzureMgmtGroupById(targetId, z)
+		props := utl.Map(obj["properties"])
+		return utl.Str(props["displayName"])
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal,
+		DirRoleDefinition, DirRoleAssignment:
+		z.AddMgHeader("ConsistencyLevel", "eventual")
+		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + targetId
+		resp, _, _ := ApiGet(apiUrl, z, nil)
+		obj := utl.Map(resp)
+		return utl.Str(obj["displayName"])
+	default:
+		return ""
+	}
+}
+
+// Retrieves Azure object ID, given its mazType and name
+func GetObjectIdFromName(mazType, targetName string, z *Config) string {
+	switch mazType {
+	case ResRoleDefinition:
+		var obj AzureObject
+		// Call below functions which returns a list
+		list := GetAzureResRoleDefinitionsByName(targetName, z)
+		if len(list) == 0 {
+			die("There's no role with that roleName (double-check that's an actual roleName)\n")
+		} else if len(list) > 1 {
+			die("Too many role with that roleName. This is not supported.\n")
+		}
+		obj = list[0] // Isolate the single object
+		return utl.Str(obj["name"])
+	case Subscription:
+		// Call below functions which returns a list
+		if obj := GetAzureSubscriptionByName(targetName, z); obj != nil {
+			return utl.Str(obj["subscriptionId"])
+		}
+	// case ManagementGroup:
+	// 	return GetAzureMgmtGroupById(id, z)
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal,
+		DirRoleDefinition, DirRoleAssignment:
+		z.AddMgHeader("ConsistencyLevel", "eventual")
+		apiUrl := ConstMgUrl + ApiEndpoint[mazType]
+		params := map[string]string{
+			"$filter": sprintf("displayName eq '%s'", targetName),
+			"$top":    "1",
+		}
+		resp, _, _ := ApiGet(apiUrl, z, params)
+		if list := utl.Slice(resp["value"]); list != nil {
+			if obj := utl.Map(list[0]); obj != nil {
+				if id := utl.Str(obj["id"]); id != "" {
+					return id
+				}
+			}
+		}
+		return ""
+	default:
+		return ""
+	}
+	return ""
 }

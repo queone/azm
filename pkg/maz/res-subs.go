@@ -153,6 +153,23 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 	}
 }
 
+// Gets a specific Azure subscription object by its nme
+func GetAzureSubscriptionByName(targetName string, z *Config) AzureObject {
+	params := map[string]string{"api-version": "2024-11-01"}
+	apiUrl := ConstAzUrl + "/subscriptions"
+	resp, _, _ := ApiGet(apiUrl, z, params)
+	subscriptions := utl.Slice(resp["value"])
+	for i := range subscriptions {
+		obj := subscriptions[i]
+		if subscription := utl.Map(obj); subscription != nil {
+			if utl.Str(subscription["displayName"]) == targetName {
+				return AzureObject(subscription)
+			}
+		}
+	}
+	return nil
+}
+
 // Gets a specific Azure subscription by its stand-alone object UUID
 func GetAzureSubscriptionById(id string, z *Config) AzureObject {
 	params := map[string]string{"api-version": "2024-11-01"}

@@ -24,6 +24,10 @@ func ObjectCountLocal(mazType string, z *Config) int64 {
 // Returns the number of objects of given type in the Azure tenant.
 func ObjectCountAzure(t string, z *Config) int64 {
 	z.AddMgHeader("ConsistencyLevel", "eventual")
+	// Above indicates that we are okay with receiving data that may not be the most
+	// up-to-date. For this function, performance is prioritized over immediate
+	// consistency. It allows the system to return data that might be slightly
+	// stale but can be retrieved more quickly.
 	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/$count"
 	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	if statCode != 200 {
@@ -228,9 +232,9 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 		case ServicePrincipal:
 			apiUrl += "?$select=id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials&$top=999"
 		case DirRoleDefinition:
-			apiUrl += "?$top=999"
+			apiUrl += "?$select=id,displayName,description,isBuiltIn,isEnabled,templateId"
 		case DirRoleAssignment:
-			apiUrl += "?$top=999"
+			apiUrl += "?$select=id,directoryScopeId,principalId,roleDefinitionId"
 		}
 	} else {
 		// Delta sync (efficient updates)
@@ -251,15 +255,19 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 	if err != nil {
 		// Fall back to full sync if delta token fails
 		Log("Delta token load failed, falling back to full sync: %v", err)
-		apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "?$select=" +
-			map[string]string{
-				DirectoryUser:     "id,displayName,userPrincipalName,onPremisesSamAccountName",
-				DirectoryGroup:    "id,displayName,description,isAssignableToRole,createdDateTime",
-				Application:       "id,displayName,appId,requiredResourceAccess,passwordCredentials",
-				ServicePrincipal:  "id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials",
-				DirRoleDefinition: "",
-				DirRoleAssignment: "",
-			}[mazType] + "&$top=999"
+		queryParams := "?$select=" + map[string]string{
+			DirectoryUser:     "id,displayName,userPrincipalName,onPremisesSamAccountName",
+			DirectoryGroup:    "id,displayName,description,isAssignableToRole,createdDateTime",
+			Application:       "id,displayName,appId,requiredResourceAccess,passwordCredentials",
+			ServicePrincipal:  "id,displayName,appId,accountEnabled,appOwnerOrganizationId,passwordCredentials",
+			DirRoleDefinition: "id,displayName,description,isBuiltIn,isEnabled,templateId",
+			DirRoleAssignment: "id,directoryScopeId,principalId,roleDefinitionId",
+		}[mazType]
+		// Only add $top for supported object types
+		if mazType != DirRoleDefinition && mazType != DirRoleAssignment {
+			queryParams += "&$top=999"
+		}
+		apiUrl = ConstMgUrl + ApiEndpoint[mazType] + queryParams
 	} else if deltaLinkMap != nil {
 		if deltaLink := utl.Str(deltaLinkMap["@odata.deltaLink"]); deltaLink != "" {
 			apiUrl = deltaLink
@@ -293,8 +301,8 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 
 	// Parallel fetching setup
 	const (
-		workerCount   = 5
-		resultBufSize = 1000
+		workerCount   = 10
+		resultBufSize = 10000
 	)
 	workQueue := make(chan string, 10)
 	results := make(chan AzureObject, resultBufSize)
@@ -352,16 +360,28 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 
 		default:
-			resp, _ := apiGetWithRetry(apiUrl, z, verbose, 3) // statCode intentionally ignored
-
-			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
-				deltaLinkMap = deltaLink
+			resp, err := apiGetWithRetry(apiUrl, z, verbose, 3) // statCode intentionally ignored
+			if err != nil {
 				close(workQueue)
 				processRemaining = true
 				continue
 			}
 
-			if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
+			// First check for data
+			if value := utl.Slice(resp["value"]); value != nil {
+				for _, item := range value {
+					if obj := utl.Map(item); obj != nil {
+						results <- AzureObject(obj)
+					}
+				}
+			}
+
+			// Then handle pagination
+			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
+				deltaLinkMap = deltaLink
+				close(workQueue)
+				processRemaining = true
+			} else if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
 				workQueue <- nextLink
 				callCount++
 				apiUrl = nextLink

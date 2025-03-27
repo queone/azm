@@ -78,11 +78,11 @@ func PrintDirRoleAssignment(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	fmt.Printf("%s\n", utl.Gra("# Directory Role Assignment"))
-	fmt.Printf("%s: %s\n", utl.Blu("object_id"), utl.Gre(id))
-	fmt.Printf("%s: %s\n", utl.Blu("directory_scope_id"), utl.Gre(utl.Str(x["directoryScopeId"])))
-	fmt.Printf("%s: %s\n", utl.Blu("principal_id"), utl.Gre(utl.Str(x["principalId"])))
-	fmt.Printf("%s: %s\n", utl.Blu("role_definition_d"), utl.Gre(utl.Str(x["roleDefinitionId"])))
+	fmt.Printf("%s\n", utl.Gra("# Directory role assignment"))
+	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
+	fmt.Printf("%s: %s\n", utl.Blu("directoryScopeId"), utl.Gre(utl.Str(x["directoryScopeId"])))
+	fmt.Printf("%s: %s\n", utl.Blu("principalId"), utl.Gre(utl.Str(x["principalId"])))
+	fmt.Printf("%s: %s\n", utl.Blu("roleDefinitionId"), utl.Gre(utl.Str(x["roleDefinitionId"])))
 }
 
 // Returns count of Azure AD directory role entries in current tenant

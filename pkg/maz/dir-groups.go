@@ -156,7 +156,7 @@ func UpsertGroup(force bool, obj AzureObject, z *Config) {
 }
 
 // Helper function to check if the object is a directory group
-func IsDirectoryGroup(obj AzureObject) bool {
+func IsDirGroup(obj AzureObject) bool {
 	// Check if 'displayName' exists and is a non-empty string
 	if utl.Str(obj["displayName"]) == "" {
 		return false

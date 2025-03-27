@@ -415,6 +415,7 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 
 	matchingObjects := GetMatchingObjects(mazType, filter, false, z) // false = get from cache, not Azure
 	matchingCount := len(matchingObjects)
+
 	if matchingCount > 1 {
 		if printJson {
 			utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
