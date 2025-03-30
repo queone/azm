@@ -37,27 +37,6 @@ func GetAzureSubscriptionsIds(z *Config) (ids []string) {
 	return ids
 }
 
-// Returns an id:name map of all Azure subscriptions
-func GetIdMapSubscriptions(z *Config) map[string]string {
-	nameMap := make(map[string]string)
-	subscriptions := GetMatchingAzureSubscriptions("", false, z) // false = get from cache, not Azure
-
-	for i := range subscriptions {
-		sub := subscriptions[i]
-		id := utl.Str(sub["subscriptionId"]) // Accessing the field directly
-		if id == "" {
-			continue // Skip if "subscriptionId" is missing or not a string
-		}
-		name := utl.Str(sub["displayName"])
-		if name == "" {
-			continue // Skip if "displayName" is missing or not a string
-		}
-		nameMap[id] = name
-	}
-
-	return nameMap
-}
-
 // Gets all Azure subscriptions matching on 'filter'. Returns entire list if filter is empty ""
 func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureObjectList {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
@@ -171,9 +150,16 @@ func GetAzureSubscriptionByName(targetName string, z *Config) AzureObject {
 }
 
 // Gets a specific Azure subscription by its stand-alone object UUID
-func GetAzureSubscriptionById(id string, z *Config) AzureObject {
+func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
+	// 1st try with new function that calls Azure Resource Graph API
+	if sub := GetAzureResObjectById(Subscription, targetId, z); sub != nil {
+		return sub // Return immediately if we found it
+	}
+
+	// Fallback to using the ARM API way if above returns nothing
+
 	params := map[string]string{"api-version": "2024-11-01"}
-	apiUrl := ConstAzUrl + "/subscriptions/" + id
+	apiUrl := ConstAzUrl + "/subscriptions/" + targetId
 	resp, _, _ := ApiGet(apiUrl, z, params)
 	azObj := AzureObject(resp)
 	azObj["maz_from_azure"] = true

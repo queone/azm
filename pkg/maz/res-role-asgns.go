@@ -24,26 +24,26 @@ func PrintResRoleAssignment(obj AzureObject, z *Config) {
 	fmt.Println(utl.Blu("properties") + ":")
 
 	// Get all role definition id:name pairs to print their names as comments
-	roleNameMap := GetIdMapRoleDefs(z)
+	roleIdMap := GetIdNameMap(ResRoleDefinition, z)
 	roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
-	comment := "# Role '" + roleNameMap[roleDefinitionId] + "'"
+	comment := "# Role '" + roleIdMap[roleDefinitionId] + "'"
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("roleDefinitionId"), utl.Gre(roleDefinitionId), utl.Gra(comment))
 
 	// Get all id:name pairs for the principal type, to print their names as comments
-	var principalNameMap map[string]string = nil
+	var principalIdMap map[string]string = nil
 	pType := utl.Str(props["principalType"])
 	switch pType {
 	case "Group":
-		principalNameMap = GetIdMapDirObjects(DirectoryGroup, z) // Get all group id:name pairs
+		principalIdMap = GetIdNameMap(DirectoryGroup, z) // Get all group id:name pairs
 	case "User":
-		principalNameMap = GetIdMapDirObjects(DirectoryUser, z) // Get all users id:name pairs
+		principalIdMap = GetIdNameMap(DirectoryUser, z) // Get all users id:name pairs
 	case "ServicePrincipal":
-		principalNameMap = GetIdMapDirObjects(ServicePrincipal, z) // Get all SPs id:name pairs
+		principalIdMap = GetIdNameMap(ServicePrincipal, z) // Get all SPs id:name pairs
 	default:
 		pType = "UnknownPrincipalType"
 	}
 	principalId := utl.Str(props["principalId"])
-	pName := principalNameMap[principalId]
+	pName := principalIdMap[principalId]
 	if pName == "" {
 		pName = "???"
 	}
@@ -51,13 +51,13 @@ func PrintResRoleAssignment(obj AzureObject, z *Config) {
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("principalId"), utl.Gre(principalId), utl.Gra(comment))
 
 	// Get all subscription id:name pairs, to print their names as comments
-	subNameMap := GetIdMapSubscriptions(z)
+	subIdMap := GetIdNameMap(Subscription, z)
 	scope := utl.Str(props["scope"])
 	colorKey := utl.Blu("scope")
 	colorValue := utl.Gre(scope)
 	if strings.HasPrefix(scope, "/subscriptions") {
 		split := strings.Split(scope, "/")
-		subName := subNameMap[split[2]]
+		subName := subIdMap[split[2]]
 		fmt.Printf("  %s: %s  %s\n", colorKey, colorValue, utl.Gra("# Subscription = "+subName))
 	} else if scope == "/" {
 		fmt.Printf("  %s: %s  %s\n", colorKey, colorValue, utl.Gra("# Tenant-wide assignment!"))
@@ -95,11 +95,11 @@ func IsResRoleAssignment(obj AzureObject) bool {
 
 // Prints a human-readable report of all Azure resource role assignments in the tenant
 func PrintResRoleAssignmentReport(z *Config) {
-	roleNameMap := GetIdMapRoleDefs(z)                    // Get all role definition id:name pairs
-	subNameMap := GetIdMapSubscriptions(z)                // Get all subscription id:name pairs
-	groupNameMap := GetIdMapDirObjects(DirectoryGroup, z) // Get all groups id:name pairs
-	userNameMap := GetIdMapDirObjects(DirectoryUser, z)   // Get all users id:name pairs
-	spNameMap := GetIdMapDirObjects(ServicePrincipal, z)  // Get all SPs id:name pairs
+	roleIdMap := GetIdNameMap(ResRoleDefinition, z) // Get all role definition id:name pairs
+	subIdMap := GetIdNameMap(Subscription, z)       // Get all subscription id:name pairs
+	groupIdMap := GetIdNameMap(DirectoryGroup, z)   // Get all groups id:name pairs
+	userIdMap := GetIdNameMap(DirectoryUser, z)     // Get all users id:name pairs
+	spIdMap := GetIdNameMap(ServicePrincipal, z)    // Get all SPs id:name pairs
 
 	assignments := GetMatchingResRoleAssignments("", false, z) // Get all the assignments. false = quietly
 
@@ -119,11 +119,11 @@ func PrintResRoleAssignmentReport(z *Config) {
 		principalName := "ID-Not-Found"
 		switch principalType {
 		case "Group":
-			principalName = groupNameMap[principalId]
+			principalName = groupIdMap[principalId]
 		case "User":
-			principalName = userNameMap[principalId]
+			principalName = userIdMap[principalId]
 		case "ServicePrincipal":
-			principalName = spNameMap[principalId]
+			principalName = spIdMap[principalId]
 		}
 
 		// Make scope a bit more readable also
@@ -131,11 +131,12 @@ func PrintResRoleAssignmentReport(z *Config) {
 		if strings.HasPrefix(scope, "/subscriptions") {
 			// Replace subscription ID with its name, but keep the rest of the resource path
 			split := strings.Split(scope, "/")
-			scope = subNameMap[split[2]] + " " + strings.Join(split[3:], "/")
+			scope = subIdMap[split[2]] + " " + strings.Join(split[3:], "/")
 		}
 		scope = strings.TrimSpace(scope)
 
-		fmt.Printf("\"%s\",\"%s\",\"%s\",\"%s\"\n", roleNameMap[roleDefinitionId], principalName, principalType, scope)
+		fmt.Printf("\"%s\",\"%s\",\"%s\",\"%s\"\n", roleIdMap[roleDefinitionId],
+			principalName, principalType, scope)
 	}
 }
 
@@ -350,10 +351,10 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
 
 	// Set up these maps for more informative verbose output
-	var mgGroupNameMap, subNameMap map[string]string
+	var mgroupIdMap, subIdMap map[string]string
 	if verbose {
-		mgGroupNameMap = GetIdMapMgmtGroups(z)
-		subNameMap = GetIdMapSubscriptions(z)
+		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
+		subIdMap = GetIdNameMap(Subscription, z)
 	}
 
 	// Search in each resource scope
@@ -396,10 +397,10 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 			scopeName := scope
 			scopeType := "subscription"
 			if strings.HasPrefix(scope, "/providers") {
-				scopeName = mgGroupNameMap[scope]
+				scopeName = mgroupIdMap[scope]
 				scopeType = "Management Group"
 			} else if strings.HasPrefix(scope, "/subscriptions") {
-				scopeName = subNameMap[path.Base(scope)]
+				scopeName = subIdMap[path.Base(scope)]
 			}
 			fmt.Printf("%sCall %05d: %05d assignments under %s %s", rUp, callCount, count, scopeType, scopeName)
 		}
@@ -460,28 +461,38 @@ func GetAzureResRoleAssignmentBy3Args(targetRoleDefinitionId, targetPrincipalId,
 }
 
 // Retrieves a role assignment by its unique ID from the Azure resource hierarchy.
-func GetAzureResRoleAssignmentById(id string, z *Config) AzureObject {
-	// Get all the scopes in the tenant resource hierarchy
-	scopes := GetAzureResRoleScopes(z)
+func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
+	// 1st try with new function that calls Azure Resource Graph API
+	if assignment := GetAzureResObjectById(ResRoleAssignment, targetId, z); assignment != nil {
+		return assignment // Return immediately if we found it
+	}
 
-	// NOTE: Microsoft documentation explicitly states that a role assignment UUID
-	// cannot be repeated across different scopes in the hierarchy. This is why we
-	// return immediately upon a successful match in any of the scopes.
+	// Fallback to using the ARM API way if above returns nothing. Unfortunately, below
+	// will still not be able to retrieve assignments hidden deep under resourceGroups.
+
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
 
-	// Search each of the tenant scopes
+	// Create a list of API URLs to check
+	apiUrls := []string{
+		// The 1st is the standard roleAssignments endpoint
+		ConstAzUrl + "/providers/Microsoft.Authorization/roleAssignments/" + targetId,
+	}
+	for _, scope := range GetAzureResRoleScopes(z) {
+		// The others are all other scopes in the tenant resource hierarchy
+		apiUrls = append(apiUrls, ConstAzUrl+scope+"/providers/Microsoft.Authorization/roleAssignments/"+targetId)
+	}
+
+	// Check each API URL in the list
 	params := map[string]string{"api-version": "2022-04-01"}
-	for _, scope := range scopes {
-		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + id
+	for _, apiUrl := range apiUrls {
 		resp, statCode, _ := ApiGet(apiUrl, z, params)
 		if statCode == 200 {
-			assignment := utl.Map(resp) // Try asserting the response as a single object of map type
-			if assignment == nil {
-				continue
+			if assignment := utl.Map(resp); assignment != nil {
+				assignment["maz_from_azure"] = true
+				return AzureObject(assignment) // Return immediately on 1st match
 			}
-			assignment["maz_from_azure"] = true
-			return AzureObject(assignment) // Return immediately on 1st match
 		}
 	}
-	return nil
+
+	return nil // Nothing found, return empty object
 }
