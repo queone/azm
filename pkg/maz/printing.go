@@ -276,6 +276,28 @@ func PrintMemberOfs(memberOf []interface{}) {
 	}
 }
 
+func ColorizeExpiryDateTime(endDateTime string) string {
+	cExpiry, err := utl.ConvertDateFormat(utl.Str(endDateTime), time.RFC3339Nano, "2006-01-02 15:04")
+	if err != nil {
+		return utl.Yel("DateFormatConversionError")
+	}
+
+	now := time.Now().Unix()
+	expiry, err := utl.DateStringToEpocInt64(utl.Str(endDateTime), time.RFC3339Nano)
+	if err != nil {
+		return utl.Yel("DateFormatConversionError")
+	}
+
+	daysDiff := (expiry - now) / 86400
+	if daysDiff <= 0 {
+		return utl.Red(cExpiry) // If it's expired print in red
+	} else if daysDiff < 7 {
+		return utl.Yel(cExpiry) // If expiring within a week print in yellow
+	} else {
+		return utl.Gre(cExpiry)
+	}
+}
+
 // Prints secret list stanza for App and SP objects
 func PrintSecretList(secretsList []interface{}) {
 	if len(secretsList) < 1 {
@@ -283,40 +305,28 @@ func PrintSecretList(secretsList []interface{}) {
 	}
 	fmt.Println(utl.Blu("secrets") + ":")
 	for _, item := range secretsList {
-		pw := utl.Map(item)
-		if pw == nil {
+		pwd := utl.Map(item)
+		if pwd == nil {
 			continue // Skip if not a map
 		}
-		cId := utl.Str(pw["keyId"])
-		cName := utl.Str(pw["displayName"])
-		cHint := utl.Str(pw["hint"]) + "********"
+		cId := utl.Gre(utl.Str(pwd["keyId"]))
+		cName := utl.Gre(utl.Str(pwd["displayName"]))
+		cHint := utl.Gre(utl.Str(pwd["hint"]) + "***")
 
 		// Reformat date strings for better readability
-		cStart, err := utl.ConvertDateFormat(utl.Str(pw["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
+		cStart, err := utl.ConvertDateFormat(utl.Str(pwd["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting startDateTime format"))
+			cStart = utl.Yel("DateFormatConversionError")
 		}
-		cExpiry, err := utl.ConvertDateFormat(utl.Str(pw["endDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
-		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime format"))
-		}
+		cExpiry := ColorizeExpiryDateTime(utl.Str(pwd["endDateTime"]))
 
-		// Check if expiring soon
-		now := time.Now().Unix()
-		expiry, err := utl.DateStringToEpocInt64(utl.Str(pw["endDateTime"]), time.RFC3339Nano)
-		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime epoc string"))
-		}
-		daysDiff := (expiry - now) / 86400
-		if daysDiff <= 0 {
-			cExpiry = utl.Red(cExpiry) // If it's expired print in red
-		} else if daysDiff < 7 {
-			cExpiry = utl.Yel(cExpiry) // If expiring within a week print in yellow
-		} else {
-			cExpiry = utl.Gre(cExpiry)
-		}
-		fmt.Printf("  %-36s  %-30s  %-16s  %-16s  %s\n", utl.Gre(cId), utl.Gre(cName),
-			utl.Gre(cHint), utl.Gre(cStart), cExpiry)
+		fmt.Printf("  - %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n",
+			utl.Blu("keyId"), cId, utl.Blu("displayName"), cName, utl.Blu("hint"), cHint,
+			utl.Blu("startDateTime"), utl.Gre(cStart), utl.Blu("expiry"), cExpiry)
+
+		// Old way, all in one line
+		// fmt.Printf("  %-36s  %-30s  %-16s  %-16s  %s\n", cId, cName,
+		// 	cHint, utl.Gre(cStart), cExpiry)
 	}
 }
 
@@ -327,44 +337,30 @@ func PrintCertificateList(certificates []interface{}) {
 	}
 	fmt.Println(utl.Blu("certificates") + ":")
 	for _, item := range certificates {
-		a := utl.Map(item)
-		if a == nil {
+		cert := utl.Map(item)
+		if cert == nil {
 			continue // Skip if not a map
 		}
-		cId := utl.Str(a["keyId"])
-		cName := utl.Str(a["displayName"])
-		cType := utl.Str(a["type"])
+		cId := utl.Gre(utl.Str(cert["keyId"]))
+		cName := utl.Gre(utl.Str(cert["displayName"]))
+		cType := utl.Gre(utl.Str(cert["type"]))
+		cCustomKeyIdentifier := utl.Gre(utl.Str(cert["customKeyIdentifier"]))
 		// Reformat date strings for better readability
-		cStart, err := utl.ConvertDateFormat(utl.Str(a["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
+		cStart, err := utl.ConvertDateFormat(utl.Str(cert["startDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
 		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting startDateTime format"))
+			cStart = utl.Yel("DateFormatConversionError")
 		}
-		cExpiry, err := utl.ConvertDateFormat(utl.Str(a["endDateTime"]), time.RFC3339Nano, "2006-01-02 15:04")
-		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime format"))
-		}
-		// Check if expiring soon
-		now := time.Now().Unix()
-		expiry, err := utl.DateStringToEpocInt64(utl.Str(a["endDateTime"]), time.RFC3339Nano)
-		if err != nil {
-			fmt.Printf("%s\n", utl.Yel("Error converting endDateTime epoc string"))
-		}
-		daysDiff := (expiry - now) / 86400
-		if daysDiff <= 0 {
-			cExpiry = utl.Red(cExpiry) // If it's expired print in red
-		} else if daysDiff < 7 {
-			cExpiry = utl.Yel(cExpiry) // If expiring within a week print in yellow
-		} else {
-			cExpiry = utl.Gre(cExpiry)
-		}
-		// There's also:
-		// 	"customKeyIdentifier": "09228573F93570D8113D90DA69D8DF6E2E396874",
-		// 	"key": "<RSA_KEY>",
-		// 	"usage": "Verify"
-		fmt.Printf("  %-36s  %-30s  %-40s  %-10s  %s\n", utl.Gre(cId), utl.Gre(cName),
-			utl.Gre(cType), utl.Gre(cStart), cExpiry)
+		cExpiry := ColorizeExpiryDateTime(utl.Str(cert["endDateTime"]))
+
+		fmt.Printf("  - %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n",
+			utl.Blu("keyId"), cId, utl.Blu("displayName"), cName, utl.Blu("type"), cType,
+			utl.Blu("customKeyIdentifier"), cCustomKeyIdentifier,
+			utl.Blu("startDateTime"), utl.Gre(cStart), utl.Blu("expiry"), cExpiry)
+
+		// Old way, all in one line
+		// fmt.Printf("  %-36s  %-30s  %-40s  %-10s  %s\n",
+		// 	utl.Gre(cId), utl.Gre(cName), utl.Gre(cType), utl.Gre(cStart), cExpiry)
 	}
-	// https://learn.microsoft.com/en-us/graph/api/application-addkey
 }
 
 // Print owners stanza for applications and service principals

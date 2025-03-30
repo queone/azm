@@ -16,18 +16,18 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print the most important attributes first
 	displayName := utl.Str(x["displayName"])
-	fmt.Printf("%s\n", utl.Gra("# Service Principal"))
+	fmt.Printf("%s\n", utl.Gra("# Service principal"))
 	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(displayName))
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
 	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
 
-	// Print certificates keys
+	// Print certificates details
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
 	resp, _, _ := ApiGet(apiUrl, z, nil)
 	keyCredentials := utl.Slice(resp["value"])
 	PrintCertificateList(keyCredentials)
 
-	// Print secret expiry and other details. Not actual secretText, which cannot be retrieve anyway!
+	// Print secrets details
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
 	resp, _, _ = ApiGet(apiUrl, z, nil)
 	passwordCredentials := utl.Slice(resp["value"])
@@ -66,7 +66,7 @@ func PrintSp(x AzureObject, z *Config) {
 	appRoleAssignedTo := GetAzureAllPages(apiUrl, z)
 	PrintAppRoleAssignmentsSp(roleNameMap, appRoleAssignedTo) // roleNameMap is used here
 
-	// Print all groups and roles it is a member of
+	// Prints groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
 	resp, _, _ = ApiGet(apiUrl, z, nil)
 	memberOf := utl.Slice(resp["value"])

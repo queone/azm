@@ -29,15 +29,37 @@ func PrintApp(x AzureObject, z *Config) {
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
 	fmt.Printf("%s: %s\n", utl.Blu("appId"), utl.Gre(utl.Str(x["appId"])))
 
-	// Print certificates keys
-	keyCredentials := utl.Slice(x["keyCredentials"]) // Cast to a slice
+	// Print certificates details
+	keyCredentials := utl.Slice(x["keyCredentials"])
 	PrintCertificateList(keyCredentials)
 
-	// Print secret list & expiry details, not actual secretText (which cannot be retrieve anyway)
-	passwordCredentials := utl.Slice(x["passwordCredentials"]) // Cast to a slice
+	// Print secrets details
+	passwordCredentials := utl.Slice(x["passwordCredentials"])
 	PrintSecretList(passwordCredentials)
 
-	// Print federated credentials
+	// Print federated credentials details
+	PrintFederatedCredentials(id, z)
+
+	// Print any owners
+	apiUrl := ConstMgUrl + "/beta/applications/" + id + "/owners"
+	resp, statusCode, _ := ApiGet(apiUrl, z, nil)
+	owners := utl.Slice(resp["value"]) // Cast to a slice
+	if statusCode == 200 {
+		PrintOwners(owners)
+	}
+
+	// Print OAuth2 permission scopes
+	api := utl.Map(x["api"])
+	PrintOAuth2PermissionScopes(api, displayName)
+
+	// Print API permissions that have already been assigned to this application
+	// Just look under the object's 'requiredResourceAccess' attribute
+	requiredResourceAccess := utl.Slice(x["requiredResourceAccess"])
+	PrintAssignedApiPermissions(requiredResourceAccess, z)
+}
+
+// Prints federated credentials list stanza for App objects
+func PrintFederatedCredentials(id string, z *Config) {
 	apiUrl := ConstMgUrl + "/v1.0/applications/" + id + "/federatedIdentityCredentials"
 	resp, statusCode, _ := ApiGet(apiUrl, z, nil)
 	fedCreds := utl.Slice(resp["value"]) // Cast to a slice
@@ -46,87 +68,102 @@ func PrintApp(x AzureObject, z *Config) {
 		for _, item := range fedCreds {
 			cred := utl.Map(item) // Try casting to a map
 			if cred == nil {
-				fmt.Printf("  %s\n", utl.Gre("(unable to read cred)"))
+				fmt.Printf("  - %s\n", utl.Gre("(unable to read credential)"))
 				continue
 			}
 			iId := utl.Gre(utl.Str(cred["id"]))
 			name := utl.Gre(utl.Str(cred["name"]))
 			sub := utl.Gre(utl.Str(cred["subject"]))
 			iss := utl.Gre(utl.Str(cred["issuer"]))
+
+			// Derive audiences string
 			var audiences []string
 			audList := utl.Slice(cred["audiences"])
 			for _, audience := range audList {
 				audiences = append(audiences, utl.Str(audience)) // Convert and append to the string slice
 			}
 			aud := utl.Gre(strings.Join(audiences, ", "))
-			// TODO: Fix the coloring padding
-			//fmt.Printf("  %-36s  %-40s  %-40s  %-40s  %s\n", iId, name, sub, iss, aud)
-			fmt.Printf("  %-36s  %-20s  %s  %s  %s\n", iId, name, sub, iss, aud)
+
+			fmt.Printf("  - %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n",
+				utl.Blu("id"), iId, utl.Blu("name"), name, utl.Blu("subject"), sub,
+				utl.Blu("issuer"), iss, utl.Blu("audiences"), aud)
+
+			// Old printout style
+			//fmt.Printf("  %-36s  %-20s  %s  %s  %s\n", iId, name, sub, iss, aud)
 		}
 	}
+}
 
-	// Print any owners
-	apiUrl = ConstMgUrl + "/beta/applications/" + id + "/owners"
-	resp, statusCode, _ = ApiGet(apiUrl, z, nil)
-	owners := utl.Slice(resp["value"]) // Cast to a slice
-	if statusCode == 200 {
-		PrintOwners(owners)
-	}
+// Prints OAuth2 permission scopes and pre-authorized applications
+func PrintOAuth2PermissionScopes(api map[string]interface{}, displayName string) {
+	oauth2PermissionScopes := utl.Slice(api["oauth2PermissionScopes"]) // Cast to a slice
+	scopeValueMap := make(map[string]string)
+	if len(oauth2PermissionScopes) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("oauth2_permission_scopes"))
+		for _, item := range oauth2PermissionScopes {
+			if scope := utl.Map(item); scope != nil {
+				// Process if casting to a map works
+				scopeId := utl.Str(scope["id"])
+				isEnabled := utl.Bool(scope["isEnabled"])
 
-	// Print any oAuth2 permission scopes
-	api := utl.Map(x["api"]) // Cast to a map
-	if api != nil {
-		oauth2PermissionScopes := utl.Slice(api["oauth2PermissionScopes"]) // Cast to a slice
-		scopeValueMap := make(map[string]string)
-		if len(oauth2PermissionScopes) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("oauth2_permission_scopes"))
-			for _, item := range oauth2PermissionScopes {
-				if scope := utl.Map(item); scope != nil {
-					// Process if casting to a map works
-					scopeId := utl.Str(scope["id"])
-					enabledStat := "Disabled"
-					if utl.Str(scope["isEnabled"]) == "true" {
-						enabledStat = "Enabled"
-					}
-					apiName := displayName
-					scopeType := "Delegated"
-					scopeValue := utl.Str(scope["value"])
-					scopeValueMap[scopeId] = scopeValue // Keep building scopeValueMap (to be used for preAuthApp below)
-					fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",
-						utl.Gre(scopeId), utl.PadSpaces(38, len(scopeId)),
-						utl.Gre(enabledStat), utl.PadSpaces(10, len(enabledStat)),
-						utl.Gre(apiName), utl.PadSpaces(50, len(apiName)),
-						utl.Gre(scopeType), utl.PadSpaces(12, len(scopeType)),
-						utl.Gre(scopeValue))
-				}
-			}
-		}
-		// Also print any pre-authorized applications
-		preAuthorizedApplications := utl.Slice(api["preAuthorizedApplications"]) // Cast to a slice
-		if len(preAuthorizedApplications) > 0 {
-			fmt.Printf("%s:\n", utl.Blu("  pre_authorized_applications"))
-			for _, item := range preAuthorizedApplications {
-				app := utl.Map(item)
-				clientId := utl.Str(app["appId"])
-				permissionIds := utl.Slice(app["permissionIds"])
-				if len(permissionIds) > 0 {
-					for _, j := range permissionIds {
-						scopeId := utl.Str(j)
-						scopeValue := scopeValueMap[scopeId]
-						fmt.Printf("    %s%s  %s\n",
-							utl.Gre(clientId), utl.PadSpaces(38, len(clientId)),
-							utl.Gre(scopeValue))
-					}
-				}
+				// enabledStat := "Disabled"
+				// if utl.Str(scope["isEnabled"]) == "true" {
+				// 	enabledStat = "Enabled"
+				// }
+
+				apiName := displayName
+				scopeType := "Delegated"
+				scopeValue := utl.Str(scope["value"])
+				scopeValueMap[scopeId] = scopeValue
+				// Keep building scopeValueMap (to be used for preAuthApp below)
+
+				fmt.Printf("  - %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n    %s: %s\n",
+					utl.Blu("id"), utl.Gre(scopeId), utl.Blu("isEnabled"), utl.Gre(isEnabled),
+					utl.Blu("apiName"), utl.Gre(apiName), utl.Blu("type"), utl.Gre(scopeType),
+					utl.Blu("value"), utl.Gre(scopeValue))
+
+				// Old printout style
+				// fmt.Printf("  %s%s  %s%s  %s%s  %s%s  %s\n",
+				// 	utl.Gre(scopeId), utl.PadSpaces(38, len(scopeId)),
+				// 	utl.Gre(enabledStat), utl.PadSpaces(10, len(enabledStat)),
+				// 	utl.Gre(apiName), utl.PadSpaces(50, len(apiName)),
+				// 	utl.Gre(scopeType), utl.PadSpaces(12, len(scopeType)),
+				// 	utl.Gre(scopeValue))
 			}
 		}
 	}
+	// Also print any pre-authorized applications
+	preAuthorizedApplications := utl.Slice(api["preAuthorizedApplications"]) // Cast to a slice
+	if len(preAuthorizedApplications) > 0 {
+		fmt.Printf("%s:\n", utl.Blu("  pre_authorized_applications"))
+		for _, item := range preAuthorizedApplications {
+			app := utl.Map(item)
+			clientId := utl.Str(app["appId"])
+			permissionIds := utl.Slice(app["permissionIds"])
+			if len(permissionIds) > 0 {
+				for _, j := range permissionIds {
+					scopeId := utl.Str(j)
+					scopeValue := scopeValueMap[scopeId]
 
-	// Print API permissions that have been ASSIGNED to this application
-	// - https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
-	// - https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
-	// Just look under the object's 'requiredResourceAccess' attribute
-	APIs := utl.Slice(x["requiredResourceAccess"]) // Cast to a slice
+					fmt.Printf("    - %s: %s\n      %s: %s\n",
+						utl.Blu("appId"), utl.Gre(clientId), utl.Blu("permissionIds"), utl.Gre(scopeValue))
+
+					// Old printout style
+					// fmt.Printf("    %s%s  %s\n",
+					// 	utl.Gre(clientId), utl.PadSpaces(38, len(clientId)),
+					// 	utl.Gre(scopeValue))
+				}
+			}
+		}
+	}
+}
+
+// Prints API permissions that have already been assigned to this application
+func PrintAssignedApiPermissions(requiredResourceAccess interface{}, z *Config) {
+	// https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
+	// https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
+
+	APIs := utl.Slice(requiredResourceAccess) // Cast to a slice
 	if len(APIs) > 0 {
 		fmt.Printf("%s:\n", utl.Blu("api_permissions_assigned"))
 		for _, item := range APIs {
@@ -260,36 +297,36 @@ func CreateAppSpByName(force bool, displayName string, z *Config) {
 		if !force {
 			msg := utl.Yel("Create App/SP pair with above parameters? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
-				die("%s\n", "Operation aborted by user")
+				utl.Die("%s\n", "Operation aborted by user")
 			}
 		} else {
-			printf("Creating App/SP pair with above parameters...")
+			fmt.Printf("Creating App/SP pair with above parameters...")
 		}
 
 		app := CreateDirObjectInAzure(Application, obj, z)
 		if app == nil {
-			die("%s creating the App object.\n", utl.Red("Error"))
+			utl.Die("%s creating the App object.\n", utl.Red("Error"))
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
 		sp := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if sp == nil {
-			die("%s creating the SP object.\n", utl.Red("Error"))
+			utl.Die("%s creating the SP object.\n", utl.Red("Error"))
 		}
 	case OnlySPExists:
 		idSp := utl.Str(sp["id"])
 		appId := utl.Str(sp["appId"])
-		die("SP (%s) named '%s' exists, and the associated AppID/ClientID is %s.\n",
+		utl.Die("SP (%s) named '%s' exists, and the associated AppID/ClientID is %s.\n",
 			idSp, utl.Yel(displayName), appId)
 	case OnlyAppExists:
 		idApp := utl.Str(app["id"])
 		appId := utl.Str(app["appId"])
-		printf("App (%s) named '%s' exists, its AppID/ClientID is %s.\n", idApp,
+		fmt.Printf("App (%s) named '%s' exists, its AppID/ClientID is %s.\n", idApp,
 			utl.Yel(displayName), appId)
 		if !force {
 			msg := utl.Yel("Create corresponding SP? y/n ")
 			if utl.PromptMsg(msg) != 'y' {
-				die("Operation aborted by user.\n")
+				utl.Die("Operation aborted by user.\n")
 			}
 		} else {
 			fmt.Println("Creating corresponding SP...")
@@ -297,16 +334,16 @@ func CreateAppSpByName(force bool, displayName string, z *Config) {
 		spObj := AzureObject{"appId": appId}
 		sp := CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if sp == nil {
-			die("Error creating the SP\n")
+			utl.Die("Error creating the SP\n")
 		}
 	case BothExist:
 		idApp := utl.Str(app["id"])
 		appId := utl.Str(app["appId"])
 		idSp := utl.Str(sp["id"])
-		die("Both App (%s) and SP (%s) named '%s' exist. They share appId '%s'.\n",
+		utl.Die("Both App (%s) and SP (%s) named '%s' exist. They share appId '%s'.\n",
 			idApp, idSp, utl.Yel(displayName), appId)
 	default:
-		die("Unexpected app/sp existence state")
+		utl.Die("Unexpected app/sp existence state")
 	}
 }
 
@@ -459,10 +496,10 @@ func UpsertAppSp(force bool, obj AzureObject, z *Config) {
 	displayName := utl.Str(obj["displayName"])
 	signInAudience := utl.Str(obj["displayName"])
 	if displayName == "" {
-		die("Object is missing %s\n", utl.Red("displayName"))
+		utl.Die("Object is missing %s\n", utl.Red("displayName"))
 	}
 	if signInAudience == "" {
-		die("Object is missing %s\n", utl.Red("signInAudience"))
+		utl.Die("Object is missing %s\n", utl.Red("signInAudience"))
 	}
 
 	// Check if either the App or the SP exist and process accordingly
@@ -474,32 +511,32 @@ func UpsertAppSp(force bool, obj AzureObject, z *Config) {
 		if !force {
 			msg := fmt.Sprintf("%s App/SP pair with above parameters? y/n", utl.Yel("Create"))
 			if utl.PromptMsg(msg) != 'y' {
-				die("Operation aborted by user.\n")
+				utl.Die("Operation aborted by user.\n")
 			}
 		} else {
-			printf("Creating App/SP pair with above parameters...\n")
+			fmt.Printf("Creating App/SP pair with above parameters...\n")
 		}
 
 		appObj := CreateDirObjectInAzure(Application, obj, z)
 		if appObj == nil {
-			die("Error creating App object\n")
+			utl.Die("Error creating App object\n")
 		}
 		appId := utl.Str(app["appId"])
 		spObj := AzureObject{"appId": appId}
 		spObj = CreateDirObjectInAzure(ServicePrincipal, spObj, z)
 		if spObj == nil {
-			die("Error creating SP object\n")
+			utl.Die("Error creating SP object\n")
 		}
 	case OnlySPExists:
 		// So let's update the SP and create the App?
 		idSp := utl.Str(sp["id"])
-		printf("There's an existing SP (%s) named '%s'.\n", idSp, utl.Yel(displayName))
-		die("This condition is not supported. Aborting.\n")
+		fmt.Printf("There's an existing SP (%s) named '%s'.\n", idSp, utl.Yel(displayName))
+		utl.Die("This condition is not supported. Aborting.\n")
 	case OnlyAppExists:
 		// So let's update the App and create the SP
 		idApp := utl.Str(app["id"])
-		printf("There's an existing App (%s) named '%s'.\n", idApp, utl.Yel(displayName))
-		die("This condition is not supported. Aborting.\n")
+		fmt.Printf("There's an existing App (%s) named '%s'.\n", idApp, utl.Yel(displayName))
+		utl.Die("This condition is not supported. Aborting.\n")
 	case BothExist:
 		// So let's update them both
 		idApp := utl.Str(app["id"])

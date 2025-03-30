@@ -69,7 +69,7 @@ func generateName(mazType string, names ...string) (fileName, objName string) {
 	// If any non-printable characters are found, exit with an error.
 	for _, r := range name {
 		if !unicode.IsPrint(r) {
-			die("Error: name contains non-printable character: %q\n", r)
+			utl.Die("Error: name contains non-printable character: %q\n", r)
 		}
 	}
 
@@ -130,7 +130,7 @@ func sanitizeFileName(s string) string {
 func CreateSkeletonFile(mazType, name string) {
 	pwd, err := os.Getwd()
 	if err != nil {
-		die("%s Error getting current working directory.\n", utl.Trace())
+		utl.Die("%s Error getting current working directory.\n", utl.Trace())
 	}
 	fileName, objName, fileContent := "", "", []byte("")
 	switch mazType {
@@ -201,11 +201,11 @@ func CreateSkeletonFile(mazType, name string) {
 	}
 	specfile := filepath.Join(pwd, fileName)
 	if utl.FileExist(specfile) {
-		die("Error: File %s already exists.\n", fileName)
+		utl.Die("Error: File %s already exists.\n", fileName)
 	}
 	f, err := os.Create(specfile) // Create the file
 	if err != nil {
-		die("Error creating file: %s", err)
+		utl.Die("Error creating file: %s", err)
 	}
 	defer f.Close()
 	f.Write(fileContent) // Write the content

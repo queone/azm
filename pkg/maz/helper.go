@@ -268,16 +268,16 @@ func GetObjectFromFile(specfile string) (format, mazType string, obj AzureObject
 	// Load specfile and capture the raw object, the format, and any error
 	rawObj, format, err := utl.LoadFileAuto(specfile)
 	if err != nil {
-		die("Error loading specfile %s: %v\n", utl.Yel(specfile), err)
+		utl.Die("Error loading specfile %s: %v\n", utl.Yel(specfile), err)
 	}
 	if format != YamlFormat && format != JsonFormat {
-		die("Error. File %s is not in YAML format\n", utl.Yel(specfile))
+		utl.Die("Error. File %s is not in YAML format\n", utl.Yel(specfile))
 	}
 
 	// Attempt to unpack the object
 	specfileObj := utl.Map(rawObj)
 	if specfileObj == nil {
-		die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
+		utl.Die("Error unpacking the object in specfile %s\n", utl.Yel(specfile))
 	}
 
 	obj = AzureObject(specfileObj) // Cast to our standard AzureObject type
@@ -409,7 +409,7 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 		z.AddMgHeader("ConsistencyLevel", "eventual")
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 		params := map[string]string{
-			"$filter": sprintf("displayName eq '%s'", targetName),
+			"$filter": fmt.Sprintf("displayName eq '%s'", targetName),
 			"$top":    "1",
 		}
 		resp, _, _ := ApiGet(apiUrl, z, params)
