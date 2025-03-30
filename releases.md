@@ -1,5 +1,12 @@
 ## Releases
 
+### v0.7.3
+Release Date: 2025-mar-30
+- Now gradually switching to GetAzureResObjectById() which uses the more performant Azure Resource Graph API
+- Fixed -a issue whereby some assignments could not be retrieved, because they are hidden deep under resourceGroup scopes 
+- New generic GetIdNameMap() replaces GetIdMapDirObjects, GetIdMapMgmtGroups, GetIdMapRoleDefs, and GetIdMapSubscriptions
+- Removed -Xi and -Xn options from azm utility, will still use GetObjectIdFromName() and GetObjectNameFromId() as internal functions
+
 ### v0.7.2
 Release Date: 2025-mar-27
 - Added azm utility -iX and -nX options and supporting functions, to print ID or name given the other

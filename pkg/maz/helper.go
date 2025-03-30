@@ -357,53 +357,55 @@ func CompareSpecfileToAzure(specfile string, z *Config) {
 
 // Retrieves Azure object display name, given its mazType and ID
 func GetObjectNameFromId(mazType, targetId string, z *Config) string {
+	// This doesn't apply to ResRoleAssignment nor DirRoleAssignment
+
 	switch mazType {
 	case ResRoleDefinition:
-		obj := GetAzureResRoleDefinitionById(targetId, z)
-		props := utl.Map(obj["properties"])
-		return utl.Str(props["roleName"])
+		obj := GetAzureResObjectById(mazType, targetId, z)
+		if obj != nil {
+			if props := utl.Map(obj["properties"]); props != nil {
+				return utl.Str(props["roleName"])
+			}
+		}
 	case Subscription:
-		obj := GetAzureSubscriptionById(targetId, z)
-		return utl.Str(obj["displayName"])
+		obj := GetAzureResObjectById(mazType, targetId, z)
+		if obj != nil {
+			return utl.Str(obj["displayName"])
+		}
 	case ManagementGroup:
-		obj := GetAzureMgmtGroupById(targetId, z)
-		props := utl.Map(obj["properties"])
-		return utl.Str(props["displayName"])
-	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal,
-		DirRoleDefinition, DirRoleAssignment:
+		obj := GetAzureResObjectById(mazType, targetId, z)
+		if obj != nil {
+			if props := utl.Map(obj["properties"]); props != nil {
+				return utl.Str(props["displayName"])
+			}
+		}
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal, DirRoleDefinition:
 		z.AddMgHeader("ConsistencyLevel", "eventual")
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + targetId
 		resp, _, _ := ApiGet(apiUrl, z, nil)
-		obj := utl.Map(resp)
-		return utl.Str(obj["displayName"])
-	default:
-		return ""
+		if obj := utl.Map(resp); obj != nil {
+			return utl.Str(obj["displayName"])
+		}
 	}
+	return ""
 }
 
 // Retrieves Azure object ID, given its mazType and name
 func GetObjectIdFromName(mazType, targetName string, z *Config) string {
+	// This doesn't apply to ResRoleAssignment nor DirRoleAssignment
+
 	switch mazType {
-	case ResRoleDefinition:
-		var obj AzureObject
-		// Call below functions which returns a list
-		list := GetAzureResRoleDefinitionsByName(targetName, z)
-		if len(list) == 0 {
-			die("There's no role with that roleName (double-check that's an actual roleName)\n")
-		} else if len(list) > 1 {
-			die("Too many role with that roleName. This is not supported.\n")
+	case ResRoleDefinition, ManagementGroup:
+		obj := GetAzureResObjectByName(mazType, targetName, z)
+		if obj != nil {
+			return utl.Str(obj["name"])
 		}
-		obj = list[0] // Isolate the single object
-		return utl.Str(obj["name"])
 	case Subscription:
-		// Call below functions which returns a list
-		if obj := GetAzureSubscriptionByName(targetName, z); obj != nil {
+		obj := GetAzureResObjectByName(mazType, targetName, z)
+		if obj != nil {
 			return utl.Str(obj["subscriptionId"])
 		}
-	// case ManagementGroup:
-	// 	return GetAzureMgmtGroupById(id, z)
-	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal,
-		DirRoleDefinition, DirRoleAssignment:
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal, DirRoleDefinition:
 		z.AddMgHeader("ConsistencyLevel", "eventual")
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 		params := map[string]string{
@@ -418,9 +420,49 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 				}
 			}
 		}
-		return ""
-	default:
-		return ""
 	}
 	return ""
+}
+
+// Returns an id:name map of the given object type.
+func GetIdNameMap(mazType string, z *Config) map[string]string {
+	// This doesn't apply to ResRoleAssignment nor DirRoleAssignment
+
+	var dirObjects AzureObjectList
+	idNameMap := make(map[string]string)
+
+	// Note false = get from cache. We optimize speed for accuracy.
+	switch mazType {
+	case ResRoleDefinition:
+		dirObjects = GetMatchingResRoleDefinitions("", false, z)
+	case Subscription:
+		dirObjects = GetMatchingAzureSubscriptions("", false, z)
+	case ManagementGroup:
+		dirObjects = GetMatchingAzureMgmtGroups("", false, z)
+	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal, DirRoleDefinition:
+		dirObjects = GetMatchingDirObjects(mazType, "", false, z)
+	default:
+		return nil
+	}
+	for i := range dirObjects {
+		obj := dirObjects[i]
+		// We do Base() to cover subscriptions, mgmt groups, and role definitions
+		id := path.Base(utl.Str(obj["id"]))
+		if id != "" {
+			var name string
+			if displayName := utl.Str(obj["displayName"]); displayName != "" {
+				name = displayName
+			} else if props := utl.Map(obj["properties"]); props != nil {
+				if displayName := utl.Str(props["displayName"]); displayName != "" {
+					name = displayName
+				} else if roleName := utl.Str(props["roleName"]); roleName != "" {
+					name = roleName
+				}
+			}
+			if name != "" {
+				idNameMap[id] = name
+			}
+		}
+	}
+	return idNameMap
 }

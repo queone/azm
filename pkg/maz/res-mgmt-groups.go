@@ -40,25 +40,6 @@ func GetAzureMgmtGroupsIds(z *Config) (mgmtGroupIds []string) {
 	return mgmtGroupIds
 }
 
-// Returns an id:name map of all Azure management groups
-func GetIdMapMgmtGroups(z *Config) map[string]string {
-	nameMap := make(map[string]string)
-
-	// Optimize performance by using cached management groups; 'false' avoids querying Azure
-	mgmtGroups := GetMatchingAzureMgmtGroups("", false, z)
-
-	for i := range mgmtGroups {
-		group := mgmtGroups[i]
-		if id := utl.Str(group["name"]); id != "" {
-			if name := utl.Str(group["displayName"]); name != "" {
-				nameMap[id] = name
-			}
-		}
-	}
-
-	return nameMap
-}
-
 // Gets all Azure management groups matching on 'filter'. Returns entire list if filter is empty ""
 func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjectList {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
@@ -207,9 +188,16 @@ func PrintAzureMgmtGroupTree(z *Config) {
 }
 
 // Gets a specific Azure management group by its stand-alone object UUID or name
-func GetAzureMgmtGroupById(id string, z *Config) AzureObject {
+func GetAzureMgmtGroupById(targetId string, z *Config) AzureObject {
+	// 1st try with new function that calls Azure Resource Graph API
+	if group := GetAzureResObjectById(ManagementGroup, targetId, z); group != nil {
+		return group // Return immediately if we found it
+	}
+
+	// Fallback to using the ARM API way if above returns nothing
+
 	params := map[string]string{"api-version": "2023-04-01"}
-	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups/" + id
+	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups/" + targetId
 	resp, _, _ := ApiGet(apiUrl, z, params)
 	group := AzureObject(resp)
 	group["maz_from_azure"] = true

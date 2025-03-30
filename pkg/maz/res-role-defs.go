@@ -39,13 +39,12 @@ func PrintResRoleDefinition(obj AzureObject, z *Config) {
 		if len(assignableScopes) < 1 {
 			fmt.Println(utl.Red("    <Error: Role 'assignableScopes' slice has no entries?>\n"))
 		} else {
-			subNameMap := GetIdMapSubscriptions(z) // Get all subscription id:name pairs
+			subIdMap := GetIdNameMap(Subscription, z) // Get all subscription id:name pairs
 			for _, item := range assignableScopes {
 				if scope := utl.Str(item); scope != "" {
 					if strings.HasPrefix(scope, "/subscriptions") {
 						// Print subscription name as a comment at the end of line
-						subId := path.Base(scope)
-						comment := "# " + subNameMap[subId]
+						comment := "# " + subIdMap[path.Base(scope)]
 						fmt.Printf("    - %s  %s\n", utl.Gre(scope), utl.Gra(comment))
 					} else {
 						fmt.Printf("    - %s\n", utl.Gre(scope))
@@ -322,32 +321,6 @@ func DeleteResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	}
 }
 
-// Returns id:name map of all Azure resource role definitions
-func GetIdMapRoleDefs(z *Config) (nameMap map[string]string) {
-	nameMap = make(map[string]string)
-	roles := GetMatchingResRoleDefinitions("", false, z) // false = get from cache, not Azure
-	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
-
-	for i := range roles {
-		role := roles[i]
-		id := utl.Str(role["name"]) // Accessing the field directly
-		if id == "" {
-			continue // Skip if "name" is missing or not a string
-		}
-		props := utl.Map(role["properties"])
-		if props == nil {
-			continue // Skip if "properties" is missing or not a map
-		}
-		name := utl.Str(props["roleName"])
-		if name == "" {
-			continue // Skip if "roleName" is missing or not a string
-		}
-		nameMap[id] = name
-	}
-
-	return nameMap
-}
-
 // Counts all role definitions. If fromAzure is true, the definitions are sourced
 // directly from Azure; otherwise, they are read from the local cache. It returns
 // separate counts for custom and built-in roles.
@@ -431,10 +404,10 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
 
 	// Set up these maps for more informative verbose output
-	var mgmtGroupIdMap, subscriptionIdMap map[string]string
+	var mgroupIdMap, subIdMap map[string]string
 	if verbose {
-		mgmtGroupIdMap = GetIdMapMgmtGroups(z)
-		subscriptionIdMap = GetIdMapSubscriptions(z)
+		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
+		subIdMap = GetIdNameMap(Subscription, z)
 	}
 
 	// Search in each resource scope
@@ -466,10 +439,10 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 			scopeName := scope
 			scopeType := "Subscription"
 			if strings.HasPrefix(scope, "/providers") {
-				scopeName = mgmtGroupIdMap[scope]
+				scopeName = mgroupIdMap[scope]
 				scopeType = "Management Group"
 			} else if strings.HasPrefix(scope, "/subscriptions") {
-				scopeName = subscriptionIdMap[path.Base(scope)]
+				scopeName = subIdMap[path.Base(scope)]
 			}
 			fmt.Printf("%sCall %05d: %05d definitions under %s %s", rUp, callCount, count, scopeType, scopeName)
 		}
@@ -554,27 +527,39 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 
 // Retrieves a role definition by its unique ID from the Azure resource hierarchy.
 func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
-	// Get all the scopes in the tenant hierarchy
-	scopes := GetAzureResRoleScopes(z)
+	// 1st try with new function that calls Azure Resource Graph API
+	if role := GetAzureResObjectById(ResRoleDefinition, targetId, z); role != nil {
+		return role // Return immediately if we found it
+	}
 
-	// NOTE: Microsoft documentation explicitly states that a role definition UUID
-	// cannot be repeated across different scopes in the hierarchy. This is why we
-	// return immediately upon a successful match.
+	// Fallback to using the ARM API way if above returns nothing.
+
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
 
-	// Search each of the tenant scopes
+	// Create a list of API URLs to check
+	apiUrls := []string{
+		// The 1st is the standard roleDefinitions endpoint
+		ConstAzUrl + "/providers/Microsoft.Authorization/roleDefinitions/" + targetId,
+	}
+	for _, scope := range GetAzureResRoleScopes(z) {
+		// The others are all other scopes in the tenant resource hierarchy
+		apiUrls = append(apiUrls, ConstAzUrl+scope+"/providers/Microsoft.Authorization/roleDefinitions/"+targetId)
+	}
+
+	// Check each API URL in the list
 	params := map[string]string{"api-version": "2022-04-01"}
-	for _, scope := range scopes {
-		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions/" + targetId
-		resp, _, _ := ApiGet(apiUrl, z, params)
-		if role := utl.Map(resp); role != nil {
-			id := utl.Str(role["name"])
-			if id == targetId {
-				role["maz_from_azure"] = true
-				return AzureObject(role) // Return immediately if a match is found
+	for _, apiUrl := range apiUrls {
+		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		if statCode == 200 {
+			if role := utl.Map(resp); role != nil {
+				if id := utl.Str(role["name"]); id == targetId {
+					role["maz_from_azure"] = true
+					return AzureObject(role) // Return immediately on 1st match
+				}
 			}
 		}
 	}
-	return nil
+
+	return nil // Nothing found, return empty object
 }

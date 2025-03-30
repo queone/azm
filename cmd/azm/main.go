@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.7.2"
+	program_version = "0.7.3"
 )
 
 func printUsage(extended bool) {
@@ -54,8 +54,6 @@ func printUsage(extended bool) {
 		utl.Whi2("Quick Examples"), n, n, n, n, n, n, n)
 	usageExtended := fmt.Sprintf("\n%s (allow reading Azure objects)\n"+
 		"  UUID                             Show all Azure objects associated with the given UUID\n"+
-		"  -%si NAME                         Print the object ID, given its name; some objects lack name\n"+
-		"  -%sn ID                           Print the object name, given its ID; some objects lack name\n"+
 		"  -%s[j] [FILTER]                   List all %s objects tersely; optional JSON output; optional\n"+
 		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
 		"                                   If the result is a single object, it is printed in more detail.\n"+
@@ -100,7 +98,7 @@ func printUsage(extended bool) {
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
 		"  -?, -h, --help                   Display the full list of options\n",
-		utl.Whi2("Read Options"), X, X, X, X, utl.Whi2("Write Options"), X, X, utl.Whi2("Other Options"), X, X)
+		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, X, utl.Whi2("Other Options"), X, X)
 	fmt.Print(usageHeader)
 	if extended {
 		fmt.Print(usageExtended)
@@ -187,12 +185,6 @@ func main() {
 			maz.CreateSkeletonFile(mazType, arg2)
 		case "-tc":
 			maz.DecodeJwtToken(arg2)
-		case "-di", "-si", "-mi", "-ui", "-gi", "-api", "-spi", "-dri":
-			mazType := arg1[1 : len(arg1)-1]
-			fmt.Println(maz.GetObjectIdFromName(mazType, arg2, z))
-		case "-dn", "-sn", "-mn", "-un", "-gn", "-apn", "-spn", "-drn":
-			mazType := arg1[1 : len(arg1)-1]
-			fmt.Println(maz.GetObjectNameFromId(mazType, arg2, z))
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove the leading '-'

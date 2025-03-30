@@ -37,26 +37,6 @@ func ObjectCountAzure(t string, z *Config) int64 {
 	return count
 }
 
-// Returns an id:name map of objects of the given type.
-func GetIdMapDirObjects(mazType string, z *Config) map[string]string {
-	nameMap := make(map[string]string)
-	objects := GetMatchingDirObjects(mazType, "", false, z) // false = get from cache, not Azure
-	// By not forcing an Azure call we're opting for cache speed over id:name map accuracy
-
-	// Memory-walk the slice to gather these values more efficiently
-	for i := range objects {
-		obj := objects[i]                   // No need to cast; should already be AzureObject type
-		id := utl.Str(obj["id"])            // Try casting as a string
-		name := utl.Str(obj["displayName"]) // Try casting as a string
-		if id == "" || name == "" {
-			continue // Skip is either is not a string or empty
-		}
-		nameMap[id] = name
-	}
-
-	return nameMap
-}
-
 // Gets object of given type from Azure by id. Updates entry in local cache.
 func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 	obj := AzureObject{}
