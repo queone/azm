@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.7.4
+Release Date: 2025-mar-30
+- Reformatted printout of credentials and other ap/sp values to be more YAML-like
+
 ### v0.7.3
 Release Date: 2025-mar-30
 - Now gradually switching to GetAzureResObjectById() which uses the more performant Azure Resource Graph API

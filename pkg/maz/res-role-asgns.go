@@ -258,7 +258,7 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 			err = cache.Save()
 		}
 		if err != nil {
-			die("Error: %v\n", err)
+			utl.Die("Error: %v\n", err)
 		}
 	} else if statCode == 204 {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))

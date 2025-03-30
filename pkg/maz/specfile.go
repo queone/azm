@@ -23,14 +23,14 @@ func GenerateAndPrintSpecfileName(specifier string, z *Config) {
 		// If it's an ID, get the mazType and object of all matching objects
 		list, _ := FindAzureObjectsById(specifier, z)
 		if len(list) == 0 {
-			die("There's no object with that ID\n")
+			utl.Die("There's no object with that ID\n")
 		} else if len(list) > 1 {
-			die("Too many objects with that ID. This is not supported.\n")
+			utl.Die("Too many objects with that ID. This is not supported.\n")
 		}
 		obj = list[0] // Isolate the single object
 		mazType = utl.Str(obj["maz_type"])
 	} else {
-		die("Invalid specfile or ID\n")
+		utl.Die("Invalid specfile or ID\n")
 	}
 
 	var specfileName string
@@ -86,7 +86,7 @@ func GenerateAndPrintSpecfileName(specifier string, z *Config) {
 		specfileName = fmt.Sprintf("%s_%s.yaml", mazType, part2)
 
 	default:
-		die("Can't determine object type for this specfile\n")
+		utl.Die("Can't determine object type for this specfile\n")
 	}
 
 	// Print the generated file name
@@ -96,7 +96,7 @@ func GenerateAndPrintSpecfileName(specifier string, z *Config) {
 	// // Let's clean up the object, which could be from Azure, with excess attributes
 	// normalizedObj, err := normalizeObject(mazType, obj, z)
 	// if err != nil {
-	// 	die("Error cleaning object: %v", err)
+	// utl.Die("Error cleaning object: %v", err)
 	// }
 
 	// Save the object in new recommended specfile name
@@ -104,7 +104,7 @@ func GenerateAndPrintSpecfileName(specifier string, z *Config) {
 		fmt.Println("Above file already exists. Content not overwritten.")
 	} else {
 		if err = utl.SaveFileAuto(specfileName, "yaml", obj, false, 0); err != nil {
-			die("Error saving specfile: %v\n", err)
+			utl.Die("Error saving specfile: %v\n", err)
 		}
 		fmt.Println("Above file has been created with the object's content.")
 	}

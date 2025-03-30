@@ -14,7 +14,7 @@ func PrintGroup(x AzureObject, z *Config) {
 	}
 
 	// Print the most important attributes first
-	fmt.Printf("%s\n", utl.Gra("# Directory Group"))
+	fmt.Printf("%s\n", utl.Gra("# Directory group"))
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(id))
 	fmt.Printf("%s: %s\n", utl.Blu("displayName"), utl.Gre(utl.Str(x["displayName"])))
 	description := utl.Str(x["description"])

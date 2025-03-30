@@ -261,13 +261,13 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 		Log("Delta token save failed, retrying once: %v", err)
 		time.Sleep(1 * time.Second)
 		if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
-			die("Error saving delta link after retry: %v", err)
+			utl.Die("Error saving delta link after retry: %v", err)
 		}
 	}
 
 	cache.Normalize(mazType, deltaSet)
 	if err := cache.Save(); err != nil {
-		die("Error saving cache: %v", err)
+		utl.Die("Error saving cache: %v", err)
 	}
 }
 
@@ -336,7 +336,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 			deltaSet = append(deltaSet, obj)
 			if verbose && len(deltaSet)%100 == 0 {
-				printf("%sCall %05d : count %05d", rUp, callCount, len(deltaSet))
+				fmt.Printf("%sCall %05d : count %05d", rUp, callCount, len(deltaSet))
 			}
 
 		default:
@@ -383,7 +383,7 @@ func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (Azure
 			return resp, nil
 		}
 		if verbose {
-			printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
+			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
 		}
 		time.Sleep(time.Second * time.Duration(1<<i))
 	}
@@ -397,16 +397,16 @@ func DeleteDirObject(force bool, id, mazType string, z *Config) {
 	mazTypeName := MazTypeNames[mazType]
 	obj := PreFetchAzureObject(mazType, id, z)
 	if obj == nil {
-		die("No %s with identifier %s\n", utl.Yel(mazTypeName), utl.Yel(id))
+		utl.Die("No %s with identifier %s\n", utl.Yel(mazTypeName), utl.Yel(id))
 	}
 
 	// Confirmation prompt
-	printf("Deleting below %s:\n", utl.Yel(mazTypeName))
+	fmt.Printf("Deleting below %s:\n", utl.Yel(mazTypeName))
 	PrintObject(mazType, obj, z)
 	if !force {
 		msg := fmt.Sprintf("%s %s? y/n ", utl.Yel("Delete"), mazTypeName)
 		if utl.PromptMsg(msg) != 'y' {
-			die("Operation aborted by user.\n")
+			utl.Die("Operation aborted by user.\n")
 		}
 	}
 
@@ -421,7 +421,7 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
 	if statCode == 204 {
-		printf("Successfully %s %s!\n", utl.Gre("DELETED"), mazTypeName)
+		fmt.Printf("Successfully %s %s!\n", utl.Gre("DELETED"), mazTypeName)
 
 		// Also remove from local cache
 		cache, err := GetCache(mazType, z)
@@ -436,7 +436,7 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 			Log("Failed to delete object with ID %s: %w\n", id, err)
 		}
 	} else {
-		printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
+		fmt.Printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
 	return nil
 }
@@ -445,12 +445,12 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 func CreateDirObject(force bool, obj AzureObject, mazType string, z *Config) AzureObject {
 	// Present confirmation prompt if force isn't set
 	mazTypeName := MazTypeNames[mazType]
-	printf("Creating new %s with below attributes:\n", utl.Yel(mazTypeName))
+	fmt.Printf("Creating new %s with below attributes:\n", utl.Yel(mazTypeName))
 	utl.PrintYamlColor(obj)
 	if !force {
 		msg := fmt.Sprintf("%s %s ? y/n ", utl.Yel("Create"), mazTypeName)
 		if utl.PromptMsg(msg) != 'y' {
-			die("Operation aborted by user.\n")
+			utl.Die("Operation aborted by user.\n")
 		}
 	}
 
@@ -472,7 +472,7 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 	if statCode == 201 {
 		azObj = AzureObject(resp) // Cast newly created object to our standard type
 		id := utl.Str(azObj["id"])
-		printf("Successfully %s %s with new ID %s\n", utl.Gre("CREATED"), mazTypeName, id)
+		fmt.Printf("Successfully %s %s with new ID %s\n", utl.Gre("CREATED"), mazTypeName, id)
 
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
@@ -487,7 +487,7 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 			Log("Failed to save cache: %v", err)
 		}
 	} else {
-		printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
+		fmt.Printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
 	return azObj
 }
@@ -497,12 +497,12 @@ func UpdateDirObject(force bool, id string, obj AzureObject, mazType string, z *
 	mazTypeName := MazTypeNames[mazType]
 
 	// Present confirmation prompt if force isn't set
-	printf("Update exiting %s with below attributes:\n", utl.Yel(mazTypeName))
+	fmt.Printf("Update exiting %s with below attributes:\n", utl.Yel(mazTypeName))
 	utl.PrintYamlColor(obj)
 	if !force {
 		msg := fmt.Sprintf("%s %s ? y/n ", utl.Yel("Update"), mazTypeName)
 		if utl.PromptMsg(msg) != 'y' {
-			die("Operation aborted by user.\n")
+			utl.Die("Operation aborted by user.\n")
 		}
 	}
 
@@ -517,7 +517,7 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 	payload := obj
 	resp, statCode, _ := ApiPatch(apiUrl, z, payload, nil)
 	if statCode == 204 {
-		printf("Successfully %s %s!\n", utl.Gre("UPDATED"), mazTypeName)
+		fmt.Printf("Successfully %s %s!\n", utl.Gre("UPDATED"), mazTypeName)
 
 		// Above API patch call does NOT return the updated object, so to update
 		// the local cache we have to re-use our original item.
@@ -536,7 +536,7 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 			Log("Failed to save cache: %v", err)
 		}
 	} else {
-		printf("HTTP %d: Error updating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
+		fmt.Printf("HTTP %d: Error updating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
 	}
 	return nil
 }

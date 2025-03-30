@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.7.3"
+	program_version = "0.7.4"
 )
 
 func printUsage(extended bool) {
@@ -62,15 +62,11 @@ func printUsage(extended bool) {
 		"  -mt                              List Management Group and subscriptions tree\n"+
 		"  -pags                            List all Azure AD Privileged Access Groups\n"+
 		"  -st                              Show count of all objects in local cache and Azure tenant\n"+
-		"  -tmg                             Display current Microsoft Graph API access token\n"+
-		"  -taz                             Display current Azure Resource API access token\n"+
-		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
 		"\n"+
 		"%s (allow managing Azure objects)\n"+
-		"  -k%s [NAME]                       Generate a YAML skeleton file for object type %s. Only\n"+
+		"  -%sk [NAME]                       Generate a YAML skeleton file for object type %s. Only\n"+
 		"                                   certain objects are currently supported; optional name for both\n"+
-		"                                   the group and the basis for the specfile name\n"+
-
+		"                                   the object and the recommended specfile name\n"+
 		"  -up[f] SPECFILE                  Create or update object by given SPECFILE (only for certain\n"+
 		"                                   objects); use 'f' to suppress confirmation\n"+
 		"  -rm[f] SPECFILE|ID               Delete object by given SPECFILE (only for certain objects);\n"+
@@ -95,6 +91,9 @@ func printUsage(extended bool) {
 		"  -tx                              Delete the current configured login values and token\n"+
 		"  -xx                              Delete ALL local file cache\n"+
 		"  -%sx                              Delete %s object local file cache\n"+
+		"  -tmg                             Display current Microsoft Graph API access token\n"+
+		"  -taz                             Display current Azure Resource API access token\n"+
+		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
 		"  -?, -h, --help                   Display the full list of options\n",
@@ -153,8 +152,8 @@ func main() {
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove arg1 leading '-'
 			maz.PrintMatchingObjects(specifier, "", z)
-		case "-kd", "-ka", "-kg", "-kap":
-			mazType := arg1[2:]
+		case "-dk", "-ak", "-gk", "-apk":
+			mazType := arg1[1 : len(arg1)-1]
 			maz.CreateSkeletonFile(mazType, "")
 		case "-ar":
 			maz.PrintResRoleAssignmentReport(z)
