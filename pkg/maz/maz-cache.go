@@ -243,6 +243,15 @@ func (c *Cache) upsertLocked(obj AzureObject) error {
 	return nil
 }
 
+func (c *Cache) BatchUpsert(objects AzureObjectList) error {
+	for _, obj := range objects {
+		if err := c.upsertLocked(obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 	// Process changes under single lock
@@ -259,13 +268,11 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 		if id == "" {
 			continue
 		}
-
 		// Check for deletions first (most delta sets are <5% deletions)
 		if obj["@removed"] != nil || obj["members@delta"] != nil {
 			deletedIds[id] = struct{}{}
 			continue
 		}
-
 		// Dedupe in mergeSet
 		if _, exists := uniqueIds[id]; !exists {
 			uniqueIds[id] = struct{}{}
@@ -279,9 +286,13 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 	}
 
 	// 3. Sequential upsert
-	for _, obj := range mergeSet {
-		if err := c.upsertLocked(obj); err != nil {
-			fmt.Printf("WARNING: %v\n", err)
+	if c.Count() == 0 {
+		c.BatchUpsert(mergeSet)
+	} else {
+		for _, obj := range mergeSet {
+			if err := c.upsertLocked(obj); err != nil {
+				fmt.Printf("WARNING: %v\n", err)
+			}
 		}
 	}
 }
