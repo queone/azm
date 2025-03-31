@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.2
+Release Date: 2025-mar-31
+- Adjusting and fixing token acquisition issues
+
 ### v0.8.1
 Release Date: 2025-mar-31
 - Correction to previous Normalize() fix

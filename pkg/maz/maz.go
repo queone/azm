@@ -97,7 +97,7 @@ var (
 		DirRoleDefinition: "/v1.0/roleManagement/directory/roleDefinitions",
 		DirRoleAssignment: "/v1.0/roleManagement/directory/roleAssignments",
 	}
-	eVars = map[string]string{
+	mazVars = map[string]string{
 		"MAZ_TENANT_ID":     "",
 		"MAZ_USERNAME":      "",
 		"MAZ_INTERACTIVE":   "",
@@ -107,24 +107,6 @@ var (
 		"MAZ_AZ_TOKEN":      "",
 	}
 )
-
-// Old configuration Bundle type. To be deprecated.
-type Bundle struct {
-	ConfDir      string // Directory where utility will store all its file
-	CredsFile    string
-	TokenFile    string
-	TenantId     string
-	ClientId     string
-	ClientSecret string
-	Interactive  bool
-	Username     string
-	AuthorityUrl string
-	MgToken      string // This and below to support MS Graph API
-	MgHeaders    map[string]string
-	AzToken      string // This and below to support Azure Resource Management API
-	AzHeaders    map[string]string
-	// To support other future APIs, those token/headers pairs can be added here
-}
 
 // Config holds configuration and credentials for various APIs and the calling programs themselves.
 type Config struct {
@@ -136,10 +118,13 @@ type Config struct {
 	ClientSecret string
 	Interactive  bool
 	Username     string
-	MgToken      string
-	MgHeaders    map[string]string
-	AzToken      string
-	AzHeaders    map[string]string
+	// --- For MS Graph API
+	MgToken   string
+	MgHeaders map[string]string
+	// --- For ARM API
+	AzToken   string
+	AzHeaders map[string]string
+	// --- Add other API token/headers here...
 }
 
 // Constructs, initializes, and returns a pointer to a Config instance.
@@ -290,37 +275,37 @@ func SetupAutomatedLogin(z *Config) {
 // credentials file.
 func SetupCredentials(z *Config) {
 	usingEnv := false // Assume environment variables are not being used
-	for k := range eVars {
-		eVars[k] = os.Getenv(k) // Read all MAZ_* environment variables
-		if eVars[k] != "" {
+	for k := range mazVars {
+		mazVars[k] = os.Getenv(k) // Read all MAZ_* environment variables
+		if mazVars[k] != "" {
 			usingEnv = true // If any are set, environment variable login/token is true
 		}
 	}
 	if usingEnv {
 		// Getting from OS environment variables
-		z.TenantId = eVars["MAZ_TENANT_ID"]
+		z.TenantId = mazVars["MAZ_TENANT_ID"]
 		if !utl.ValidUuid(z.TenantId) {
 			utl.Die("[MAZ_TENANT_ID] tenant_id '%s' is not a valid UUID\n", z.TenantId)
 		}
-		z.MgToken = eVars["MAZ_MG_TOKEN"]
-		z.AzToken = eVars["MAZ_AZ_TOKEN"]
+		z.MgToken = mazVars["MAZ_MG_TOKEN"]
+		z.AzToken = mazVars["MAZ_AZ_TOKEN"]
 		// Let's assume tokens for each of the 2 APIs have been supplied
 		AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
 		MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
 		if !AzTokenValid && !MgTokenValid {
 			// If they are both not valid, then we'll process the other variables
-			z.Interactive = utl.Bool(eVars["MAZ_INTERACTIVE"]) // Try casting as bool
+			z.Interactive = utl.Bool(mazVars["MAZ_INTERACTIVE"]) // Try casting as bool
 			if z.Interactive {
-				z.Username = strings.ToLower(utl.Str(eVars["MAZ_USERNAME"]))
+				z.Username = strings.ToLower(utl.Str(mazVars["MAZ_USERNAME"]))
 				if z.ClientId != "" || z.ClientSecret != "" {
 					fmt.Println("Warning: ", utl.Yel(""))
 				}
 			} else {
-				z.ClientId = utl.Str(eVars["MAZ_CLIENT_ID"])
+				z.ClientId = utl.Str(mazVars["MAZ_CLIENT_ID"])
 				if !utl.ValidUuid(z.ClientId) {
 					utl.Die("[MAZ_CLIENT_ID] client_id '%s' is not a valid UUID\n", z.ClientId)
 				}
-				z.ClientSecret = utl.Str(eVars["MAZ_CLIENT_SECRET"])
+				z.ClientSecret = utl.Str(mazVars["MAZ_CLIENT_SECRET"])
 				if z.ClientSecret == "" {
 					utl.Die("[MAZ_CLIENT_SECRET] client_secret is blank\n")
 				}
@@ -377,24 +362,38 @@ func SetupApiTokens(z *Config) {
 		// If API tokens have *both* not been supplied via environment variables, let's go ahead and get them
 		// via the other supported methods.
 
+		var err error
+
 		// Get a token for ARM access
 		azScope := []string{ConstAzUrl + "/.default"}
 		// Appending '/.default' allows using all static and consented permissions of the identity in use
 		// See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
 		if z.Interactive {
 			// Get token interactively
-			z.AzToken, _ = GetTokenInteractively(azScope, z)
+			z.AzToken, err = GetTokenInteractively(azScope, z)
+			if err != nil {
+				utl.Die("%v", err)
+			}
 		} else {
 			// Get token with clientId + Secret
-			z.AzToken, _ = GetTokenByCredentials(azScope, z)
+			z.AzToken, err = GetTokenByCredentials(azScope, z)
+			if err != nil {
+				utl.Die("%v", err)
+			}
 		}
 
 		// Get a token for MS Graph access
 		mgScope := []string{ConstMgUrl + "/.default"}
 		if z.Interactive {
-			z.MgToken, _ = GetTokenInteractively(mgScope, z)
+			z.MgToken, err = GetTokenInteractively(mgScope, z)
+			if err != nil {
+				utl.Die("%v", err)
+			}
 		} else {
 			z.MgToken, _ = GetTokenByCredentials(mgScope, z)
+			if err != nil {
+				utl.Die("%v", err)
+			}
 		}
 
 		// Support for other APIs can be added here in the future ...
