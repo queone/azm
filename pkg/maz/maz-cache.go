@@ -243,15 +243,6 @@ func (c *Cache) upsertLocked(obj AzureObject) error {
 	return nil
 }
 
-func (c *Cache) BatchUpsert(objects AzureObjectList) error {
-	for _, obj := range objects {
-		if err := c.upsertLocked(obj); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 	// Process changes under single lock
@@ -287,7 +278,25 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 
 	// 3. Sequential upsert
 	if c.Count() == 0 {
-		c.BatchUpsert(mergeSet)
+		// Optimized path for initial load
+		// Pre-allocate slice
+		c.data = make(AzureObjectList, 0, len(mergeSet))
+
+		// Bulk append without per-item processing, with proper ID checking
+		for _, obj := range mergeSet {
+			id := utl.Str(obj["id"])
+			if id == "" {
+				id = utl.Str(obj["name"])
+				if id == "" {
+					id = utl.Str(obj["subscriptionId"])
+					if id == "" {
+						fmt.Printf("WARNING: object with blank ID not added to cache\n")
+						continue
+					}
+				}
+			}
+			c.data = append(c.data, obj)
+		}
 	} else {
 		for _, obj := range mergeSet {
 			if err := c.upsertLocked(obj); err != nil {
