@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.1
+Release Date: 2025-mar-31
+- Correction to previous Normalize() fix
+
 ### v0.8.0
 Release Date: 2025-mar-31
 - Fixes bottleneck with Normalize() cache, when it's empty
