@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +37,13 @@ type TokenCache struct {
 func (t *TokenCache) Replace(ctx context.Context, cache cache.Unmarshaler, hints cache.ReplaceHints) error {
 	data, err := os.ReadFile(t.file)
 	if err != nil {
-		log.Println(err)
+		if os.IsNotExist(err) {
+			return nil // Return nil if file doesn't exist yet
+		}
+		return err
+	}
+	if len(data) == 0 {
+		return nil // Skip if empty file
 	}
 	return cache.Unmarshal(data)
 }
@@ -46,7 +51,7 @@ func (t *TokenCache) Replace(ctx context.Context, cache cache.Unmarshaler, hints
 func (t *TokenCache) Export(ctx context.Context, cache cache.Marshaler, hints cache.ExportHints) error {
 	data, err := cache.Marshal()
 	if err != nil {
-		log.Println(err)
+		return err
 	}
 	return os.WriteFile(t.file, data, 0600)
 }
@@ -80,16 +85,14 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	// Note we're using constant ConstAzPowerShellClientId for interactive login
 	app, err := public.New(ConstAzPowerShellClientId, public.WithAuthority(authorityUrl), public.WithCache(cacheAccessor))
 	if err != nil {
-		PrintApiErrMsg(err.Error())
-		utl.Die("")
+		return "", fmt.Errorf("failed to setup a Public auth app: %w", err)
 	}
 
 	// Look in the cache to see if the account to use has been cached
 	var targetAccount public.Account
 	accounts, err := app.Accounts(ctx)
 	if err != nil {
-		PrintApiErrMsg(err.Error())
-		utl.Die("")
+		return "", fmt.Errorf("failed to setup a new auth account: %w", err)
 	}
 	for _, account := range accounts {
 		if strings.ToLower(account.PreferredUsername) == username {
@@ -97,24 +100,25 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		}
 	}
 
-	// 1st, try getting cached token
+	// Add context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// 1st, always try silent acquisition first
 	result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
 	if err != nil {
-		// 2nd, try AcquireTokenInteractive, which uses the default web browser to to select
+		// 2nd, try AcquireTokenInteractive, which uses the default web browser to select
 		// the account and then acquire a security token from the authority.
 		result, err = app.AcquireTokenInteractive(ctx, scopes)
 
-		// AcquireTokenInteractive may not have worked because user is within a VM environment,
-		// so let's fall back to AcquireTokenByDeviceCode
+		// AcquireTokenInteractive may not work if user is within a VM environment,
+		// so fall back to device code flow
 		if err != nil {
 			fmt.Println("\nAcquireTokenInteractive login method failed.")
 			fmt.Println("Falling back to AcquireTokenByDeviceCode login method.")
-			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
-			defer cancel()
 			devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 			if err != nil {
-				PrintApiErrMsg(err.Error())
-				utl.Die("")
+				return "", fmt.Errorf("all authentication methods failed: %w", err)
 			}
 			verificationUri := devCode.Result.VerificationURL
 			if verificationUri == "" {
@@ -125,8 +129,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			fmt.Printf("And enter this code ==> %s\n\n", devCode.Result.UserCode)
 			result, err = devCode.AuthenticationResult(ctx)
 			if err != nil {
-				PrintApiErrMsg(err.Error())
-				utl.Die("")
+				return "", fmt.Errorf("device code flow authentication method failed: %w", err)
 			}
 		}
 	}
@@ -147,20 +150,21 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	// Set up token cache storage file and accessor
 	cacheFilePath := filepath.Join(confDir, tokenFile)
 	cacheAccessor := &TokenCache{cacheFilePath}
-	ctx := context.Background()
 
 	// Initializing the client credential
 	cred, err := confidential.NewCredFromSecret(clientSecret)
 	if err != nil {
-		fmt.Println("Could not create a cred object from client_secret.")
+		return "", fmt.Errorf("could not create a cred object from client_secret: %w", err)
 	}
 
 	// Automated login obviously uses the registered app client_id (App ID)
 	app, err := confidential.New(authorityUrl, clientId, cred, confidential.WithCache(cacheAccessor))
 	if err != nil {
-		PrintApiErrMsg(err.Error())
-		utl.Die("")
+		return "", fmt.Errorf("failed to setup a Confidential auth app: %w", err)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
 	// Try getting cached token 1st
 	// targetAccount not required, as it appears to locate existing cached tokens without it
@@ -170,8 +174,7 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 		result, err = app.AcquireTokenByCredential(ctx, scopes)
 		// AcquireTokenByCredential acquires a security token from the authority, using the client credentials grant
 		if err != nil {
-			PrintApiErrMsg(err.Error())
-			utl.Die("")
+			return "", fmt.Errorf("failed to acquire token: %w", err)
 		}
 	}
 	return result.AccessToken, nil // Return only the AccessToken, which is of type string
@@ -246,8 +249,8 @@ func DecodeJwtToken(tokenString string) {
 			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(v))
 		case float64:
 			t := time.Unix(int64(v), 0)
-			vStr := utl.Gre(t.Format("2006-01-02 15:04:05"))
-			vStr += fmt.Sprintf("  # %d", int64(v))
+			vStr := utl.Yel(t.Format("2006-Jan-02 15:04:05"))
+			vStr += utl.Gra(fmt.Sprintf("  # %d", int64(v)))
 			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
 		case []interface{}:
 			vList := v
@@ -273,7 +276,7 @@ func DecodeJwtToken(tokenString string) {
 	if token.Valid {
 		vStr = utl.Gre("true")
 	} else {
-		vStr = utl.Gre("false") + "  # Since this parsing isn't verifying it"
+		vStr = utl.Gre("false") + utl.Gra("  # Since this parsing isn't really verifying it")
 	}
 	fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
 
