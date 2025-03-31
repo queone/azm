@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.0
+Release Date: 2025-mar-31
+- Fixes bottleneck with Normalize() cache, when it's empty
+
 ### v0.7.4
 Release Date: 2025-mar-30
 - Reformatted printout of credentials and other ap/sp values to be more YAML-like
