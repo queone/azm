@@ -316,7 +316,8 @@ func SetupCredentials(z *Config) {
 		credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
 		if !utl.FileUsable(credsFile) {
 			utl.Die("Missing credentials file: %s\n"+
-				"Re-run program to set up the appropriate login credentials.\n", credsFile)
+				"Run program with the %s option to set up the appropriate login credentials.\n",
+				credsFile, utl.Yel("-id"))
 		}
 		credsRaw, err := utl.LoadFileYaml(credsFile)
 		if err != nil {
@@ -350,6 +351,9 @@ func SetupCredentials(z *Config) {
 
 // Initializes the necessary global variables, acquires all API tokens, and sets them up for use.
 func SetupApiTokens(z *Config) {
+
+	// DebugTokens("in", z) // DEBUG
+
 	SetupCredentials(z) // Sets up tenant ID, client ID, authentication method, etc
 
 	// Currently supporting calls for 2 different APIs (Azure Resource Management (ARM) and MS Graph), so each needs its own
@@ -390,7 +394,7 @@ func SetupApiTokens(z *Config) {
 				utl.Die("%v", err)
 			}
 		} else {
-			z.MgToken, _ = GetTokenByCredentials(mgScope, z)
+			z.MgToken, err = GetTokenByCredentials(mgScope, z)
 			if err != nil {
 				utl.Die("%v", err)
 			}
@@ -398,6 +402,8 @@ func SetupApiTokens(z *Config) {
 
 		// Support for other APIs can be added here in the future ...
 	}
+
+	// DebugTokens("out", z) // DEBUG
 
 	// Setup the base API headers; token + content type
 	z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")

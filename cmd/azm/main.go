@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.2"
+	program_version = "0.8.3"
 )
 
 func printUsage(extended bool) {
@@ -120,6 +120,8 @@ func main() {
 	// Set up global config z pointer variable
 	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
 	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", and so on
+
+	//maz.DebugTokens("in", z) // DEBUG
 
 	switch numberOfArguments {
 	case 1: // 1 argument
@@ -276,5 +278,6 @@ func main() {
 			printUnknownCommandError()
 		}
 	}
-	os.Exit(0)
+
+	//maz.DebugTokens("out", z) // DEBUG
 }
