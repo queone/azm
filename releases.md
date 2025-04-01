@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.7
+Release Date: 2025-apr-01
+- More adjustments of GetTokenInteractively, better debug log output
+
 ### v0.8.6
 Release Date: 2025-apr-01
 - Refactored GetTokenInteractively() to hopefully:

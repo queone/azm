@@ -80,23 +80,23 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	// Set up token cache storage file and accessor
 	cacheAccessor := &TokenCache{filepath.Join(confDir, tokenFile)}
 
-	// Retry configuration
+	// Retry configuration with backoff
 	maxRetries := 3
-	retryDelay := 2 * time.Second
+	retryDelays := []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		ctx := context.Background()
 
-		// Note we're using constant ConstAzPowerShellClientId for interactive login
+		// Create new app instance for each attempt
 		app, err := public.New(ConstAzPowerShellClientId,
 			public.WithAuthority(authorityUrl),
 			public.WithCache(cacheAccessor))
 		if err != nil {
-			Log("Attempt %d: %v\n", attempt, err)
+			Log("Attempt %d app init failed: %v\n", attempt, err)
 			if attempt == maxRetries {
-				return "", err
+				return "", fmt.Errorf("failed to initialize after %d attempts: %w", maxRetries, err)
 			}
-			time.Sleep(retryDelay)
+			time.Sleep(retryDelays[attempt-1])
 			continue
 		}
 
@@ -104,11 +104,11 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		var targetAccount public.Account
 		accounts, err := app.Accounts(ctx)
 		if err != nil {
-			Log("Attempt %d: %v\n", attempt, err)
+			Log("Attempt %d account lookup failed: %v\n", attempt, err)
 			if attempt == maxRetries {
-				return "", err
+				return "", fmt.Errorf("account lookup failed after %d attempts: %w", maxRetries, err)
 			}
-			time.Sleep(retryDelay)
+			time.Sleep(retryDelays[attempt-1])
 			continue
 		}
 
@@ -125,28 +125,28 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		// Try silent acquisition first
 		result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
 		if err == nil {
+			Log("Successfully acquired silent token (attempt %d)\n", attempt)
 			return result.AccessToken, nil
 		}
 		Log("Attempt %d silent failed: %v\n", attempt, err)
 
-		// Fall back to interactive which uses the default web browser to select
-		// the account and then acquire a security token from the authority.
+		// Fall back to interactive
 		result, err = app.AcquireTokenInteractive(ctx, scopes)
 		if err == nil {
+			Log("Successfully acquired interactive token (attempt %d)\n", attempt)
 			return result.AccessToken, nil
 		}
 		Log("Attempt %d interactive failed: %v\n", attempt, err)
 
-		// AcquireTokenInteractive may not work if user is within a VM environment,
-		// so finally fallback to device code
-		fmt.Println("\nFalling back to device code flow...")
+		// Final fallback to device code
+		Log("Attempt %d trying device code flow\n", attempt)
 		devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 		if err != nil {
-			Log("Attempt %d device code failed: %v\n", attempt, err)
+			Log("Attempt %d device code init failed: %v\n", attempt, err)
 			if attempt == maxRetries {
-				return "", err
+				return "", fmt.Errorf("device code flow failed after %d attempts: %w", maxRetries, err)
 			}
-			time.Sleep(retryDelay)
+			time.Sleep(retryDelays[attempt-1])
 			continue
 		}
 
@@ -159,16 +159,17 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 
 		result, err = devCode.AuthenticationResult(ctx)
 		if err == nil {
+			Log("Successfully acquired device code token (attempt %d)\n", attempt)
 			return result.AccessToken, nil
 		}
 		Log("Attempt %d device auth failed: %v\n", attempt, err)
 
 		if attempt < maxRetries {
-			time.Sleep(retryDelay)
+			time.Sleep(retryDelays[attempt-1])
 		}
 	}
 
-	return "", fmt.Errorf("authentication failed after %d attempts", maxRetries)
+	return "", fmt.Errorf("all authentication methods failed after %d attempts", maxRetries)
 }
 
 // Initiates an Azure JWT token acquisition with provided parameters, using a Client ID plus a
