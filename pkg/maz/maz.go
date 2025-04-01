@@ -351,21 +351,15 @@ func SetupCredentials(z *Config) {
 
 // Initializes the necessary global variables, acquires all API tokens, and sets them up for use.
 func SetupApiTokens(z *Config) {
-
-	// DebugTokens("in", z) // DEBUG
-
 	SetupCredentials(z) // Sets up tenant ID, client ID, authentication method, etc
 
-	// Currently supporting calls for 2 different APIs (Azure Resource Management (ARM) and MS Graph), so each needs its own
-	// separate token. The Microsoft identity platform does not allow using same token for multiple resources at once.
+	// The Microsoft identity platform does not allow using same token for multiple resources at once.
 	// See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-net-user-gets-consent-for-multiple-resources
 
+	// Set up Azure Resource Management (ARM) API token
 	AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
-	MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
-	if !AzTokenValid && !MgTokenValid {
-		// If API tokens have *both* not been supplied via environment variables, let's go ahead and get them
-		// via the other supported methods.
-
+	if !AzTokenValid {
+		// If token not valid, let's get it via the supported methods
 		var err error
 
 		// Get a token for ARM access
@@ -385,6 +379,13 @@ func SetupApiTokens(z *Config) {
 				utl.Die("%v", err)
 			}
 		}
+	}
+
+	// Set up MS Graph API token
+	MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
+	if !MgTokenValid {
+		// If token not valid, let's get it via the supported methods
+		var err error
 
 		// Get a token for MS Graph access
 		mgScope := []string{ConstMgUrl + "/.default"}
@@ -403,28 +404,24 @@ func SetupApiTokens(z *Config) {
 		// Support for other APIs can be added here in the future ...
 	}
 
-	// DebugTokens("out", z) // DEBUG
-
 	// Setup the base API headers; token + content type
 	z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")
 	z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
 }
 
-// isLoggingEnabled returns true if MAZ_LOG is set to a truthy value (1, true, yes).
-func isLoggingEnabled() bool {
-	val := os.Getenv("MAZ_LOG")
-	truthyValues := map[string]bool{
-		"1":    true,
-		"true": true,
-		"yes":  true,
-	}
-	return truthyValues[strings.ToLower(val)]
-}
-
-// Log prints the message only if MAZ_LOG is enabled.
+// Log prints to stderr only if logging is enabled (MAZ_LOG=1/true/yes)
 func Log(format string, args ...interface{}) {
-	if isLoggingEnabled() {
-		prefix := utl.Mag("[MAZ] ")
-		fmt.Printf(prefix+format, args...)
+	// Check env var first
+	val := strings.ToLower(os.Getenv("MAZ_LOG"))
+	if val != "1" && val != "true" && val != "yes" {
+		return
 	}
+
+	// Format and output
+	prefix := utl.Mag("[MAZ] ")
+	msg := fmt.Sprintf(prefix+format, args...)
+
+	// Write to stderr with forced flush
+	fmt.Fprint(os.Stderr, msg)
+	os.Stderr.Sync()
 }

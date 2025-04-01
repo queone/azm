@@ -29,7 +29,11 @@ func PrintUser(obj map[string]interface{}, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/users/" + id + "/transitiveMemberOf"
-	resp, _, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	transitiveMemberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(transitiveMemberOf)
 }

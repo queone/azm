@@ -243,8 +243,12 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 // Returns all Azure pages for given API URL call
 func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	list = nil
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, statCode, err := ApiGet(apiUrl, z, nil)
 	for {
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if statCode != 200 {
 			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", rUp, statCode)
 			fmt.Printf("%s", utl.Yel(msg))
@@ -258,7 +262,7 @@ func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 		if nextLink == "" {
 			break // Break once there is no more pages
 		}
-		resp, statCode, _ = ApiGet(nextLink, z, nil) // Get next batch
+		resp, statCode, err = ApiGet(nextLink, z, nil) // Get next batch
 	}
 	return list
 }
@@ -382,7 +386,11 @@ func GetObjectNameFromId(mazType, targetId string, z *Config) string {
 	case DirectoryUser, DirectoryGroup, Application, ServicePrincipal, DirRoleDefinition:
 		z.AddMgHeader("ConsistencyLevel", "eventual")
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + targetId
-		resp, _, _ := ApiGet(apiUrl, z, nil)
+		var err error
+		resp, _, err := ApiGet(apiUrl, z, nil)
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if obj := utl.Map(resp); obj != nil {
 			return utl.Str(obj["displayName"])
 		}
@@ -412,7 +420,11 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 			"$filter": fmt.Sprintf("displayName eq '%s'", targetName),
 			"$top":    "1",
 		}
-		resp, _, _ := ApiGet(apiUrl, z, params)
+		var err error
+		resp, _, err := ApiGet(apiUrl, z, params)
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if list := utl.Slice(resp["value"]); list != nil {
 			if obj := utl.Map(list[0]); obj != nil {
 				if id := utl.Str(obj["id"]); id != "" {

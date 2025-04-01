@@ -197,7 +197,11 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	}
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + id
-	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
+	var err error
+	resp, statCode, err := ApiPut(apiUrl, z, payload, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 || statCode == 201 {
 		fmt.Printf("%s\n", utl.Gre("Successfully CREATED role assignment!"))
 		azObj := AzureObject(resp) // Cast newly created assignment object to our standard type
@@ -244,7 +248,11 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	// https://learn.microsoft.com/en-us/rest/api/authorization/role-assignments/delete
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + azureId
-	resp, statCode, _ := ApiDelete(apiUrl, z, params)
+	var err error
+	resp, statCode, err := ApiDelete(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 {
 		fmt.Printf("%s\n", utl.Gre("Successfully DELETED role assignment!"))
 
@@ -364,7 +372,11 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
-		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		var err error
+		resp, statCode, err := ApiGet(apiUrl, z, params)
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if statCode != 200 {
 			// For now, I don't think we care about any errors
 			continue // If any issues retrieving items for this scope, skip to next one
@@ -439,7 +451,11 @@ func GetAzureResRoleAssignmentBy3Args(targetRoleDefinitionId, targetPrincipalId,
 		"$filter":     "principalId eq '" + targetPrincipalId + "'",
 	}
 	apiUrl := ConstAzUrl + targetScope + "/providers/Microsoft.Authorization/roleAssignments"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	assignments := utl.Slice(resp["value"])
 	if len(assignments) > 0 { // Inspect all qualifying assignments for this principalId
 		for i := range assignments {
@@ -485,7 +501,11 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 	// Check each API URL in the list
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, apiUrl := range apiUrls {
-		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		var err error
+		resp, statCode, err := ApiGet(apiUrl, z, params)
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if statCode == 200 {
 			if assignment := utl.Map(resp); assignment != nil {
 				assignment["maz_from_azure"] = true

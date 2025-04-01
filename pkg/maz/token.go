@@ -78,8 +78,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	username := z.Username
 
 	// Set up token cache storage file and accessor
-	cacheFilePath := filepath.Join(confDir, tokenFile)
-	cacheAccessor := &TokenCache{cacheFilePath}
+	cacheAccessor := &TokenCache{filepath.Join(confDir, tokenFile)}
 	ctx := context.Background()
 
 	// Note we're using constant ConstAzPowerShellClientId for interactive login
@@ -87,6 +86,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		public.WithAuthority(authorityUrl),
 		public.WithCache(cacheAccessor))
 	if err != nil {
+		Log("%v\n", err)
 		return "", err
 	}
 
@@ -94,6 +94,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	var targetAccount public.Account
 	accounts, err := app.Accounts(ctx)
 	if err != nil {
+		Log("%v\n", err)
 		return "", err
 	}
 	for _, account := range accounts {
@@ -103,12 +104,14 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	}
 
 	// Add context timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
 
 	// 1st, always try silent acquisition first
 	result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
 	if err != nil {
+		Log("%v\n", err)
+
 		// 2nd, try AcquireTokenInteractive, which uses the default web browser to select
 		// the account and then acquire a security token from the authority.
 		result, err = app.AcquireTokenInteractive(ctx, scopes)
@@ -120,6 +123,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			fmt.Println("Falling back to AcquireTokenByDeviceCode login method.")
 			devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 			if err != nil {
+				Log("%v\n", err)
 				return "", err
 			}
 			verificationUri := devCode.Result.VerificationURL
@@ -131,6 +135,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			fmt.Printf("And enter this code ==> %s\n\n", devCode.Result.UserCode)
 			result, err = devCode.AuthenticationResult(ctx)
 			if err != nil {
+				Log("%v\n", err)
 				return "", err
 			}
 		}
@@ -150,18 +155,19 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	clientSecret := z.ClientSecret
 
 	// Set up token cache storage file and accessor
-	cacheFilePath := filepath.Join(confDir, tokenFile)
-	cacheAccessor := &TokenCache{cacheFilePath}
+	cacheAccessor := &TokenCache{filepath.Join(confDir, tokenFile)}
 
 	// Initializing the client credential
 	cred, err := confidential.NewCredFromSecret(clientSecret)
 	if err != nil {
+		Log("%v\n", err)
 		return "", err
 	}
 
 	// Automated login obviously uses the registered app client_id (App ID)
 	app, err := confidential.New(authorityUrl, clientId, cred, confidential.WithCache(cacheAccessor))
 	if err != nil {
+		Log("%v\n", err)
 		return "", err
 	}
 
@@ -172,10 +178,12 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	// targetAccount not required, as it appears to locate existing cached tokens without it
 	result, err := app.AcquireTokenSilent(ctx, scopes)
 	if err != nil {
+		Log("%v\n", err)
 		// If for whatever reason getting a cached token didn't work, then let's get a fresh token
 		result, err = app.AcquireTokenByCredential(ctx, scopes)
 		// AcquireTokenByCredential acquires a security token from the authority, using the client credentials grant
 		if err != nil {
+			Log("%v\n", err)
 			return "", err
 		}
 	}
@@ -285,22 +293,19 @@ func DecodeJwtToken(tokenString string) {
 	os.Exit(0)
 }
 
-// DEBUG tokens functions prints to Stderr to avoid Stdout flushing issues
-func DebugTokens(msg string, z *Config) {
-	msg = utl.Mag(fmt.Sprintf("==> %-3s", msg))
-
+// Returns DEBUG tokens string
+func DebugTokenString(z *Config) string {
 	az := utl.Str(z.AzToken)
 	if len(az) < 4 {
-		az = utl.Mag("AZ_" + "none")
+		az = "AZ_" + "none"
 	} else {
-		az = utl.Mag("AZ_" + az[len(az)-4:])
+		az = "AZ_" + az[len(az)-4:]
 	}
-
 	mg := utl.Str(z.MgToken)
 	if len(mg) < 4 {
-		mg = utl.Mag("MG_" + "none")
+		mg = "MG_" + "none"
 	} else {
-		mg = utl.Mag("MG_" + mg[len(mg)-4:])
+		mg = "MG_" + mg[len(mg)-4:]
 	}
-	fmt.Fprintf(os.Stderr, "%s %s %s\n", msg, az, mg)
+	return fmt.Sprintf("%s %s", az, mg)
 }

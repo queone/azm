@@ -23,19 +23,29 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print certificates details
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
-	resp, _, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	keyCredentials := utl.Slice(resp["value"])
 	PrintCertificateList(keyCredentials)
 
 	// Print secrets details
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
-	resp, _, _ = ApiGet(apiUrl, z, nil)
+	resp, _, err = ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	passwordCredentials := utl.Slice(resp["value"])
 	PrintSecretList(passwordCredentials)
 
 	// Print owners
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/owners"
-	resp, _, _ = ApiGet(apiUrl, z, nil)
+	resp, _, err = ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	owners := utl.Slice(resp["value"])
 	PrintOwners(owners)
 
@@ -68,7 +78,10 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Prints groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
-	resp, _, _ = ApiGet(apiUrl, z, nil)
+	resp, _, err = ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	memberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(memberOf)
 
@@ -83,7 +96,10 @@ func PrintSp(x AzureObject, z *Config) {
 	// 1st, let us gather any 'Delegated' type permission admin grants
 	params := map[string]string{"$filter": "clientId eq '" + id + "'"}
 	apiUrl = ConstMgUrl + "/v1.0/oauth2PermissionGrants"
-	resp, _, _ = ApiGet(apiUrl, z, params)
+	resp, _, err = ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	oauth2PermissionGrants := utl.Slice(resp["value"])
 
 	// IMPORTANT: Please read this carefully -- not as obvious as it seems -- if no admin grants
@@ -99,8 +115,10 @@ func PrintSp(x AzureObject, z *Config) {
 				oauthId := utl.Str(api["id"])
 				resourceId := utl.Str(api["resourceId"]) // Get API's SP to get its displayName and claim values
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-				r2, _, _ := ApiGet(apiUrl2, z, nil)
-
+				r2, _, err := ApiGet(apiUrl2, z, nil)
+				if err != nil {
+					Log("%v\n", err)
+				}
 				apiName := "Unknown"
 				if r2["displayName"] != nil {
 					apiName = utl.Str(r2["displayName"])
@@ -118,7 +136,10 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// 2nd, let us gather any 'Application' type permission admin grants
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/appRoleAssignments"
-	resp, _, _ = ApiGet(apiUrl, z, nil)
+	resp, _, err = ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	appRoleAssignments := utl.Slice(resp["value"])
 
 	// IMPORTANT: Again, read this carefully -- not as obvious as it seems -- if no admin grants
@@ -140,7 +161,10 @@ func PrintSp(x AzureObject, z *Config) {
 
 				// Map each role ID to its claim value
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-				resp2, _, _ := ApiGet(apiUrl2, z, nil)
+				resp2, _, err := ApiGet(apiUrl2, z, nil)
+				if err != nil {
+					Log("%v\n", err)
+				}
 				appRoles := utl.Slice(resp2["appRoles"])
 				for item := range appRoles {
 					if role := utl.Map(item); role != nil {
@@ -217,7 +241,10 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print all Custom Security Attributes for this SP
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "?$select=customSecurityAttributes"
-	resp, _, _ = ApiGet(apiUrl, z, nil)
+	resp, _, err = ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	customSecurityAttributes := utl.Map(resp["customSecurityAttributes"])
 	if customSecurityAttributes != nil {
 		fmt.Printf("%s:\n", utl.Blu("custom_security_attributes"))
@@ -321,7 +348,11 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	// First, get total number of SPs in native tenant
 	z.AddMgHeader("ConsistencyLevel", "eventual")
 	apiUrl := ConstMgUrl + ApiEndpoint[ServicePrincipal] + "/$count"
-	resp, _, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	all := utl.Int64(resp["value"])
 
 	// Now get count of SPs registered and native to only this tenant
@@ -330,7 +361,10 @@ func SpsCountAzure(z *Config) (native, others int64) {
 		"$count":  "true",
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint[ServicePrincipal]
-	resp, _, _ = ApiGet(apiUrl, z, params)
+	resp, _, err = ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	native = utl.Int64(resp["@odata.count"])
 
 	others = all - native

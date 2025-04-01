@@ -42,7 +42,11 @@ func PrintApp(x AzureObject, z *Config) {
 
 	// Print any owners
 	apiUrl := ConstMgUrl + "/beta/applications/" + id + "/owners"
-	resp, statusCode, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, statusCode, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	owners := utl.Slice(resp["value"]) // Cast to a slice
 	if statusCode == 200 {
 		PrintOwners(owners)
@@ -61,7 +65,11 @@ func PrintApp(x AzureObject, z *Config) {
 // Prints federated credentials list stanza for App objects
 func PrintFederatedCredentials(id string, z *Config) {
 	apiUrl := ConstMgUrl + "/v1.0/applications/" + id + "/federatedIdentityCredentials"
-	resp, statusCode, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, statusCode, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	fedCreds := utl.Slice(resp["value"]) // Cast to a slice
 	if statusCode == 200 && len(fedCreds) > 0 {
 		fmt.Printf("%s:\n", utl.Blu("federated_credentials"))
@@ -182,7 +190,11 @@ func PrintAssignedApiPermissions(requiredResourceAccess interface{}, z *Config) 
 			// Get this API's SP object with all relevant attributes
 			params := map[string]string{"$filter": "appId eq '" + resAppId + "'"}
 			apiUrl := ConstMgUrl + "/beta/servicePrincipals"
-			resp, _, _ := ApiGet(apiUrl, z, params)
+			var err error
+			resp, _, err := ApiGet(apiUrl, z, params)
+			if err != nil {
+				Log("%v\n", err)
+			}
 			SPs := utl.Slice(resp["value"]) // Cast to a slice
 			// It's a list because this could be a multi-tenant app, having multiple SPs
 			// TODO: Handle multiple SPs
@@ -575,7 +587,11 @@ func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
 	// Check if a password with the same displayName already exists
 	object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/passwordCredentials"
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, statCode, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 {
 		passwordCredentials := utl.Slice(resp["value"])
 		for _, credential := range passwordCredentials {
@@ -618,7 +634,10 @@ func AddAppSpSecret(mazType, id, displayName, expiry string, z *Config) {
 		},
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/addPassword"
-	resp, statCode, _ = ApiPost(apiUrl, z, payload, nil)
+	resp, statCode, err = ApiPost(apiUrl, z, payload, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 {
 		if mazType == Application {
 			fmt.Printf("%s: %s\n", utl.Blu("app_object_id"), utl.Gre(object_id))
@@ -689,7 +708,11 @@ func RemoveAppSpSecret(mazType, id, keyId string, force bool, z *Config) {
 		payload := AzureObject{"keyId": keyId}
 		object_id := utl.Str(x["id"]) // NOTE: We call Azure with the OBJECT ID
 		apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + object_id + "/removePassword"
-		resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+		var err error
+		resp, statCode, err := ApiPost(apiUrl, z, payload, nil)
+		if err != nil {
+			Log("%v\n", err)
+		}
 		if statCode == 204 {
 			utl.Die("Successfully deleted secret.\n")
 		} else {

@@ -61,7 +61,11 @@ func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.ResourceGraph/resources"
-	resp, statCode, _ := ApiPost(apiUrl, z, payload, params)
+	var err error
+	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {
 			if obj := utl.Map(data[0]); obj != nil {
@@ -114,7 +118,11 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.ResourceGraph/resources"
-	resp, statCode, _ := ApiPost(apiUrl, z, payload, params)
+	var err error
+	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {
 			if obj := utl.Map(data[0]); obj != nil {
