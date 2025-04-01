@@ -83,16 +83,18 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	ctx := context.Background()
 
 	// Note we're using constant ConstAzPowerShellClientId for interactive login
-	app, err := public.New(ConstAzPowerShellClientId, public.WithAuthority(authorityUrl), public.WithCache(cacheAccessor))
+	app, err := public.New(ConstAzPowerShellClientId,
+		public.WithAuthority(authorityUrl),
+		public.WithCache(cacheAccessor))
 	if err != nil {
-		return "", fmt.Errorf("failed to setup a Public auth app: %w", err)
+		return "", err
 	}
 
 	// Look in the cache to see if the account to use has been cached
 	var targetAccount public.Account
 	accounts, err := app.Accounts(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to setup a new auth account: %w", err)
+		return "", err
 	}
 	for _, account := range accounts {
 		if strings.ToLower(account.PreferredUsername) == username {
@@ -118,7 +120,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			fmt.Println("Falling back to AcquireTokenByDeviceCode login method.")
 			devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 			if err != nil {
-				return "", fmt.Errorf("all authentication methods failed: %w", err)
+				return "", err
 			}
 			verificationUri := devCode.Result.VerificationURL
 			if verificationUri == "" {
@@ -129,7 +131,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			fmt.Printf("And enter this code ==> %s\n\n", devCode.Result.UserCode)
 			result, err = devCode.AuthenticationResult(ctx)
 			if err != nil {
-				return "", fmt.Errorf("device code flow authentication method failed: %w", err)
+				return "", err
 			}
 		}
 	}
@@ -154,13 +156,13 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	// Initializing the client credential
 	cred, err := confidential.NewCredFromSecret(clientSecret)
 	if err != nil {
-		return "", fmt.Errorf("could not create a cred object from client_secret: %w", err)
+		return "", err
 	}
 
 	// Automated login obviously uses the registered app client_id (App ID)
 	app, err := confidential.New(authorityUrl, clientId, cred, confidential.WithCache(cacheAccessor))
 	if err != nil {
-		return "", fmt.Errorf("failed to setup a Confidential auth app: %w", err)
+		return "", err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -174,7 +176,7 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 		result, err = app.AcquireTokenByCredential(ctx, scopes)
 		// AcquireTokenByCredential acquires a security token from the authority, using the client credentials grant
 		if err != nil {
-			return "", fmt.Errorf("failed to acquire token: %w", err)
+			return "", err
 		}
 	}
 	return result.AccessToken, nil // Return only the AccessToken, which is of type string
@@ -281,4 +283,24 @@ func DecodeJwtToken(tokenString string) {
 	fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
 
 	os.Exit(0)
+}
+
+// DEBUG tokens functions prints to Stderr to avoid Stdout flushing issues
+func DebugTokens(msg string, z *Config) {
+	msg = utl.Mag(fmt.Sprintf("==> %-3s", msg))
+
+	az := utl.Str(z.AzToken)
+	if len(az) < 4 {
+		az = utl.Mag("AZ_" + "none")
+	} else {
+		az = utl.Mag("AZ_" + az[len(az)-4:])
+	}
+
+	mg := utl.Str(z.MgToken)
+	if len(mg) < 4 {
+		mg = utl.Mag("MG_" + "none")
+	} else {
+		mg = utl.Mag("MG_" + mg[len(mg)-4:])
+	}
+	fmt.Fprintf(os.Stderr, "%s %s %s\n", msg, az, mg)
 }

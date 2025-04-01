@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.3
+Release Date: 2025-apr-01
+- Token debugging release
+
 ### v0.8.2
 Release Date: 2025-mar-31
 - Adjusting and fixing token acquisition issues
