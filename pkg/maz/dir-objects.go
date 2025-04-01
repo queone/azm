@@ -29,7 +29,11 @@ func ObjectCountAzure(t string, z *Config) int64 {
 	// consistency. It allows the system to return data that might be slightly
 	// stale but can be retrieved more quickly.
 	apiUrl := ConstMgUrl + ApiEndpoint[t] + "/$count"
-	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, statCode, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode != 200 {
 		return 0
 	}
@@ -42,8 +46,11 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 	obj := AzureObject{}
 	baseUrl := ConstMgUrl + ApiEndpoint[mazType]
 	apiUrl := baseUrl + "/" + targetId
-	resp, _, _ := ApiGet(apiUrl, z, nil)
-	// TODO: Maybe improve error checking and reporting?
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	id := utl.Str(resp["id"]) // Try casting to a string
 	if id != "" {
 		// If we have an ID, then we found an object
@@ -54,7 +61,10 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 		if mazType == Application || mazType == ServicePrincipal {
 			apiUrl := baseUrl
 			params := map[string]string{"$filter": "appId eq '" + targetId + "'"}
-			resp, _, _ := ApiGet(apiUrl, z, params)
+			resp, _, err := ApiGet(apiUrl, z, params)
+			if err != nil {
+				Log("%v\n", err)
+			}
 			objList := utl.Slice(resp["value"]) // Try casting to a slice
 			if objList != nil {
 				count := len(objList)
@@ -97,7 +107,11 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 func GetObjectFromAzureByName(mazType, displayName string, z *Config) AzureObjectList {
 	result := AzureObjectList{} // Initialize the result list
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "?$filter=displayName eq '" + displayName + "'"
-	resp, _, _ := ApiGet(apiUrl, z, nil)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	matchingObjects := utl.Slice(resp["value"]) // Try casting to a slice
 	if matchingObjects != nil {
 		// It is a slice, let's process it
@@ -382,6 +396,7 @@ func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (Azure
 		if err == nil {
 			return resp, nil
 		}
+		Log("%v\n", err)
 		if verbose {
 			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
 		}
@@ -419,7 +434,11 @@ func DeleteDirObject(force bool, id, mazType string, z *Config) {
 func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
-	resp, statCode, _ := ApiDelete(apiUrl, z, nil)
+	var err error
+	resp, statCode, err := ApiDelete(apiUrl, z, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 204 {
 		fmt.Printf("Successfully %s %s!\n", utl.Gre("DELETED"), mazTypeName)
 
@@ -468,7 +487,11 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 	// Creates object in Azure using obj as payload
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 	payload := obj
-	resp, statCode, _ := ApiPost(apiUrl, z, payload, nil)
+	var err error
+	resp, statCode, err := ApiPost(apiUrl, z, payload, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 201 {
 		azObj = AzureObject(resp) // Cast newly created object to our standard type
 		id := utl.Str(azObj["id"])
@@ -515,7 +538,11 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 	mazTypeName := MazTypeNames[mazType]
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType] + "/" + id
 	payload := obj
-	resp, statCode, _ := ApiPatch(apiUrl, z, payload, nil)
+	var err error
+	resp, statCode, err := ApiPatch(apiUrl, z, payload, nil)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if statCode == 204 {
 		fmt.Printf("Successfully %s %s!\n", utl.Gre("UPDATED"), mazTypeName)
 

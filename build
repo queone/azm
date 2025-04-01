@@ -21,17 +21,18 @@ go test ./...
 printf "\n==> Install static analysis tool for Go\ngo install honnef.co/go/tools/cmd/staticcheck@latest\n"
 go install honnef.co/go/tools/cmd/staticcheck@latest
 printf "\n==> Analyze Go code for potential issues\nstaticcheck ./...\n"
-#staticcheck ./...
+staticcheck ./...
 
 printf "\n==> Compile the maz package library: go build -o /dev/null ./pkg/maz\n"
 go build -o /dev/null ./pkg/maz
 
-UTIL=raf
-printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
-(
-  set -x  # Print commands as they execute
-  go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "./cmd/${UTIL}"
-)
+# azm now has raf functionality via -sfn arg
+# UTIL=raf
+# printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
+# (
+#   set -x  # Print commands as they execute
+#   go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "./cmd/${UTIL}"
+# )
 
 UTIL=azm
 printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"

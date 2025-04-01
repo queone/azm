@@ -110,7 +110,11 @@ func CacheAzureMgmtGroups(cache *Cache, z *Config, verbose bool) {
 	// Get all managements groups from Azure
 	params := map[string]string{"api-version": "2023-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	mgmtGroups := utl.Slice(resp["value"])
 	for i := range mgmtGroups {
 		obj := mgmtGroups[i]
@@ -174,7 +178,11 @@ func PrintAzureMgmtGroupTree(z *Config) {
 		"$expand":     "children",
 		"$recurse":    "true",
 	}
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if props := utl.Map(resp["properties"]); props != nil {
 		// Print top line of hierarchy in blue
 		name := utl.Blu(utl.PostSpc(utl.Str(props["displayName"]), 44))
@@ -198,7 +206,11 @@ func GetAzureMgmtGroupById(targetId string, z *Config) AzureObject {
 
 	params := map[string]string{"api-version": "2023-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups/" + targetId
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	group := AzureObject(resp)
 	group["maz_from_azure"] = true
 	return group
@@ -208,7 +220,11 @@ func GetAzureMgmtGroupById(targetId string, z *Config) AzureObject {
 func CountAzureMgmtGroups(z *Config) int64 {
 	params := map[string]string{"api-version": "2023-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.Management/managementGroups"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	mgmtGroups := utl.Slice(resp["value"])
 	count := len(mgmtGroups)
 	return int64(count)

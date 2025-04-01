@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.3"
+	program_version = "0.8.5"
 )
 
 func printUsage(extended bool) {
@@ -73,6 +73,7 @@ func printUsage(extended bool) {
 		"                                   delete by given ID; use 'f' to suppress confirmation\n"+
 		"  -rn[f] NAME|ID NEWNAME           Rename object with given NAME or ID to NEWNAME (not all objects\n"+
 		"                                   are supported); use 'f' to suppress confirmation\n"+
+
 		// Need versions of above for named groups
 		// Need versions of above for named appsp
 		// Need versions of above for named res role def
@@ -121,7 +122,7 @@ func main() {
 	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
 	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", and so on
 
-	//maz.DebugTokens("in", z) // DEBUG
+	maz.Log("in  %s\n", utl.Mag(maz.DebugTokenString(z))) // DEBUG
 
 	switch numberOfArguments {
 	case 1: // 1 argument
@@ -279,5 +280,5 @@ func main() {
 		}
 	}
 
-	//maz.DebugTokens("out", z) // DEBUG
+	maz.Log("out %s\n", utl.Mag(maz.DebugTokenString(z))) // DEBUG
 }

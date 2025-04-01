@@ -108,7 +108,11 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
 		obj := subscriptions[i]
@@ -136,7 +140,11 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 func GetAzureSubscriptionByName(targetName string, z *Config) AzureObject {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
 		obj := subscriptions[i]
@@ -160,7 +168,11 @@ func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
 
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions/" + targetId
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	azObj := AzureObject(resp)
 	azObj["maz_from_azure"] = true
 	return azObj
@@ -170,7 +182,11 @@ func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
 func CountAzureSubscriptions(z *Config) int64 {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	resp, _, _ := ApiGet(apiUrl, z, params)
+	var err error
+	resp, _, err := ApiGet(apiUrl, z, params)
+	if err != nil {
+		Log("%v\n", err)
+	}
 	if rawCount := utl.Map(resp["count"]); rawCount != nil {
 		count := utl.Int64(rawCount["value"]) // Get int64 value
 		return count

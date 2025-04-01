@@ -1,5 +1,14 @@
 ## Releases
 
+### v0.8.5
+Release Date: 2025-apr-01
+- Every Api*() call now reports errors to Stderr if MAZ_LOG is set to 1/yes/true, to help with debugging
+- No longer compiling raf by default since azm -sfn now has that functionality
+
+### v0.8.4
+Release Date: 2025-apr-01
+- Token debugging release 2
+
 ### v0.8.3
 Release Date: 2025-apr-01
 - Token debugging release
