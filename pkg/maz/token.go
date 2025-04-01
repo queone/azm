@@ -79,68 +79,96 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 
 	// Set up token cache storage file and accessor
 	cacheAccessor := &TokenCache{filepath.Join(confDir, tokenFile)}
-	ctx := context.Background()
 
-	// Note we're using constant ConstAzPowerShellClientId for interactive login
-	app, err := public.New(ConstAzPowerShellClientId,
-		public.WithAuthority(authorityUrl),
-		public.WithCache(cacheAccessor))
-	if err != nil {
-		Log("%v\n", err)
-		return "", err
-	}
+	// Retry configuration
+	maxRetries := 3
+	retryDelay := 2 * time.Second
 
-	// Look in the cache to see if the account to use has been cached
-	var targetAccount public.Account
-	accounts, err := app.Accounts(ctx)
-	if err != nil {
-		Log("%v\n", err)
-		return "", err
-	}
-	for _, account := range accounts {
-		if strings.ToLower(account.PreferredUsername) == username {
-			targetAccount = account
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx := context.Background()
+
+		// Note we're using constant ConstAzPowerShellClientId for interactive login
+		app, err := public.New(ConstAzPowerShellClientId,
+			public.WithAuthority(authorityUrl),
+			public.WithCache(cacheAccessor))
+		if err != nil {
+			Log("Attempt %d: %v\n", attempt, err)
+			if attempt == maxRetries {
+				return "", err
+			}
+			time.Sleep(retryDelay)
+			continue
 		}
-	}
 
-	// Add context timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
-	defer cancel()
+		// Look for cached account
+		var targetAccount public.Account
+		accounts, err := app.Accounts(ctx)
+		if err != nil {
+			Log("Attempt %d: %v\n", attempt, err)
+			if attempt == maxRetries {
+				return "", err
+			}
+			time.Sleep(retryDelay)
+			continue
+		}
 
-	// 1st, always try silent acquisition first
-	result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
-	if err != nil {
-		Log("%v\n", err)
+		for _, account := range accounts {
+			if strings.ToLower(account.PreferredUsername) == username {
+				targetAccount = account
+				break
+			}
+		}
 
-		// 2nd, try AcquireTokenInteractive, which uses the default web browser to select
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+
+		// Try silent acquisition first
+		result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
+		if err == nil {
+			return result.AccessToken, nil
+		}
+		Log("Attempt %d silent failed: %v\n", attempt, err)
+
+		// Fall back to interactive which uses the default web browser to select
 		// the account and then acquire a security token from the authority.
 		result, err = app.AcquireTokenInteractive(ctx, scopes)
+		if err == nil {
+			return result.AccessToken, nil
+		}
+		Log("Attempt %d interactive failed: %v\n", attempt, err)
 
 		// AcquireTokenInteractive may not work if user is within a VM environment,
-		// so fall back to device code flow
+		// so finally fallback to device code
+		fmt.Println("\nFalling back to device code flow...")
+		devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 		if err != nil {
-			fmt.Println("\nAcquireTokenInteractive login method failed.")
-			fmt.Println("Falling back to AcquireTokenByDeviceCode login method.")
-			devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
-			if err != nil {
-				Log("%v\n", err)
+			Log("Attempt %d device code failed: %v\n", attempt, err)
+			if attempt == maxRetries {
 				return "", err
 			}
-			verificationUri := devCode.Result.VerificationURL
-			if verificationUri == "" {
-				// Open issue: https://github.com/AzureAD/microsoft-authentication-library-for-go/issues/520
-				verificationUri = "https://microsoft.com/devicelogin"
-			}
-			fmt.Printf("\nOpen the following URL in your browser ==> %s\n\n", verificationUri)
-			fmt.Printf("And enter this code ==> %s\n\n", devCode.Result.UserCode)
-			result, err = devCode.AuthenticationResult(ctx)
-			if err != nil {
-				Log("%v\n", err)
-				return "", err
-			}
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		verificationUri := devCode.Result.VerificationURL
+		if verificationUri == "" {
+			verificationUri = "https://microsoft.com/devicelogin"
+		}
+		fmt.Printf("\nOpen in browser: %s\n", verificationUri)
+		fmt.Printf("Enter code: %s\n\n", devCode.Result.UserCode)
+
+		result, err = devCode.AuthenticationResult(ctx)
+		if err == nil {
+			return result.AccessToken, nil
+		}
+		Log("Attempt %d device auth failed: %v\n", attempt, err)
+
+		if attempt < maxRetries {
+			time.Sleep(retryDelay)
 		}
 	}
-	return result.AccessToken, nil // Return only the AccessToken, which is of type string
+
+	return "", fmt.Errorf("authentication failed after %d attempts", maxRetries)
 }
 
 // Initiates an Azure JWT token acquisition with provided parameters, using a Client ID plus a

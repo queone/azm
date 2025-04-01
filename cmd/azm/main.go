@@ -13,7 +13,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.5"
+	program_version = "0.8.6"
 )
 
 func printUsage(extended bool) {
@@ -122,7 +122,7 @@ func main() {
 	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
 	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", and so on
 
-	maz.Log("in  %s\n", utl.Mag(maz.DebugTokenString(z))) // DEBUG
+	maz.Log("%s\n", utl.Cya("in  "+maz.DebugTokenString(z))) // DEBUG
 
 	switch numberOfArguments {
 	case 1: // 1 argument
@@ -280,5 +280,5 @@ func main() {
 		}
 	}
 
-	maz.Log("out %s\n", utl.Mag(maz.DebugTokenString(z))) // DEBUG
+	maz.Log("%s\n", utl.Cya("in  "+maz.DebugTokenString(z))) // DEBUG
 }

@@ -409,17 +409,31 @@ func SetupApiTokens(z *Config) {
 	z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
 }
 
-// Log prints to stderr only if logging is enabled (MAZ_LOG=1/true/yes)
+// Log prints to stderr with cyan-colored caller tracing when MAZ_LOG is enabled
 func Log(format string, args ...interface{}) {
-	// Check env var first
+	// Check logging enabled
 	val := strings.ToLower(os.Getenv("MAZ_LOG"))
 	if val != "1" && val != "true" && val != "yes" {
 		return
 	}
 
-	// Format and output
-	prefix := utl.Mag("[MAZ] ")
-	msg := fmt.Sprintf(prefix+format, args...)
+	// Get caller info (depth 2 skips this function and runtime calls)
+	trace := utl.Trace2(2)
+
+	// Extract just the function name without package
+	funcName := trace.FuncName
+	if lastDot := strings.LastIndex(funcName, "."); lastDot >= 0 {
+		funcName = funcName[lastDot+1:] + "()" // Add parentheses to make it clear it's a function
+	}
+
+	// Format the entire trace prefix in cyan
+	tracePrefix := utl.Cya(fmt.Sprintf("MAZ> %s:%d %s: ",
+		filepath.Base(trace.File),
+		trace.Line,
+		funcName))
+
+	// Format the complete message (tracePrefix already colored)
+	msg := fmt.Sprintf(tracePrefix+format, args...)
 
 	// Write to stderr with forced flush
 	fmt.Fprint(os.Stderr, msg)
