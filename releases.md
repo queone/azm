@@ -1,5 +1,13 @@
 ## Releases
 
+### v0.8.6
+Release Date: 2025-apr-01
+- Refactored GetTokenInteractively() to hopefully:
+  - Reduce frequency of authentication prompts
+  - Handle temporary network issues
+  - Only require re-auth when absolutely necessary
+- Log() function now prints file and line number for better troubleshooting
+
 ### v0.8.5
 Release Date: 2025-apr-01
 - Every Api*() call now reports errors to Stderr if MAZ_LOG is set to 1/yes/true, to help with debugging
