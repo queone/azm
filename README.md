@@ -4,7 +4,7 @@ This repository hosts two components:
 - The [`pkg/maz`](pkg/maz/README.md) library: a small Go library for managing a limited set of Azure IAM objects and functions
 - The [`cmd/azm`](cmd/azm/README.md) utility: a small utility that implements the `maz` library to manage Azure IAM objects
 
-They provide a more lightweight alternative to the official Azure SDK for Go and the Azure CLI tool. These are designed for limited, specialized use cases and provide a simple, customizable solution for managing Azure IAM objects.
+They provide a lightweight alternative to the official Azure SDK for Go and the Azure CLI tool. They are also designed for limited, specialized use cases as a simple, customizable solution for managing Azure IAM objects.
 
 ## Why?
 The [Azure SDKs](https://github.com/Azure/azure-sdk-for-go) and [CLI tools](https://learn.microsoft.com/en-us/cli/azure/) are well-maintained, so why another library and utility?:
