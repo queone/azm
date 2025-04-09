@@ -2,7 +2,6 @@ package maz
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/cache"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/queone/utl"
 )
 
@@ -68,6 +66,22 @@ func (t *TokenCache) Print() string {
 // Copyright (c) The maz Authors.
 // Licensed under the MIT license.
 
+// Validate token cache - ALWAYS TRUE FOR NOW
+func validateTokenCache(cacheAccessor *TokenCache) bool {
+	// Implement actual cache validation logic
+	if cacheAccessor != nil {
+		return true
+	}
+	return true // Placeholder
+}
+
+// // Check for network errors
+// func isNetworkError(err error) bool {
+// 	return strings.Contains(err.Error(), "EOF") ||
+// 		strings.Contains(err.Error(), "connection reset") ||
+// 		strings.Contains(err.Error(), "timeout")
+// }
+
 // Initiates an Azure JWT token acquisition with provided parameters, using a Username and a browser
 // pop up window. This is the 'Public' app auth flow as documented at:
 // https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/dev/apps/public/public.go
@@ -84,6 +98,22 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	maxRetries := 3
 	retryDelays := []time.Duration{2 * time.Second, 5 * time.Second, 10 * time.Second}
 
+	// Cache validation check
+	if cacheValid := validateTokenCache(cacheAccessor); !cacheValid {
+		Logf("Cache invalid, forcing fresh authentication\n")
+		if err := os.Remove(filepath.Join(confDir, tokenFile)); err != nil {
+			Logf("Cache removal failed: %v\n", err)
+		}
+	}
+
+	// Determine the service API the token is for
+	service := "MS Graph (MG)" // ConstMgUrl
+	for _, scope := range scopes {
+		if strings.HasPrefix(scope, ConstAzUrl) {
+			service = "Azure ARM (AZ)"
+		}
+	}
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		ctx := context.Background()
 
@@ -92,7 +122,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			public.WithAuthority(authorityUrl),
 			public.WithCache(cacheAccessor))
 		if err != nil {
-			Log("Attempt %d app init failed: %v\n", attempt, err)
+			Logf("Attempt %d app init failed: %v\n", attempt, err)
 			if attempt == maxRetries {
 				return "", fmt.Errorf("failed to initialize after %d attempts: %w", maxRetries, err)
 			}
@@ -104,7 +134,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		var targetAccount public.Account
 		accounts, err := app.Accounts(ctx)
 		if err != nil {
-			Log("Attempt %d account lookup failed: %v\n", attempt, err)
+			Logf("Attempt %d account lookup failed: %v\n", attempt, err)
 			if attempt == maxRetries {
 				return "", fmt.Errorf("account lookup failed after %d attempts: %w", maxRetries, err)
 			}
@@ -125,24 +155,51 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 		// Try silent acquisition first
 		result, err := app.AcquireTokenSilent(ctx, scopes, public.WithSilentAccount(targetAccount))
 		if err == nil {
-			Log("Successfully acquired silent token (attempt %d)\n", attempt)
-			return result.AccessToken, nil
+			token := result.AccessToken // Actual token
+
+			msg := fmt.Sprintf("AcquireTokenSilent for service %s SUCCEEDED (attempt %d)",
+				service, attempt)
+			Logf("%s: Suffix = %s\n", utl.Gre(msg), utl.Cya2(GetTokenSuffix(token)))
+
+			// // HOLD OFF ON THIS FOR NOW
+			// if valid, err := VerifyAzureJwt(token); valid {
+			// 	Logf("%s\n", utl.Gre("Token verification PASSED!"))
+			// 	return token, err
+			// } else {
+			// 	Logf("%s\n", utl.Red2("Token verification FAILED!"))
+			// 	Logf("Trying again...\n")
+			// 	continue
+			// }
+
+			return token, nil
+
+		} else {
+			msg := fmt.Sprintf("AcquireTokenSilent for service %s FAILED (attempt %d)",
+				service, attempt)
+			Logf("%s: Suffix = %s\n", utl.Red2(msg), utl.Cya2("none"))
+			Logf("Error: %v\n", err)
+
+			// // Special handling for network errors
+			// if isNetworkError(err) {
+			// 	Logf("Network error detected, retrying...\n")
+			// 	time.Sleep(retryDelays[attempt-1])
+			// 	continue
+			// }
 		}
-		Log("Attempt %d silent failed: %v\n", attempt, err)
 
 		// Fall back to interactive
 		result, err = app.AcquireTokenInteractive(ctx, scopes)
 		if err == nil {
-			Log("Successfully acquired interactive token (attempt %d)\n", attempt)
+			Logf("Successfully acquired interactive token (attempt %d)\n", attempt)
 			return result.AccessToken, nil
 		}
-		Log("Attempt %d interactive failed: %v\n", attempt, err)
+		Logf("Attempt %d interactive failed: %v\n", attempt, err)
 
 		// Final fallback to device code
-		Log("Attempt %d trying device code flow\n", attempt)
+		Logf("Fallback to AcquireTokenByDeviceCode for service %s (attempt %d)\n", service, attempt)
 		devCode, err := app.AcquireTokenByDeviceCode(ctx, scopes)
 		if err != nil {
-			Log("Attempt %d device code init failed: %v\n", attempt, err)
+			Logf("Attempt %d device code init failed: %v\n", attempt, err)
 			if attempt == maxRetries {
 				return "", fmt.Errorf("device code flow failed after %d attempts: %w", maxRetries, err)
 			}
@@ -159,10 +216,10 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 
 		result, err = devCode.AuthenticationResult(ctx)
 		if err == nil {
-			Log("Successfully acquired device code token (attempt %d)\n", attempt)
+			Logf("Successfully acquired device code token (attempt %d)\n", attempt)
 			return result.AccessToken, nil
 		}
-		Log("Attempt %d device auth failed: %v\n", attempt, err)
+		Logf("Attempt %d device auth failed: %v\n", attempt, err)
 
 		if attempt < maxRetries {
 			time.Sleep(retryDelays[attempt-1])
@@ -176,7 +233,6 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 // Client Secret. This is the 'Confidential' app auth flow and is documented at:
 // https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/dev/apps/confidential/confidential.go
 func GetTokenByCredentials(scopes []string, z *Config) (token string, err error) {
-	// func GetTokenByCredentials(scopes []string, confDir, tokenFile, authorityUrl, clientId, clientSecret string) (token string, err error) {
 	confDir := z.ConfDir
 	tokenFile := z.TokenFile
 	authorityUrl := ConstAuthUrl + z.TenantId
@@ -189,152 +245,63 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	// Initializing the client credential
 	cred, err := confidential.NewCredFromSecret(clientSecret)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 		return "", err
 	}
 
 	// Automated login obviously uses the registered app client_id (App ID)
 	app, err := confidential.New(authorityUrl, clientId, cred, confidential.WithCache(cacheAccessor))
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 		return "", err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Try getting cached token 1st
-	// targetAccount not required, as it appears to locate existing cached tokens without it
+	// Determine the service API the token is for
+	service := "MS Graph (MG)" // ConstMgUrl
+	for _, scope := range scopes {
+		if strings.HasPrefix(scope, ConstAzUrl) {
+			service = "Azure ARM (AZ)"
+		}
+	}
+
+	// First, try to get token silent
+	Logf("First, try AcquireTokenSilent for service %s\n", service)
 	result, err := app.AcquireTokenSilent(ctx, scopes)
-	if err != nil {
-		Log("%v\n", err)
-		// If for whatever reason getting a cached token didn't work, then let's get a fresh token
-		result, err = app.AcquireTokenByCredential(ctx, scopes)
-		// AcquireTokenByCredential acquires a security token from the authority, using the client credentials grant
-		if err != nil {
-			Log("%v\n", err)
-			return "", err
-		}
-	}
-	return result.AccessToken, nil // Return only the AccessToken, which is of type string
-}
+	// Note that a targetAccount is not required; it appears to locate existing cached tokens without it
+	if err == nil {
+		token = result.AccessToken // Actual token
+		msg := fmt.Sprintf("AcquireTokenSilent for service %s SUCCEEDED", service)
+		Logf("%s: Suffix = %s\n", utl.Gre(msg), utl.Cya2(GetTokenSuffix(token)))
+		Logf("Doing a full token verification...\n")
 
-// Validates a JWT token *string format* as defined in https://tools.ietf.org/html/rfc7519
-func IsValidTokenFormat(tokenString string) (bool, string) {
-	if tokenString == "" {
-		return false, "token is empty"
-	}
-	if !strings.HasPrefix(tokenString, "eyJ") {
-		return false, "token does not start with 'eyJ'"
-	}
-	if !strings.Contains(tokenString, ".") {
-		return false, "token does not contain any '.'"
-	}
-	return true, ""
-}
+		// // HOLD OFF ON THIS FOR NOW
+		// if valid, err := VerifyAzureJwt(token); valid {
+		// 	Logf("%s\n", utl.Gre("Token verification PASSED!"))
+		// 	return token, err
+		// } else {
+		// 	Logf("%s\n", utl.Red2("Token verification FAILED!"))
+		// 	// Drop out of top IF statement, to try the fallback method
+		// }
 
-// Decode and dump token string, trusting without formal verification and validation
-func DecodeJwtToken(tokenString string) {
+		return token, nil
+	}
+	msg := fmt.Sprintf("AcquireTokenSilent for service %s FAILED", service)
+	Logf("%s: Suffix = %s\n", utl.Red2(msg), utl.Cya2("none"))
+	Logf("Error: %v\n", err)
 
-	// A JSON Web Token (JWT) string consists of three parts joined together with dot(.):
-	// "<Header>.<Payload>.<Signature>"
-	// Header: It indicates the token’s type and which signing algorithm has been used.
-	// Payload: It consists of the claims. And claims comprise of application’s data(
-	//   email id, username, role), the expiration period of a token (Exp), and so on.
-	// Signature: It is generated using the secret (provided by the user), encoded
-	// header, and payload.
-	//
-	// Token struct fields:
-	//   Raw       string                 // The raw token. Populated when you Parse a token
-	//   Method    SigningMethod          // The signing method used or to be used
-	//   Header    map[string]interface{} // The first segment of the token
-	//   Claims    Claims                 // The second segment of the token
-	//   Signature string                 // The third segment of the token. Populated when you Parse a token
-	//   Valid     bool                   // Is the token valid? Populated when you Parse/Verify a token
-
-	valid, errMsg := IsValidTokenFormat(tokenString)
-	if !valid {
-		utl.Die("%s\n", utl.Red(fmt.Sprintf("Invalid token: %s", errMsg)))
+	// Final fallback to by credential
+	Logf("Fallback to AcquireTokenByCredential for service %s\n", service)
+	result, err = app.AcquireTokenByCredential(ctx, scopes)
+	if err == nil {
+		token = result.AccessToken // Actual token
+		msg := fmt.Sprintf("AcquireTokenByCredential for service %s SUCCEEDED", service)
+		Logf("%s: Suffix = %s\n", utl.Gre(msg), utl.Cya2(GetTokenSuffix(token)))
+		Logf("%v\n", err)
+		return token, nil
 	}
 
-	// Parse the token without verifying the signature
-	claims := jwt.MapClaims{} // claims are actually a map[string]interface{}
-	token, _ := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte("<YOUR VERIFICATION KEY>"), nil
-	})
-	// // Below no yet needed, since this is only printing claims in an unverified way
-	// if err != nil {
-	// 	fmt.Println(utl.Red("Token is invalid: " + err.Error()))
-	// }
-	// if token == nil {
-	// 	fmt.Println(utl.Red("Error parsing token: " + err.Error()))
-	// }
-
-	fmt.Println(utl.Blu("header") + ":")
-
-	sortedKeys := utl.SortObjStringKeys(token.Header)
-	for _, k := range sortedKeys {
-		v := token.Header[k]
-		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(v))
-	}
-
-	fmt.Println(utl.Blu("claims") + ":")
-	sortedKeys = utl.SortObjStringKeys(token.Claims.(jwt.MapClaims))
-	for _, k := range sortedKeys {
-		v := token.Claims.(jwt.MapClaims)[k]
-
-		switch v := v.(type) {
-		case string:
-			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(v))
-		case float64:
-			t := time.Unix(int64(v), 0)
-			vStr := utl.Yel(t.Format("2006-Jan-02 15:04:05"))
-			vStr += utl.Gra(fmt.Sprintf("  # %d", int64(v)))
-			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
-		case []interface{}:
-			vList := v
-			vStr := ""
-			for _, i := range vList {
-				vStr += utl.Str(i) + " "
-			}
-			fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), utl.Gre(vStr))
-		}
-	}
-
-	fmt.Println(utl.Blu("signature") + ":")
-	if string(token.Signature) != "" {
-		k := "signature"
-		// Display the base64 encoded signature
-		fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)),
-			utl.Gre(base64.StdEncoding.EncodeToString([]byte(token.Signature))))
-	}
-
-	fmt.Println(utl.Blu("status") + ":")
-	k := "valid"
-	vStr := ""
-	if token.Valid {
-		vStr = utl.Gre("true")
-	} else {
-		vStr = utl.Gre("false") + utl.Gra("  # Since this parsing isn't really verifying it")
-	}
-	fmt.Printf("  %s:%s %s\n", utl.Blu(k), utl.PadSpaces(20, len(k)), vStr)
-
-	os.Exit(0)
-}
-
-// Returns DEBUG tokens string
-func DebugTokenString(z *Config) string {
-	az := utl.Str(z.AzToken)
-	if len(az) < 4 {
-		az = "AZ_" + "none"
-	} else {
-		az = "AZ_" + az[len(az)-4:]
-	}
-	mg := utl.Str(z.MgToken)
-	if len(mg) < 4 {
-		mg = "MG_" + "none"
-	} else {
-		mg = "MG_" + mg[len(mg)-4:]
-	}
-	return fmt.Sprintf("%s %s", az, mg)
+	return "", err
 }

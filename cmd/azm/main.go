@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.7"
+	program_version = "0.8.8"
 )
 
 func printUsage(extended bool) {
@@ -21,7 +20,7 @@ func printUsage(extended bool) {
 	v := program_version
 	X := utl.Red("X")
 	usageHeader := fmt.Sprintf("%s v%s\n"+
-		"Azure IAM CLI manager - github.com/queone/azm\n"+
+		"Azure IAM CLI utility - github.com/queone/azm\n"+
 		"%s\n"+
 		"  %s [options] [arguments]\n"+
 		"\n"+
@@ -47,7 +46,7 @@ func printUsage(extended bool) {
 		"  %s -g MyGroup                               To show any directory group with the filter\n"+
 		"                                               'MyGroup' in its attributes\n"+
 		"  %s -s                                       To list all subscriptions in current tenant\n"+
-		"  %s -h                                       To display the full list of options\n",
+		"  %s -?                                       To display the full list of options\n",
 		n, v, utl.Whi2("Usage"), n, X,
 		utl.Red("d "), utl.Red("a "), utl.Red("s "), utl.Red("m "), utl.Red("u "),
 		utl.Red("g "), utl.Red("ap"), utl.Red("sp"), utl.Red("dr"), utl.Red("da"), X,
@@ -89,12 +88,12 @@ func printUsage(extended bool) {
 		"  -id                              Display the currently configured login values\n"+
 		"  -id TenantId Username            Set up user credentials for interactive login\n"+
 		"  -id TenantId ClientId Secret     Configure ID for automated login\n"+
-		"  -tx                              Delete the current configured login values and token\n"+
+		"  -tx                              Delete the current token and other configured login values\n"+
 		"  -xx                              Delete ALL local file cache\n"+
 		"  -%sx                              Delete %s object local file cache\n"+
 		"  -tmg                             Display current Microsoft Graph API access token\n"+
 		"  -taz                             Display current Azure Resource API access token\n"+
-		"  -tc \"TokenString\"                Parse and display the claims contained in the given token\n"+
+		"  -td \"TokenString\"                Decode given JWT token string\n"+
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
 		"  -?, -h, --help                   Display the full list of options\n",
@@ -113,16 +112,15 @@ func printUnknownCommandError() {
 }
 
 func main() {
-	numberOfArguments := len(os.Args[1:]) // Not including the program itself
+	numberOfArguments := len(os.Args[1:]) // Exclude the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {
-		printUsage(false) // Don't accept less than 1 or more than 4 arguments
+		// Don't accept less than 1, or more than 4 arguments
+		printUsage(false) // false = display short usage
 	}
 
-	// Set up global config z pointer variable
-	// See Config type in https://github.com/queone/azm/blob/main/pkg/maz/maz.go
-	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", and so on
-
-	maz.Log("%s\n", utl.Cya("in  "+maz.DebugTokenString(z))) // DEBUG
+	// Set up required global configuration variable; includes z.ConfDir = "~/.maz", etc
+	// For more info see https://github.com/queone/azm/blob/main/pkg/maz/maz_core.go
+	z := maz.NewConfig()
 
 	switch numberOfArguments {
 	case 1: // 1 argument
@@ -132,29 +130,23 @@ func main() {
 		case "-id":
 			maz.DumpLoginValues(z)
 		case "-?", "-h", "--help":
-			printUsage(true)
+			printUsage(true) // true = display long usage
 		case "-uuid":
 			utl.Die("%s\n", uuid.New().String())
 		}
 		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens
 		switch arg1 {
 		case "-tx":
-			utl.RemoveFile(filepath.Join(z.ConfDir, z.TokenFile)) // Remove token file
-			utl.RemoveFile(filepath.Join(z.ConfDir, z.CredsFile)) // Remove credentials file
-		case "-xx":
-			// Loop through each mazType in CacheSuffix
-			for mazType := range maz.CacheSuffix {
-				if err := maz.RemoveCacheFiles(mazType, z); err != nil {
-					fmt.Printf("Error removing %s cache files: %v\n", utl.Red(mazType), err)
-				}
-			}
-		case "-ax", "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax":
+			maz.DeleteCurrentCredentials(z)
+		case "-ax", "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax", "-xx":
 			mazType := arg1[1 : len(arg1)-1]
-			maz.RemoveCacheFiles(mazType, z)
+			maz.PurgeMazObjectCacheFiles(mazType, z)
+
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
-			specifier := arg1[1:] // Remove arg1 leading '-'
+			specifier := arg1[1:] // Remove arg1 leading hyphen
 			maz.PrintMatchingObjects(specifier, "", z)
+
 		case "-dk", "-ak", "-gk", "-apk":
 			mazType := arg1[1 : len(arg1)-1]
 			maz.CreateSkeletonFile(mazType, "")
@@ -180,13 +172,15 @@ func main() {
 	case 2: // 2 arguments
 		arg1 := os.Args[1]
 		arg2 := os.Args[2]
-		maz.SetupApiTokens(z)
+		switch arg1 {
+		case "-td":
+			maz.DecodeAndValidateToken(arg2)
+		}
+		maz.SetupApiTokens(z) // Remaining 2-arg requests do need API access
 		switch arg1 {
 		case "-kd", "-ka", "-kg", "-kap":
 			mazType := arg1[2:]
 			maz.CreateSkeletonFile(mazType, arg2)
-		case "-tc":
-			maz.DecodeJwtToken(arg2)
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove the leading '-'
@@ -228,9 +222,9 @@ func main() {
 		case "-id":
 			z.TenantId = arg2
 			z.Username = arg3
-			maz.SetupInterativeLogin(z)
+			maz.ConfigureCredsFileForInterativeLogin(z)
 		}
-		maz.SetupApiTokens(z) // The remaining 3-arg requests do need API access
+		maz.SetupApiTokens(z) // Remaining 3-arg requests do need API access
 		switch arg1 {
 		case "-rn", "-rnf":
 			force := false
@@ -267,7 +261,7 @@ func main() {
 			z.TenantId = arg2
 			z.ClientId = arg3
 			z.ClientSecret = arg4
-			maz.SetupAutomatedLogin(z)
+			maz.ConfigureCredsFileForAutomatedLogin(z)
 		}
 		maz.SetupApiTokens(z)
 		switch arg1 {
@@ -279,6 +273,4 @@ func main() {
 			printUnknownCommandError()
 		}
 	}
-
-	maz.Log("%s\n", utl.Cya("in  "+maz.DebugTokenString(z))) // DEBUG
 }

@@ -32,7 +32,7 @@ func ObjectCountAzure(t string, z *Config) int64 {
 	var err error
 	resp, statCode, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode != 200 {
 		return 0
@@ -49,7 +49,7 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	id := utl.Str(resp["id"]) // Try casting to a string
 	if id != "" {
@@ -63,7 +63,7 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 			params := map[string]string{"$filter": "appId eq '" + targetId + "'"}
 			resp, _, err := ApiGet(apiUrl, z, params)
 			if err != nil {
-				Log("%v\n", err)
+				Logf("%v\n", err)
 			}
 			objList := utl.Slice(resp["value"]) // Try casting to a slice
 			if objList != nil {
@@ -95,7 +95,7 @@ func GetObjectFromAzureById(mazType, targetId string, z *Config) AzureObject {
 	}
 	cache.Upsert(obj.TrimForCache(mazType))
 	if err := cache.Save(); err != nil {
-		Log("Failed to save cache: %v", err)
+		Logf("Failed to save cache: %v", err)
 	}
 
 	return obj // Return the found object or nil
@@ -110,7 +110,7 @@ func GetObjectFromAzureByName(mazType, displayName string, z *Config) AzureObjec
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	matchingObjects := utl.Slice(resp["value"]) // Try casting to a slice
 	if matchingObjects != nil {
@@ -248,7 +248,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 	deltaLinkMap, err := cache.LoadDeltaLink()
 	if err != nil {
 		// Fall back to full sync if delta token fails
-		Log("Delta token load failed, falling back to full sync: %v", err)
+		Logf("Delta token load failed, falling back to full sync: %v", err)
 		queryParams := "?$select=" + map[string]string{
 			DirectoryUser:     "id,displayName,userPrincipalName,onPremisesSamAccountName",
 			DirectoryGroup:    "id,displayName,description,isAssignableToRole,createdDateTime",
@@ -272,7 +272,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 
 	// Retry delta token save once before dying
 	if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
-		Log("Delta token save failed, retrying once: %v", err)
+		Logf("Delta token save failed, retrying once: %v", err)
 		time.Sleep(1 * time.Second)
 		if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
 			utl.Die("Error saving delta link after retry: %v", err)
@@ -350,7 +350,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 			deltaSet = append(deltaSet, obj)
 			if verbose && len(deltaSet)%100 == 0 {
-				fmt.Printf("%sCall %05d : count %05d", rUp, callCount, len(deltaSet))
+				fmt.Printf("%sCall %05d : count %07d", rUp, callCount, len(deltaSet))
 			}
 
 		default:
@@ -396,7 +396,7 @@ func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (Azure
 		if err == nil {
 			return resp, nil
 		}
-		Log("%v\n", err)
+		Logf("%v\n", err)
 		if verbose {
 			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
 		}
@@ -437,7 +437,7 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 	var err error
 	resp, statCode, err := ApiDelete(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 204 {
 		fmt.Printf("Successfully %s %s!\n", utl.Gre("DELETED"), mazTypeName)
@@ -445,14 +445,14 @@ func DeleteDirObjectInAzure(mazType, id string, z *Config) error {
 		// Also remove from local cache
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
+			Logf("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Delete(id)
 		if err == nil { // Only save if deletion succeeded
 			err = cache.Save()
 		}
 		if err != nil {
-			Log("Failed to delete object with ID %s: %w\n", id, err)
+			Logf("Failed to delete object with ID %s: %w\n", id, err)
 		}
 	} else {
 		fmt.Printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
@@ -490,7 +490,7 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 	var err error
 	resp, statCode, err := ApiPost(apiUrl, z, payload, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 201 {
 		azObj = AzureObject(resp) // Cast newly created object to our standard type
@@ -500,14 +500,14 @@ func CreateDirObjectInAzure(mazType string, obj AzureObject, z *Config) AzureObj
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
+			Logf("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Upsert(azObj.TrimForCache(mazType))
 		if err != nil {
-			Log("Failed to upsert object with ID %s: %w\n", id, err)
+			Logf("Failed to upsert object with ID %s: %w\n", id, err)
 		}
 		if err := cache.Save(); err != nil {
-			Log("Failed to save cache: %v", err)
+			Logf("Failed to save cache: %v", err)
 		}
 	} else {
 		fmt.Printf("HTTP %d: Error creating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))
@@ -541,7 +541,7 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 	var err error
 	resp, statCode, err := ApiPatch(apiUrl, z, payload, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 204 {
 		fmt.Printf("Successfully %s %s!\n", utl.Gre("UPDATED"), mazTypeName)
@@ -553,14 +553,14 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 		// Upsert object in local cache also
 		cache, err := GetCache(mazType, z)
 		if err != nil {
-			Log("Failed to get cache for %s: %w\n", mazTypeName, err)
+			Logf("Failed to get cache for %s: %w\n", mazTypeName, err)
 		}
 		err = cache.Upsert(obj.TrimForCache(mazType))
 		if err != nil {
-			Log("Failed to upsert object with ID %s: %w\n", id, err)
+			Logf("Failed to upsert object with ID %s: %w\n", id, err)
 		}
 		if err := cache.Save(); err != nil {
-			Log("Failed to save cache: %v", err)
+			Logf("Failed to save cache: %v", err)
 		}
 	} else {
 		fmt.Printf("HTTP %d: Error updating %s: %s\n", statCode, mazTypeName, ApiErrorMsg(resp))

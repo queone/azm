@@ -31,7 +31,7 @@ func PrintGroup(x AzureObject, z *Config) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	owners := utl.Slice(resp["value"])
 	if len(owners) > 0 {
@@ -53,7 +53,7 @@ func PrintGroup(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/transitiveMemberOf"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	memberOfList := utl.Slice(resp["value"])
 	if len(memberOfList) > 0 {
@@ -64,7 +64,7 @@ func PrintGroup(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members" // beta works
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	members := utl.Slice(resp["value"])
 	if len(members) > 0 {

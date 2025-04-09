@@ -32,7 +32,7 @@ func PrintUser(obj map[string]interface{}, z *Config) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	transitiveMemberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(transitiveMemberOf)

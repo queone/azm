@@ -26,7 +26,7 @@ func PrintSp(x AzureObject, z *Config) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	keyCredentials := utl.Slice(resp["value"])
 	PrintCertificateList(keyCredentials)
@@ -35,7 +35,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	passwordCredentials := utl.Slice(resp["value"])
 	PrintSecretList(passwordCredentials)
@@ -44,7 +44,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/owners"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	owners := utl.Slice(resp["value"])
 	PrintOwners(owners)
@@ -80,7 +80,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	memberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(memberOf)
@@ -98,7 +98,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/oauth2PermissionGrants"
 	resp, _, err = ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	oauth2PermissionGrants := utl.Slice(resp["value"])
 
@@ -117,7 +117,7 @@ func PrintSp(x AzureObject, z *Config) {
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
 				r2, _, err := ApiGet(apiUrl2, z, nil)
 				if err != nil {
-					Log("%v\n", err)
+					Logf("%v\n", err)
 				}
 				apiName := "Unknown"
 				if r2["displayName"] != nil {
@@ -138,7 +138,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/appRoleAssignments"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	appRoleAssignments := utl.Slice(resp["value"])
 
@@ -163,7 +163,7 @@ func PrintSp(x AzureObject, z *Config) {
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
 				resp2, _, err := ApiGet(apiUrl2, z, nil)
 				if err != nil {
-					Log("%v\n", err)
+					Logf("%v\n", err)
 				}
 				appRoles := utl.Slice(resp2["appRoles"])
 				for item := range appRoles {
@@ -243,7 +243,7 @@ func PrintSp(x AzureObject, z *Config) {
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "?$select=customSecurityAttributes"
 	resp, _, err = ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	customSecurityAttributes := utl.Map(resp["customSecurityAttributes"])
 	if customSecurityAttributes != nil {
@@ -351,7 +351,7 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	all := utl.Int64(resp["value"])
 
@@ -363,7 +363,7 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	apiUrl = ConstMgUrl + ApiEndpoint[ServicePrincipal]
 	resp, _, err = ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	native = utl.Int64(resp["@odata.count"])
 

@@ -200,7 +200,7 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	var err error
 	resp, statCode, err := ApiPut(apiUrl, z, payload, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 200 || statCode == 201 {
 		fmt.Printf("%s\n", utl.Gre("Successfully CREATED role assignment!"))
@@ -216,7 +216,7 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 			utl.Die("Error: %v\n", err)
 		}
 		if err := cache.Save(); err != nil {
-			Log("Failed to save cache: %v", err)
+			Logf("Failed to save cache: %v", err)
 		}
 	} else {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
@@ -251,7 +251,7 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	var err error
 	resp, statCode, err := ApiDelete(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 200 {
 		fmt.Printf("%s\n", utl.Gre("Successfully DELETED role assignment!"))
@@ -375,7 +375,7 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 		var err error
 		resp, statCode, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if statCode != 200 {
 			// For now, I don't think we care about any errors
@@ -454,7 +454,7 @@ func GetAzureResRoleAssignmentBy3Args(targetRoleDefinitionId, targetPrincipalId,
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	assignments := utl.Slice(resp["value"])
 	if len(assignments) > 0 { // Inspect all qualifying assignments for this principalId
@@ -504,7 +504,7 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 		var err error
 		resp, statCode, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if statCode == 200 {
 			if assignment := utl.Map(resp); assignment != nil {

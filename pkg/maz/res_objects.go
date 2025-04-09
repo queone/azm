@@ -64,7 +64,7 @@ func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 	var err error
 	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {
@@ -121,7 +121,7 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 	var err error
 	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {
