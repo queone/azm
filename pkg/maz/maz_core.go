@@ -3,6 +3,7 @@
 // and the MS Graph API, but can be extended to support additional APIs. This package
 // obviously also includes code to get an Azure JWT token using the MSAL library, to
 // then use against either the 2 currently supported Azure APIs.
+
 package maz
 
 import (
@@ -18,6 +19,10 @@ const (
 	ConstAuthUrl = "https://login.microsoftonline.com/"
 	ConstMgUrl   = "https://graph.microsoft.com"
 	ConstAzUrl   = "https://management.azure.com"
+
+	AzApiToken      = "AzApiToken"
+	MgApiToken      = "MgApiToken"
+	UnknownApiToken = "UnknownApiToken"
 
 	ConstAzPowerShellClientId = "1950a258-227b-4e31-a9cf-717495945fc2" // 'Microsoft Azure PowerShell' ClientId
 	//ConstAzPowerShellClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" // 'Microsoft Azure CLI' ClientId
@@ -46,6 +51,7 @@ const (
 	DirRoleDefinition = "dr" // Azure directory role definition
 	DirRoleAssignment = "da" // Azure directory role assignment
 	UnknownObject     = ""
+	AllMazObjects     = "x"
 )
 
 var (
@@ -97,7 +103,7 @@ var (
 		DirRoleDefinition: "/v1.0/roleManagement/directory/roleDefinitions",
 		DirRoleAssignment: "/v1.0/roleManagement/directory/roleAssignments",
 	}
-	mazVars = map[string]string{
+	mazEnvironmentVars = map[string]string{
 		"MAZ_TENANT_ID":     "",
 		"MAZ_USERNAME":      "",
 		"MAZ_INTERACTIVE":   "",
@@ -196,11 +202,43 @@ func (m *Config) Validate() error {
 	return nil
 }
 
+// Deletes current credentials and token files
+func DeleteCurrentCredentials(z *Config) {
+	utl.RemoveFile(filepath.Join(z.ConfDir, z.TokenFile)) // Remove token file
+	utl.RemoveFile(filepath.Join(z.ConfDir, z.CredsFile)) // Remove credentials file
+	os.Exit(0)
+}
+
+// Purges the cache files for given maz object type(s)
+func PurgeMazObjectCacheFiles(mazType string, z *Config) {
+	var hasError bool // Flag to track if any errors occurred
+
+	if mazType == AllMazObjects {
+		for mazType, mazTypeName := range MazTypeNames {
+			hasError = true // Set the flag to true if an error occurs
+			if err := PurgeCacheFiles(mazType, z); err != nil {
+				fmt.Printf("Error removing %s cache files: %v\n", utl.Red(mazTypeName), err)
+			}
+		}
+	} else {
+		if err := PurgeCacheFiles(mazType, z); err != nil {
+			hasError = true
+			fmt.Printf("Error removing %s cache files: %v\n", utl.Red(MazTypeNames[mazType]), err)
+		}
+	}
+
+	if hasError {
+		os.Exit(1) // Exit with code 1 if any errors occurred
+	} else {
+		os.Exit(0) // Exit with code 0 if everything was successful
+	}
+}
+
 // Dumps configured login values
 func DumpLoginValues(z *Config) {
 	fmt.Printf("%s: %s  %s\n", utl.Blu("config_dir"), utl.Gre(z.ConfDir), utl.Gra("# Config and cache directory"))
 
-	fmt.Printf("%s:\n", utl.Blu("config_env_variables"))
+	fmt.Printf("%s:\n", utl.Blu("config_vars"))
 	comment := "  # 1. MS Graph and Azure ARM tokens can be supplied directly via MAZ_MG_TOKEN and\n" +
 		"  #    MAZ_AZ_TOKEN environment variables, and they have the highest precedence.\n" +
 		"  #    Note, MAZ_TENANT_ID is still required when using these 2.\n" +
@@ -238,8 +276,8 @@ func DumpLoginValues(z *Config) {
 	os.Exit(0)
 }
 
-// Sets up credentials file for interactive login
-func SetupInterativeLogin(z *Config) {
+// Configure maz credentials file for interactive login
+func ConfigureCredsFileForInterativeLogin(z *Config) {
 	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
@@ -253,8 +291,8 @@ func SetupInterativeLogin(z *Config) {
 	os.Exit(0)
 }
 
-// Sets up credentials file for client_id + secret login
-func SetupAutomatedLogin(z *Config) {
+// Configure maz credentials file for automated client_id/secret login
+func ConfigureCredsFileForAutomatedLogin(z *Config) {
 	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
@@ -271,146 +309,220 @@ func SetupAutomatedLogin(z *Config) {
 	os.Exit(0)
 }
 
-// Gets credentials from OS environment variables (which take precedence), or from the
-// credentials file.
-func SetupCredentials(z *Config) {
-	usingEnv := false // Assume environment variables are not being used
-	for k := range mazVars {
-		mazVars[k] = os.Getenv(k) // Read all MAZ_* environment variables
-		if mazVars[k] != "" {
-			usingEnv = true // If any are set, environment variable login/token is true
+// Configure variables and API credentials for maz
+func SetupMazCredentials(z *Config) {
+	// For login credentials precedence is given to environment variables
+
+	// Check if credentials have been provided via environment variables
+	usingEnvVars := false // Assume they have not
+	for k := range mazEnvironmentVars {
+		mazEnvironmentVars[k] = os.Getenv(k)
+		// Read all MAZ_* environment variables
+		if mazEnvironmentVars[k] != "" {
+			// If any are set, then environment variable are being used
+			usingEnvVars = true
 		}
 	}
-	if usingEnv {
-		// Getting from OS environment variables
-		z.TenantId = mazVars["MAZ_TENANT_ID"]
-		if !utl.ValidUuid(z.TenantId) {
-			utl.Die("[MAZ_TENANT_ID] tenant_id '%s' is not a valid UUID\n", z.TenantId)
-		}
-		z.MgToken = mazVars["MAZ_MG_TOKEN"]
-		z.AzToken = mazVars["MAZ_AZ_TOKEN"]
-		// Let's assume tokens for each of the 2 APIs have been supplied
-		AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
-		MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
-		if !AzTokenValid && !MgTokenValid {
-			// If they are both not valid, then we'll process the other variables
-			z.Interactive = utl.Bool(mazVars["MAZ_INTERACTIVE"]) // Try casting as bool
-			if z.Interactive {
-				z.Username = strings.ToLower(utl.Str(mazVars["MAZ_USERNAME"]))
-				if z.ClientId != "" || z.ClientSecret != "" {
-					fmt.Println("Warning: ", utl.Yel(""))
-				}
-			} else {
-				z.ClientId = utl.Str(mazVars["MAZ_CLIENT_ID"])
-				if !utl.ValidUuid(z.ClientId) {
-					utl.Die("[MAZ_CLIENT_ID] client_id '%s' is not a valid UUID\n", z.ClientId)
-				}
-				z.ClientSecret = utl.Str(mazVars["MAZ_CLIENT_SECRET"])
-				if z.ClientSecret == "" {
-					utl.Die("[MAZ_CLIENT_SECRET] client_secret is blank\n")
-				}
-			}
-		} // ... else it gets the Tenant Id from the valid tokens
+	if usingEnvVars {
+		SetupMazCredentialsFromEnvVars(z)
 	} else {
-		// Getting from credentials file
-		credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
-		if !utl.FileUsable(credsFile) {
-			utl.Die("Missing credentials file: %s\n"+
-				"Run program with the %s option to set up the appropriate login credentials.\n",
-				credsFile, utl.Yel("-id"))
-		}
-		credsRaw, err := utl.LoadFileYaml(credsFile)
-		if err != nil {
-			utl.Die("[%s] %s\n", credsFile, err)
-		}
-		creds := utl.Map(credsRaw)
-		if creds == nil {
-			utl.Die("[%s] Values in file are not properly formatted.\n", credsFile)
-		}
-
-		z.TenantId = utl.Str(creds["tenant_id"])
-		if !utl.ValidUuid(z.TenantId) {
-			utl.Die("[%s] tenant_id '%s' is not a valid UUID\n", credsFile, z.TenantId)
-		}
-
-		z.Interactive = utl.Bool(creds["interactive"]) // Try casting as bool
-		if z.Interactive {
-			z.Username = strings.ToLower(utl.Str(creds["username"]))
-		} else {
-			z.ClientId = utl.Str(creds["client_id"])
-			if !utl.ValidUuid(z.ClientId) {
-				utl.Die("[%s] client_id '%s' is not a valid UUID\n", credsFile, z.ClientId)
-			}
-			z.ClientSecret = utl.Str(creds["client_secret"])
-			if z.ClientSecret == "" {
-				utl.Die("[%s] client_secret is blank\n", credsFile)
-			}
-		}
+		SetupMazCredentialsFromFile(z)
 	}
 }
 
-// Initializes the necessary global variables, acquires all API tokens, and sets them up for use.
+// Configure login credentials from OS environment variables
+func SetupMazCredentialsFromEnvVars(z *Config) {
+	Logf("Using environment variables for login credentials\n")
+	z.TenantId = mazEnvironmentVars["MAZ_TENANT_ID"]
+	if !utl.ValidUuid(z.TenantId) {
+		utl.Die("Error: Environment variable MAZ_TENANT_ID '%s' is not a valid UUID. "+
+			"Cannot continue.\n", z.TenantId)
+	}
+	Logf("1. Environment variable MAZ_TENANT_ID is set to %s\n", utl.Yel(z.TenantId))
+
+	// Use API login tokens provided via environment variables
+	z.AzToken = mazEnvironmentVars["MAZ_AZ_TOKEN"]
+	z.MgToken = mazEnvironmentVars["MAZ_MG_TOKEN"]
+	_, azErr := SplitJWT(z.AzToken)
+	_, mgErr := SplitJWT(z.MgToken)
+	bothTokensAreValid := azErr == nil && mgErr == nil
+	if bothTokensAreValid {
+		Logf("2. Environment variable MAZ_AZ_TOKEN appears to have a valid token: Suffix = %s\n",
+			utl.Yel(GetTokenSuffix(z.AzToken)))
+		Logf("3. Environment variable MAZ_MG_TOKEN appears to have a valid token: Suffix = %s\n",
+			utl.Yel(GetTokenSuffix(z.MgToken)))
+		Logf("Above three credentials should suffice for token login.\n")
+		return // Return early since we have all creds for this type of login
+	}
+
+	// Assume the 2 API tokens will be acquired using the other variables, so let's check them
+	z.Interactive = utl.Bool(mazEnvironmentVars["MAZ_INTERACTIVE"])
+	if z.Interactive {
+		Logf("2. Environment variable MAZ_INTERACTIVE is set to %s", utl.Yel(z.Interactive))
+		z.Username = strings.ToLower(utl.Str(mazEnvironmentVars["MAZ_USERNAME"]))
+		if z.Username != "" {
+			Logf("3. Environment variable MAZ_USERNAME is set to %s", utl.Yel(z.Username))
+			Logf("Above three credentials should suffice for interactive login.\n")
+		} else {
+			utl.Die("Error: Environment variable MAZ_USERNAME is blank. Cannot continue " +
+				"with interactive login.\n")
+		}
+	} else {
+		z.ClientId = utl.Str(mazEnvironmentVars["MAZ_CLIENT_ID"])
+		if !utl.ValidUuid(z.ClientId) {
+			utl.Die("Error: The chosen login method appears to be via environment variables, "+
+				"but variable MAZ_CLIENT_ID '%s' is not a valid UUID. Cannot continue.\n", z.ClientId)
+		}
+		Logf("2. Environment variable MAZ_CLIENT_ID is set to %s", utl.Yel(z.ClientId))
+		z.ClientSecret = utl.Str(mazEnvironmentVars["MAZ_CLIENT_SECRET"])
+		if z.ClientSecret == "" {
+			utl.Die("Error: The chosen login method appears to be via environment variables, " +
+				"but variable MAZ_CLIENT_SECRET is blank. Cannot continue.\n")
+		}
+		Logf("3. Environment variable MAZ_CLIENT_SECRET has a value.\n")
+		Logf("Above three credentials should suffice for client_id/secret login.\n")
+	}
+}
+
+// Configure login credentials from credentials file
+func SetupMazCredentialsFromFile(z *Config) {
+	credsFile := filepath.Join(z.ConfDir, z.CredsFile)
+	Logf("Using login credentials in file %s\n", utl.Yel(credsFile))
+	if !utl.FileUsable(credsFile) {
+		utl.Die("Error: The credentials file is missing!\n")
+	}
+	Logf("The file exists\n")
+
+	credsRaw, err := utl.LoadFileYaml(credsFile)
+	if err != nil {
+		utl.Die("Error: %s\n", err)
+	}
+	Logf("The file is valid YAML\n")
+
+	creds := utl.Map(credsRaw)
+	if creds == nil {
+		utl.Die("Error: Values in file %s are not formatted properly.\n", utl.Red(credsFile))
+	}
+	Logf("Credential file parameter and values appear to be formatted properly.\n")
+
+	z.TenantId = utl.Str(creds["tenant_id"])
+	if !utl.ValidUuid(z.TenantId) {
+		utl.Die("Error: The value of %s (%s) in file %s is not a valid UUID.\n",
+			utl.Red("tenant_id"), z.TenantId, utl.Red(credsFile))
+	}
+	Logf("1. Credential file parameter 'tenant_id' is set to %s\n", utl.Yel(z.TenantId))
+
+	z.Interactive = utl.Bool(creds["interactive"])
+	if z.Interactive {
+		Logf("2. Credential file parameter 'interactive' is set to %s\n", utl.Yel(z.Interactive))
+		z.Username = strings.ToLower(utl.Str(creds["username"]))
+		if z.Username != "" {
+			Logf("3. Credential file parameter 'username' is set to %s\n", utl.Yel(z.Username))
+			Logf("Above three credentials should suffice for interactive username login.\n")
+		} else {
+			utl.Die("Error: Credential file parameter 'username' is blank. Cannot " +
+				"continue with interactive login.\n")
+		}
+	} else {
+		z.ClientId = utl.Str(creds["client_id"])
+		if !utl.ValidUuid(z.ClientId) {
+			utl.Die("Error: Credential file parameter %s (%s) is not a valid UUID.\n",
+				utl.Red("client_id"), z.ClientId)
+		}
+		Logf("2. Credential file parameter 'client_id' is set to %s\n", utl.Yel(z.ClientId))
+
+		z.ClientSecret = utl.Str(creds["client_secret"])
+		if z.ClientSecret == "" {
+			utl.Die("Error: Credential file parameter %s is blank. Cannot continue.\n",
+				utl.Red("client_secret"))
+		}
+		Logf("3. Credential file parameter 'client_secret' has a value.\n")
+		Logf("Above three credentials should suffice for automated client_id/secret login.\n")
+	}
+}
+
+// Initializes all necessary global variables and acquires and sets all API tokens.
 func SetupApiTokens(z *Config) {
-	SetupCredentials(z) // Sets up tenant ID, client ID, authentication method, etc
+	SetupMazCredentials(z) // Set up authentication method and required variables
 
-	// The Microsoft identity platform does not allow using same token for multiple resources at once.
-	// See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-net-user-gets-consent-for-multiple-resources
+	// This function must initialize ALL service API tokens. A failure to do so for
+	// any any token will result in the program aborting.
 
-	// Set up Azure Resource Management (ARM) API token
-	AzTokenValid, _ := IsValidTokenFormat(z.AzToken)
-	if !AzTokenValid {
-		// If token not valid, let's get it via the supported methods
-		var err error
+	// Initialize Azure ARM API token
+	SetupAzureArmToken(z)
 
-		// Get a token for ARM access
-		azScope := []string{ConstAzUrl + "/.default"}
-		// Appending '/.default' allows using all static and consented permissions of the identity in use
-		// See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
-		if z.Interactive {
-			// Get token interactively
-			z.AzToken, err = GetTokenInteractively(azScope, z)
-			if err != nil {
-				utl.Die("%v", err)
-			}
-		} else {
-			// Get token with clientId + Secret
-			z.AzToken, err = GetTokenByCredentials(azScope, z)
-			if err != nil {
-				utl.Die("%v", err)
-			}
-		}
-	}
+	// Initialize MS Graph API token
+	SetupMsGraphToken(z)
 
-	// Set up MS Graph API token
-	MgTokenValid, _ := IsValidTokenFormat(z.MgToken)
-	if !MgTokenValid {
-		// If token not valid, let's get it via the supported methods
-		var err error
-
-		// Get a token for MS Graph access
-		mgScope := []string{ConstMgUrl + "/.default"}
-		if z.Interactive {
-			z.MgToken, err = GetTokenInteractively(mgScope, z)
-			if err != nil {
-				utl.Die("%v", err)
-			}
-		} else {
-			z.MgToken, err = GetTokenByCredentials(mgScope, z)
-			if err != nil {
-				utl.Die("%v", err)
-			}
-		}
-
-		// Support for other APIs can be added here in the future ...
-	}
-
-	// Setup the base API headers; token + content type
-	z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")
-	z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
+	// Other API tokens can be initialized here...
 }
 
-// Log prints to stderr with cyan-colored caller tracing when MAZ_LOG is enabled
-func Log(format string, args ...interface{}) {
+// Sets up the Azure Resource Management (ARM) API token
+func SetupAzureArmToken(z *Config) {
+	// If token is not valid, then lets acquire a new one
+	if _, err := SplitJWT(z.AzToken); err != nil {
+		Logf("Current AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
+		scope := []string{ConstAzUrl + "/.default"}
+		// Appending '/.default' allows using all static and consented permissions of the identity in
+		// use. See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
+		var err error
+		z.AzToken, err = GetApiToken(scope, z) // Get the Azure ARM token
+		if err != nil {
+			utl.Die("%s: %v\n", utl.Red("Error"), err)
+		}
+		Logf("Current AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
+		// Setup the base API headers; token + content type
+		z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")
+	}
+}
+
+// Sets up the Microsoft Graph API token
+func SetupMsGraphToken(z *Config) {
+	// If token is not valid, then lets acquire a new one
+	if _, err := SplitJWT(z.MgToken); err != nil {
+		Logf("Current MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
+		scope := []string{ConstMgUrl + "/.default"}
+		var err error
+		z.MgToken, err = GetApiToken(scope, z) // Get the MS Graph token
+		if err != nil {
+			utl.Die("%s: %v\n", utl.Red("Error"), err)
+		}
+		Logf("Current MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
+		// Setup the base API headers; token + content type
+		z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
+	}
+}
+
+// Acquires an access token for the given API scope using one of two different methods
+func GetApiToken(scope []string, z *Config) (string, error) {
+	if z.Interactive {
+		// User has configured the utility to do interactive username popup browser login
+		return GetTokenInteractively(scope, z)
+	} else {
+		// User has configured the utility to do automated client_id/secret login
+		return GetTokenByCredentials(scope, z)
+	}
+}
+
+// Checks if a JWT token string is properly formatted and splits it into its three parts.
+func SplitJWT(tokenString string) ([]string, error) {
+	if tokenString == "" {
+		return nil, fmt.Errorf("token is empty")
+	}
+	if !strings.HasPrefix(tokenString, "eyJ") {
+		return nil, fmt.Errorf("token does not appear to start with a JWT header")
+	}
+
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT format: expected 3 parts separated by '.'")
+	}
+
+	return parts, nil
+}
+
+// Prints colorized, formatted debugging messages to stderr when MAZ_LOG is enabled
+func Logf(format string, args ...interface{}) {
 	// Check logging enabled
 	val := strings.ToLower(os.Getenv("MAZ_LOG"))
 	if val != "1" && val != "true" && val != "yes" {
@@ -427,7 +539,7 @@ func Log(format string, args ...interface{}) {
 	}
 
 	// Format the entire trace prefix in cyan
-	tracePrefix := utl.Cya(fmt.Sprintf("MAZ> %s:%d %s: ",
+	tracePrefix := utl.Cya(fmt.Sprintf("MAZ %s:%d %s: ",
 		filepath.Base(trace.File),
 		trace.Line,
 		funcName))

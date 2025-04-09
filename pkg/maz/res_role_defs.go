@@ -249,7 +249,7 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	var err error
 	resp, statCode, err := ApiPut(apiUrl, z, payload, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 201 {
 		msg := fmt.Sprintf("Successfully %s %s!", deployType, MazTypeNames[mazType])
@@ -265,7 +265,7 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 			utl.Die("Error: %v\n", err)
 		}
 		if err := cache.Save(); err != nil {
-			Log("Failed to save cache: %v", err)
+			Logf("Failed to save cache: %v", err)
 		}
 	} else {
 		msg := fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))
@@ -302,7 +302,7 @@ func DeleteResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	var err error
 	resp, statCode, err := ApiDelete(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if statCode == 200 {
 		msg := fmt.Sprintf("Successfully DELETED %s!", MazTypeNames[mazType])
@@ -428,7 +428,7 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 		var err error
 		resp, _, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		roles := utl.Slice(resp["value"])
 		count := 0
@@ -489,7 +489,7 @@ func GetAzureResRoleDefinitionByScopeAndName(scope, roleName string, z *Config) 
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	roles := utl.Slice(resp["value"]) // Cast to a slice
 	if len(roles) == 1 {
@@ -525,7 +525,7 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 		var err error
 		resp, _, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		roles := utl.Slice(resp["value"])
 		for i := range roles {
@@ -573,7 +573,7 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 		var err error
 		resp, statCode, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if statCode == 200 {
 			if role := utl.Map(resp); role != nil {

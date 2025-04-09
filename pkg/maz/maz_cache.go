@@ -50,13 +50,14 @@ func GetCache(mazType string, z *Config) (*Cache, error) {
 	return cache, nil
 }
 
-// Removes cache files for a given type code and configuration.
-// It ensures both the cache file and deltaLink file associated with the type are deleted.
-func RemoveCacheFiles(mazType string, z *Config) error {
+// Purges cache and delta link files for a given type.
+func PurgeCacheFiles(mazType string, z *Config) error {
 	// Validate the input type and get the suffix.
 	suffix, ok := CacheSuffix[mazType]
 	if !ok {
-		return fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
+		msg := "invalid object type code"
+		Logf("Error: %s %s\n", utl.Red(mazType))
+		return fmt.Errorf("%s: %s", msg, mazType)
 	}
 
 	// Construct the cache file and delta link file paths without loading the cache.
@@ -65,12 +66,16 @@ func RemoveCacheFiles(mazType string, z *Config) error {
 
 	// Remove the cache file.
 	if err := os.Remove(cacheFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove cache file: %w", err)
+		msg := "failed to remove cache file"
+		Logf("Error: %s %s\n", utl.Red(cacheFile))
+		return fmt.Errorf("%s: %w", msg, err)
 	}
 
 	// Remove the delta link file.
 	if err := os.Remove(deltaLinkFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove deltaLink file: %w", err)
+		msg := "failed to remove deltaLink file"
+		Logf("Error: %s %s\n", utl.Red(deltaLinkFile))
+		return fmt.Errorf("%s: %w", msg, err)
 	}
 
 	return nil

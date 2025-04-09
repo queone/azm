@@ -1,8 +1,15 @@
 ## Releases
 
+### v0.8.8
+Release Date: 2025-apr-09
+- The -td "tokenString" option now performs proper token signature verification for AZ tokens only
+- Revamped the token decoding and verifications and placed in new token_decode.go file
+- Renamed maz.Log() to maz.Logf(), to make it clear it accepts formatting
+- Renames all files to use the more idiomatic underscore rather than hyphens
+
 ### v0.8.7
 Release Date: 2025-apr-01
-- More adjustments of GetTokenInteractively, better debug log output
+- More adjustments of GetTokenInteractively(), better debug log output
 
 ### v0.8.6
 Release Date: 2025-apr-01

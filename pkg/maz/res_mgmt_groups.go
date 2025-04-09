@@ -113,7 +113,7 @@ func CacheAzureMgmtGroups(cache *Cache, z *Config, verbose bool) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	mgmtGroups := utl.Slice(resp["value"])
 	for i := range mgmtGroups {
@@ -181,7 +181,7 @@ func PrintAzureMgmtGroupTree(z *Config) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if props := utl.Map(resp["properties"]); props != nil {
 		// Print top line of hierarchy in blue
@@ -209,7 +209,7 @@ func GetAzureMgmtGroupById(targetId string, z *Config) AzureObject {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	group := AzureObject(resp)
 	group["maz_from_azure"] = true
@@ -223,7 +223,7 @@ func CountAzureMgmtGroups(z *Config) int64 {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	mgmtGroups := utl.Slice(resp["value"])
 	count := len(mgmtGroups)

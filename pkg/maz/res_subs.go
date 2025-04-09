@@ -111,7 +111,7 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
@@ -143,7 +143,7 @@ func GetAzureSubscriptionByName(targetName string, z *Config) AzureObject {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
@@ -171,7 +171,7 @@ func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	azObj := AzureObject(resp)
 	azObj["maz_from_azure"] = true
@@ -185,7 +185,7 @@ func CountAzureSubscriptions(z *Config) int64 {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	if rawCount := utl.Map(resp["count"]); rawCount != nil {
 		count := utl.Int64(rawCount["value"]) // Get int64 value

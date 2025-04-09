@@ -53,7 +53,7 @@ func PrintDirRoleDefinition(x AzureObject, z *Config) {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, params)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	assignments := utl.Slice(resp["value"])
 	if len(assignments) > 0 {
@@ -101,7 +101,7 @@ func AdRolesCountAzure(z *Config) int64 {
 	var err error
 	resp, _, err := ApiGet(apiUrl, z, nil)
 	if err != nil {
-		Log("%v\n", err)
+		Logf("%v\n", err)
 	}
 	dirRoles := utl.Slice(resp["value"])
 	return int64(len(dirRoles))

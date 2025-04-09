@@ -247,7 +247,7 @@ func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	resp, statCode, err := ApiGet(apiUrl, z, nil)
 	for {
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if statCode != 200 {
 			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", rUp, statCode)
@@ -389,7 +389,7 @@ func GetObjectNameFromId(mazType, targetId string, z *Config) string {
 		var err error
 		resp, _, err := ApiGet(apiUrl, z, nil)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if obj := utl.Map(resp); obj != nil {
 			return utl.Str(obj["displayName"])
@@ -423,7 +423,7 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 		var err error
 		resp, _, err := ApiGet(apiUrl, z, params)
 		if err != nil {
-			Log("%v\n", err)
+			Logf("%v\n", err)
 		}
 		if list := utl.Slice(resp["value"]); list != nil {
 			if obj := utl.Map(list[0]); obj != nil {
