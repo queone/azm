@@ -10,16 +10,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/queone/utl"
 )
 
 const (
-	ConstAuthUrl = "https://login.microsoftonline.com/"
-	ConstMgUrl   = "https://graph.microsoft.com"
-	ConstAzUrl   = "https://management.azure.com"
-
+	ConfigBaseDir   = ".maz"
+	CredentialsFile = "credentials.yaml"
+	TokenCacheFile  = "token_cache.json"
+	ConstAuthUrl    = "https://login.microsoftonline.com/"
+	ConstMgUrl      = "https://graph.microsoft.com"
+	ConstAzUrl      = "https://management.azure.com"
 	AzApiToken      = "AzApiToken"
 	MgApiToken      = "MgApiToken"
 	UnknownApiToken = "UnknownApiToken"
@@ -55,6 +59,8 @@ const (
 )
 
 var (
+	MazConfigDir string // Global configuration directory, see init()
+
 	MazTypes = []string{
 		ResRoleDefinition,
 		ResRoleAssignment,
@@ -116,9 +122,6 @@ var (
 
 // Config holds configuration and credentials for various APIs and the calling programs themselves.
 type Config struct {
-	ConfDir      string
-	CredsFile    string
-	TokenFile    string
 	TenantId     string
 	ClientId     string
 	ClientSecret string
@@ -133,46 +136,32 @@ type Config struct {
 	// --- Add other API token/headers here...
 }
 
+// Initialize MazConfigDir to the user's home directory in a cross-platform way.
+func init() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		utl.Die("Could not determine user home directory: %v", err)
+	}
+
+	MazConfigDir = filepath.Join(homeDir, ConfigBaseDir)
+
+	// Ensure the configuration directory exists
+	if _, err := os.Stat(MazConfigDir); os.IsNotExist(err) {
+		if err := os.Mkdir(MazConfigDir, 0700); err != nil {
+			utl.Die("Failed to create '%s' config directory: %v",
+				utl.Yel(MazConfigDir), err)
+		}
+	}
+}
+
 // Constructs, initializes, and returns a pointer to a Config instance.
 // The returned pointer can be used as a global configuration object to store
 // credentials, tokens, and other API-related details for the application.
 func NewConfig() *Config {
-	configDir := filepath.Join(os.Getenv("HOME"), ".maz")
-
-	// Ensure the configuration directory exists
-	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		if err := os.Mkdir(configDir, 0700); err != nil {
-			panic(fmt.Sprintf("Failed to create config directory: %v", err))
-		}
-	}
-
 	return &Config{
-		ConfDir:   configDir,
-		CredsFile: "credentials.yaml",
-		TokenFile: "accessTokens.json",
 		MgHeaders: make(map[string]string),
 		AzHeaders: make(map[string]string),
 	}
-}
-
-// Sets the credentials for the tenant.
-func (m *Config) SetTenantCredentials(tenantID, clientID, clientSecret string) *Config {
-	m.TenantId = tenantID
-	m.ClientId = clientID
-	m.ClientSecret = clientSecret
-	return m
-}
-
-// Sets the interactive mode flag.
-func (m *Config) SetInteractiveMode(interactive bool) *Config {
-	m.Interactive = interactive
-	return m
-}
-
-// Sets the username.
-func (m *Config) SetUsername(username string) *Config {
-	m.Username = username
-	return m
 }
 
 // Adds a Microsoft Graph API header.
@@ -187,25 +176,10 @@ func (m *Config) AddAzHeader(key, value string) *Config {
 	return m
 }
 
-// Checks whether required fields are set and returns an error if not.
-func (m *Config) Validate() error {
-	requiredFields := map[string]string{
-		"TenantId":     m.TenantId,
-		"ClientId":     m.ClientId,
-		"ClientSecret": m.ClientSecret,
-	}
-	for fieldName, value := range requiredFields {
-		if value == "" {
-			return fmt.Errorf("missing required field: %s", fieldName)
-		}
-	}
-	return nil
-}
-
 // Deletes current credentials and token files
 func DeleteCurrentCredentials(z *Config) {
-	utl.RemoveFile(filepath.Join(z.ConfDir, z.TokenFile)) // Remove token file
-	utl.RemoveFile(filepath.Join(z.ConfDir, z.CredsFile)) // Remove credentials file
+	utl.RemoveFile(filepath.Join(MazConfigDir, TokenCacheFile))  // Remove token file
+	utl.RemoveFile(filepath.Join(MazConfigDir, CredentialsFile)) // Remove credentials file
 	os.Exit(0)
 }
 
@@ -236,7 +210,8 @@ func PurgeMazObjectCacheFiles(mazType string, z *Config) {
 
 // Dumps configured login values
 func DumpLoginValues(z *Config) {
-	fmt.Printf("%s: %s  %s\n", utl.Blu("config_dir"), utl.Gre(z.ConfDir), utl.Gra("# Config and cache directory"))
+	fmt.Printf("%s: %s  %s\n", utl.Blu("config_dir"), utl.Gre(MazConfigDir),
+		utl.Gra("# Config and cache directory"))
 
 	fmt.Printf("%s:\n", utl.Blu("config_vars"))
 	comment := "  # 1. MS Graph and Azure ARM tokens can be supplied directly via MAZ_MG_TOKEN and\n" +
@@ -255,7 +230,7 @@ func DumpLoginValues(z *Config) {
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_MG_TOKEN"), utl.Gre(os.Getenv("MAZ_MG_TOKEN")))
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_AZ_TOKEN"), utl.Gre(os.Getenv("MAZ_AZ_TOKEN")))
 	fmt.Printf("%s:\n", utl.Blu("config_creds_file"))
-	credsFile := filepath.Join(z.ConfDir, z.CredsFile)
+	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
 	fmt.Printf("  %s: %s\n", utl.Blu("file_path"), utl.Gre(credsFile))
 	credsRaw, err := utl.LoadFileYaml(credsFile)
 	if err != nil {
@@ -278,7 +253,7 @@ func DumpLoginValues(z *Config) {
 
 // Configure maz credentials file for interactive login
 func ConfigureCredsFileForInterativeLogin(z *Config) {
-	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
+	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
 	}
@@ -287,13 +262,13 @@ func ConfigureCredsFileForInterativeLogin(z *Config) {
 	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
-	fmt.Printf("Updated %s file\n", utl.Gre(credsFile))
+	fmt.Printf("Updated %s file\n", utl.Yel(credsFile))
 	os.Exit(0)
 }
 
 // Configure maz credentials file for automated client_id/secret login
 func ConfigureCredsFileForAutomatedLogin(z *Config) {
-	credsFile := filepath.Join(z.ConfDir, z.CredsFile) // credentials.yaml
+	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
 	if !utl.ValidUuid(z.TenantId) {
 		utl.Die("Error. TENANT_ID is an invalid UUID.\n")
 	}
@@ -305,7 +280,7 @@ func ConfigureCredsFileForAutomatedLogin(z *Config) {
 	if err := os.WriteFile(credsFile, []byte(content), 0600); err != nil { // Write string to file
 		panic(err.Error())
 	}
-	fmt.Printf("Updated %s file\n", utl.Gre(credsFile))
+	fmt.Printf("Updated %s file\n", utl.Yel(credsFile))
 	os.Exit(0)
 }
 
@@ -351,7 +326,7 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 			utl.Yel(GetTokenSuffix(z.AzToken)))
 		Logf("3. Environment variable MAZ_MG_TOKEN appears to have a valid token: Suffix = %s\n",
 			utl.Yel(GetTokenSuffix(z.MgToken)))
-		Logf("Above three credentials should suffice for token login.\n")
+		Logf("Attempting %s login\n", utl.Yel("automated token-based"))
 		return // Return early since we have all creds for this type of login
 	}
 
@@ -362,7 +337,7 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 		z.Username = strings.ToLower(utl.Str(mazEnvironmentVars["MAZ_USERNAME"]))
 		if z.Username != "" {
 			Logf("3. Environment variable MAZ_USERNAME is set to %s", utl.Yel(z.Username))
-			Logf("Above three credentials should suffice for interactive login.\n")
+			Logf("Attempting %s login\n", utl.Yel("interactive username"))
 		} else {
 			utl.Die("Error: Environment variable MAZ_USERNAME is blank. Cannot continue " +
 				"with interactive login.\n")
@@ -380,35 +355,36 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 				"but variable MAZ_CLIENT_SECRET is blank. Cannot continue.\n")
 		}
 		Logf("3. Environment variable MAZ_CLIENT_SECRET has a value.\n")
-		Logf("Above three credentials should suffice for client_id/secret login.\n")
+		Logf("Attempting %s login\n", utl.Yel("automated client_id/secret"))
 	}
 }
 
 // Configure login credentials from credentials file
 func SetupMazCredentialsFromFile(z *Config) {
-	credsFile := filepath.Join(z.ConfDir, z.CredsFile)
-	Logf("Using login credentials in file %s\n", utl.Yel(credsFile))
+	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
+	Logf("Using credential file %s\n", utl.Yel(credsFile))
 	if !utl.FileUsable(credsFile) {
-		utl.Die("Error: The credentials file is missing!\n")
+		utl.Die("Error: Credential file is missing!\n")
 	}
-	Logf("The file exists\n")
+	Logf("Credential file exists\n")
 
 	credsRaw, err := utl.LoadFileYaml(credsFile)
 	if err != nil {
 		utl.Die("Error: %s\n", err)
 	}
-	Logf("The file is valid YAML\n")
+	Logf("Credential file is valid YAML\n")
 
 	creds := utl.Map(credsRaw)
 	if creds == nil {
-		utl.Die("Error: Values in file %s are not formatted properly.\n", utl.Red(credsFile))
+		utl.Die("Error: Credential file %s values are not formatted properly.\n",
+			utl.Red(credsFile))
 	}
-	Logf("Credential file parameter and values appear to be formatted properly.\n")
+	Logf("Credential file parameters/values appear to be formatted properly.\n")
 
 	z.TenantId = utl.Str(creds["tenant_id"])
 	if !utl.ValidUuid(z.TenantId) {
-		utl.Die("Error: The value of %s (%s) in file %s is not a valid UUID.\n",
-			utl.Red("tenant_id"), z.TenantId, utl.Red(credsFile))
+		utl.Die("Error: Credential file %s parameter %s (%s) is not a valid UUID.\n",
+			utl.Red(credsFile), utl.Red("tenant_id"), z.TenantId)
 	}
 	Logf("1. Credential file parameter 'tenant_id' is set to %s\n", utl.Yel(z.TenantId))
 
@@ -418,7 +394,7 @@ func SetupMazCredentialsFromFile(z *Config) {
 		z.Username = strings.ToLower(utl.Str(creds["username"]))
 		if z.Username != "" {
 			Logf("3. Credential file parameter 'username' is set to %s\n", utl.Yel(z.Username))
-			Logf("Above three credentials should suffice for interactive username login.\n")
+			Logf("Attempting %s login\n", utl.Yel("interactive username"))
 		} else {
 			utl.Die("Error: Credential file parameter 'username' is blank. Cannot " +
 				"continue with interactive login.\n")
@@ -437,7 +413,7 @@ func SetupMazCredentialsFromFile(z *Config) {
 				utl.Red("client_secret"))
 		}
 		Logf("3. Credential file parameter 'client_secret' has a value.\n")
-		Logf("Above three credentials should suffice for automated client_id/secret login.\n")
+		Logf("Attempting %s login\n", utl.Yel("automated client_id/secret"))
 	}
 }
 
@@ -461,7 +437,7 @@ func SetupApiTokens(z *Config) {
 func SetupAzureArmToken(z *Config) {
 	// If token is not valid, then lets acquire a new one
 	if _, err := SplitJWT(z.AzToken); err != nil {
-		Logf("Current AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
+		Logf("AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
 		scope := []string{ConstAzUrl + "/.default"}
 		// Appending '/.default' allows using all static and consented permissions of the identity in
 		// use. See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
@@ -470,7 +446,7 @@ func SetupAzureArmToken(z *Config) {
 		if err != nil {
 			utl.Die("%s: %v\n", utl.Red("Error"), err)
 		}
-		Logf("Current AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
+		Logf("AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
 		// Setup the base API headers; token + content type
 		z.AddAzHeader("Authorization", "Bearer "+z.AzToken).AddAzHeader("Content-Type", "application/json")
 	}
@@ -480,14 +456,14 @@ func SetupAzureArmToken(z *Config) {
 func SetupMsGraphToken(z *Config) {
 	// If token is not valid, then lets acquire a new one
 	if _, err := SplitJWT(z.MgToken); err != nil {
-		Logf("Current MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
+		Logf("MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
 		scope := []string{ConstMgUrl + "/.default"}
 		var err error
 		z.MgToken, err = GetApiToken(scope, z) // Get the MS Graph token
 		if err != nil {
 			utl.Die("%s: %v\n", utl.Red("Error"), err)
 		}
-		Logf("Current MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
+		Logf("MG token suffix = %s\n", utl.Cya(GetTokenSuffix(z.MgToken)))
 		// Setup the base API headers; token + content type
 		z.AddMgHeader("Authorization", "Bearer "+z.MgToken).AddMgHeader("Content-Type", "application/json")
 	}
@@ -521,33 +497,31 @@ func SplitJWT(tokenString string) ([]string, error) {
 	return parts, nil
 }
 
+// Check if MAZ_LOG logging is enabled
+func isMazLoggingEnabled() bool {
+	val := strings.ToLower(os.Getenv("MAZ_LOG"))
+	return val == "1" || val == "true" || val == "yes"
+}
+
 // Prints colorized, formatted debugging messages to stderr when MAZ_LOG is enabled
 func Logf(format string, args ...interface{}) {
-	// Check logging enabled
-	val := strings.ToLower(os.Getenv("MAZ_LOG"))
-	if val != "1" && val != "true" && val != "yes" {
+	if !isMazLoggingEnabled() {
 		return
 	}
 
-	// Get caller info (depth 2 skips this function and runtime calls)
-	trace := utl.Trace2(2)
-
-	// Extract just the function name without package
-	funcName := trace.FuncName
-	if lastDot := strings.LastIndex(funcName, "."); lastDot >= 0 {
-		funcName = funcName[lastDot+1:] + "()" // Add parentheses to make it clear it's a function
+	// Get caller info
+	_, file, line, ok := runtime.Caller(1)
+	if !ok {
+		file = "???"
+		line = 0
 	}
 
-	// Format the entire trace prefix in cyan
-	tracePrefix := utl.Cya(fmt.Sprintf("MAZ %s:%d %s: ",
-		filepath.Base(trace.File),
-		trace.Line,
-		funcName))
-
-	// Format the complete message (tracePrefix already colored)
-	msg := fmt.Sprintf(tracePrefix+format, args...)
+	// Format prefix and message
+	timestamp := time.Now().Format("2006-Jan-02 15:04:05")
+	shortFile := filepath.Base(file)
+	prefix := utl.Cya(fmt.Sprintf("MAZ %s %s:%04d", timestamp, shortFile, line))
+	msg := fmt.Sprintf(prefix+": "+format, args...)
 
 	// Write to stderr with forced flush
 	fmt.Fprint(os.Stderr, msg)
-	os.Stderr.Sync()
 }

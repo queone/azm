@@ -22,16 +22,15 @@ z := maz.NewConfig()
 ```
 
 - From then on, above global config `z` pointer variable can be used for managing the interation with the library.
-- This variable includes things like `z.ConfDir`, which defaults to `~/.maz`, and so on.
 - See <https://github.com/queone/maz/blob/main/maz.go> for more information on the `Config` type, and what methods are available.
 
-2. Your program should then call `maz.SetupInterativeLogin(z)` or `maz.SetupAutomatedLogin(z)` to setup the credentials file accordingly.
+1. Your program should then call `maz.SetupInterativeLogin(z)` or `maz.SetupAutomatedLogin(z)` to setup the credentials file accordingly.
 
-3. Then it should call `z := maz.SetupApiTokens(*z)` to acquire the respective API tokens, web headers, and other variables.
+2. Then it should call `z := maz.SetupApiTokens(*z)` to acquire the respective API tokens, web headers, and other variables.
 
-4. Afterwards, it can then call whatever MS Graph and Azure Resource API functions you want by passing and using the `z` variables, with its `z.mgHeaders` and/or `z.azHeaders` attributes, and so on.
+3. Afterwards, it can then call whatever MS Graph and Azure Resource API functions you want by passing and using the `z` variables, with its `z.mgHeaders` and/or `z.azHeaders` attributes, and so on.
 
-5. To better understand this libray see how the [azm](https://github.com/queone/azm/cmd/azm/README.md) utility leverages it.
+4. To better understand this libray see how the [azm](https://github.com/queone/azm/cmd/azm/README.md) utility leverages it.
 
 
 ## Login Credentials

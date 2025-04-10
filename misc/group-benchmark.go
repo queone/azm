@@ -84,7 +84,8 @@ func GenerateDummyGroupsJson(count int, filePath string) ([]interface{}, string)
 
 // Run directory group benchmarks
 // func runBenchmark() {
-// 	z := maz.NewConfig() // This includes z.ConfDir = "~/.maz", etc
+// 	z := maz.NewConfig()
+
 // 	maz.SetupApiTokens(z)
 
 // 	count := 200000
