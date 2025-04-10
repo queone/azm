@@ -24,7 +24,6 @@ func DecodeAndValidateToken(tokenString string) {
 		utl.Die("Error: %s\n", err)
 	}
 
-	Logf("Printing the 3 token parts: header, claims and signature\n")
 	PrintTokenComponents(parts)
 
 	fmt.Printf("%s:\n", utl.Blu("status")) // Token status block
@@ -51,7 +50,6 @@ func DecodeAndValidateToken(tokenString string) {
 
 // Decode and print the header, claims, and signature components of the JWT token.
 func PrintTokenComponents(parts []string) {
-	Logf("Decoding header and claims, and isolating the signature part\n")
 	headerJSON, _ := base64.RawURLEncoding.DecodeString(parts[0])
 	claimsJSON, _ := base64.RawURLEncoding.DecodeString(parts[1])
 	signature := parts[2]
@@ -61,13 +59,11 @@ func PrintTokenComponents(parts []string) {
 	json.Unmarshal(headerJSON, &header)
 	json.Unmarshal(claimsJSON, &claims)
 
-	Logf("Printing token header block\n")
 	fmt.Printf("%s:\n", utl.Blu("header"))
 	for k, v := range header {
 		fmt.Printf("  %s: %s\n", utl.Blu(k), utl.Gre(v))
 	}
 
-	Logf("Printing token claims block\n")
 	fmt.Printf("%s:\n", utl.Blu("claims"))
 	for k, v := range claims {
 		switch k {
@@ -99,7 +95,6 @@ func PrintTokenComponents(parts []string) {
 
 // Validate the given Azure or MS Graph JWT token, including key fetching and issuer structure.
 func VerifyAzureJwt(tokenString string) (bool, error) {
-	Logf("Verifying Azure JWT token\n")
 	parts, err := SplitJWT(tokenString)
 	if err != nil {
 		return false, fmt.Errorf("invalid token format: %w", err)
@@ -156,16 +151,10 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 		return false, fmt.Errorf("no matching public key found for KID: %s", kid)
 	}
 
-	Logf("Verifying token based on API token type\n")
 	tokenType := GetApiTokenType(parts)
 	switch tokenType {
-	case MgApiToken:
-		if validateIssuerStructure(iss, tid) {
-			return true, nil
-		}
-		return false, fmt.Errorf("issuer structure or tid validation failed")
-
 	case AzApiToken:
+		Logf("Verifying AZ token\n")
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return pubKey, nil
 		}, jwt.WithAudience(aud), jwt.WithIssuer(iss))
@@ -174,7 +163,12 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 			return false, fmt.Errorf("signature validation failed: %w", err)
 		}
 		return true, nil
-
+	case MgApiToken:
+		Logf("Verifying MG token\n")
+		if validateIssuerStructure(iss, tid) {
+			return true, nil
+		}
+		return false, fmt.Errorf("issuer structure or tid validation failed")
 	default:
 		return false, fmt.Errorf("unrecognized or unsupported audience: %s", aud)
 	}
@@ -184,7 +178,7 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 func validateIssuerStructure(iss string, tid string) bool {
 	// For more details about what is happening here please read below doc
 	// https://que.one/azure/ms-token-validation.html and source it references.
-	Logf("Validating iss/tid structure")
+	Logf("Validating iss/tid structure\n")
 	if tid == "" || iss == "" {
 		fmt.Println("Missing tid or iss")
 		return false

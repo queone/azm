@@ -27,7 +27,7 @@ func GetCache(mazType string, z *Config) (*Cache, error) {
 	}
 
 	// Construct both file paths
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+suffix+".bin")
+	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
 	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
 
 	cache := &Cache{
@@ -56,25 +56,25 @@ func PurgeCacheFiles(mazType string, z *Config) error {
 	suffix, ok := CacheSuffix[mazType]
 	if !ok {
 		msg := "invalid object type code"
-		Logf("Error: %s %s\n", utl.Red(mazType))
+		Logf("Error: %s %s\n", msg, utl.Red(mazType))
 		return fmt.Errorf("%s: %s", msg, mazType)
 	}
 
 	// Construct the cache file and delta link file paths without loading the cache.
-	cacheFile := filepath.Join(z.ConfDir, z.TenantId+suffix+".bin")
+	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
 	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
 
 	// Remove the cache file.
 	if err := os.Remove(cacheFile); err != nil && !os.IsNotExist(err) {
 		msg := "failed to remove cache file"
-		Logf("Error: %s %s\n", utl.Red(cacheFile))
+		Logf("Error: %s %s\n", msg, utl.Red(cacheFile))
 		return fmt.Errorf("%s: %w", msg, err)
 	}
 
 	// Remove the delta link file.
 	if err := os.Remove(deltaLinkFile); err != nil && !os.IsNotExist(err) {
 		msg := "failed to remove deltaLink file"
-		Logf("Error: %s %s\n", utl.Red(deltaLinkFile))
+		Logf("Error: %s %s\n", msg, utl.Red(deltaLinkFile))
 		return fmt.Errorf("%s: %w", msg, err)
 	}
 

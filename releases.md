@@ -1,5 +1,13 @@
 ## Releases
 
+### v0.8.9
+Release Date: 2025-apr-10
+- Removed CredentialsFile and TokenCacheFile from z.Config struct and made them global constants
+- Same with MazConfigDir, which is now a global variable, and updated in an init() function
+- Cleaned up unused functions in maz_core.go
+- Streamlined token acquisition, decoding, and verification
+- Simplified Logf() debug logging 
+
 ### v0.8.8
 Release Date: 2025-apr-09
 - The -td "tokenString" option now performs proper token signature verification for AZ tokens only

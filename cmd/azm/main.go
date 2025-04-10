@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.8"
+	program_version = "0.8.9"
 )
 
 func printUsage(extended bool) {
@@ -118,7 +118,7 @@ func main() {
 		printUsage(false) // false = display short usage
 	}
 
-	// Set up required global configuration variable; includes z.ConfDir = "~/.maz", etc
+	// Set up required global configuration variable
 	// For more info see https://github.com/queone/azm/blob/main/pkg/maz/maz_core.go
 	z := maz.NewConfig()
 
