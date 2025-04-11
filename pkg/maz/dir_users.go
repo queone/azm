@@ -10,8 +10,10 @@ import (
 func PrintUser(obj map[string]interface{}, z *Config) {
 	id := utl.Str(obj["id"])
 	if id == "" {
+		Logf("PrintUser(): Directory user object has no %s attribute\n", utl.Yel("id"))
 		return
 	}
+	Logf("Printing directory user object with ID %s\n", id)
 
 	// Print the most important attributes first
 	fmt.Printf("%s\n", utl.Gra("# Directory user"))
@@ -29,10 +31,9 @@ func PrintUser(obj map[string]interface{}, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/users/" + id + "/transitiveMemberOf"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	transitiveMemberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(transitiveMemberOf)

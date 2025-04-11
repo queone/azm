@@ -61,10 +61,9 @@ func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.ResourceGraph/resources"
-	var err error
-	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiPost(apiUrl, z, payload, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {
@@ -76,9 +75,8 @@ func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 				if strings.ToLower(utl.Str(obj["type"])) == "microsoft.resources/subscriptions" {
 					obj["displayName"] = utl.Str(obj["name"])
 				}
-				// It's a bit frustrating that Resource Graph doesn't follow the same
-				// pattern that ARM API does, using 'displayName' attribute.
-
+				// It's a bit frustrating that Resource Graph doesn't use 'displayName'
+				// for this attribute, like the ARM API does
 				return AzureObject(obj)
 			}
 		}
@@ -118,10 +116,9 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
 	apiUrl := ConstAzUrl + "/providers/Microsoft.ResourceGraph/resources"
-	var err error
-	resp, statCode, err := ApiPost(apiUrl, z, payload, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiPost(apiUrl, z, payload, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	if statCode == 200 {
 		if data := utl.Slice(resp["data"]); len(data) > 0 {

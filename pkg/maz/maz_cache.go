@@ -60,7 +60,7 @@ func PurgeCacheFiles(mazType string, z *Config) error {
 		return fmt.Errorf("%s: %s", msg, mazType)
 	}
 
-	// Construct the cache file and delta link file paths without loading the cache.
+	// Build the cache and delta link file paths without loading the cache
 	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
 	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
 

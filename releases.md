@@ -1,5 +1,10 @@
 ## Releases
 
+### v0.8.10
+Release Date: 2025-apr-11
+- Now Log access permission errors rather than masking them silently
+- Adjusted logging across entire library
+
 ### v0.8.9
 Release Date: 2025-apr-10
 - Removed CredentialsFile and TokenCacheFile from z.Config struct and made them global constants

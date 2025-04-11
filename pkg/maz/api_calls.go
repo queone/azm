@@ -186,30 +186,30 @@ func ApiDeleteVerbose(apiUrl string, z *Config, params map[string]string) (map[s
 // 	return result, statCode, nil
 // }
 
-// Returns API error message string.
+// Extracts API error message as "<code> <message>".
 func ApiErrorMsg(obj map[string]interface{}) string {
-	if err := utl.Map(obj["error"]); err != nil {
-		return utl.Str(err["message"])
+	err := utl.Map(obj["error"])
+	if err == nil {
+		return ""
 	}
+
+	// Prefer details[0] if available
+	if details := utl.Slice(err["details"]); len(details) > 0 {
+		if d := utl.Map(details[0]); d != nil {
+			code, msg := utl.Str(d["code"]), utl.Str(d["message"])
+			if code != "" && msg != "" {
+				return fmt.Sprintf("%s: %s", code, msg)
+			}
+		}
+	}
+
+	// Fall back to top-level error
+	code, msg := utl.Str(err["code"]), utl.Str(err["message"])
+	if code != "" || msg != "" {
+		return fmt.Sprintf("%s: %s", code, msg)
+	}
+
 	return ""
-}
-
-// Prints API error messages in 2 parts separated by a newline: A header, then a JSON byte slice
-func PrintApiErrMsg(msg string) {
-	parts := strings.Split(msg, "\n")
-	fmt.Println(utl.Red(parts[0])) // Print error header
-
-	// Check if there is a second part
-	if len(parts) > 1 {
-		errorBytes := []byte(parts[1])
-		yamlError, _ := utl.BytesToYamlObject(errorBytes)
-		utl.PrintYamlColor(yamlError) // Print error
-		// errorMsg, _ := utl.JsonBytesReindent(errorBytes, 2)
-		// utl.PrintYamlBytesColor(errorMsg) // Print error
-	} else {
-		// Handle the case where there is no second part
-		fmt.Println(utl.Red("No error details available."))
-	}
 }
 
 // Prints HTTP headers specific to API calls. Simplifies ApiCall function.
@@ -255,9 +255,12 @@ func PrintParams(params url.Values) {
 // =========================================================================
 // Makes an API call and returns the result object, statusCode, and error.
 func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+	Logf("%s %s\n", method, apiUrl) // Basic logging info
+
 	// Validate URL
 	if !strings.HasPrefix(apiUrl, "http") {
-		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
+		Logf("%s\n", utl.Red2("Error: Bad URL"))
+		return nil, 0, fmt.Errorf("%s error: Bad URL, %s", utl.Trace(), apiUrl)
 	}
 
 	// Set headers based on the API URL
@@ -266,6 +269,7 @@ func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, p
 	// Create HTTP request
 	req, err := createHttpRequest(method, apiUrl, payload)
 	if err != nil {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("Failed to create HTTP request: %s", err)))
 		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
@@ -278,17 +282,20 @@ func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, p
 		logRequestDetails(method, apiUrl, req, payload, params)
 	}
 
-	// Execute the HTTP request
-	resp, err := executeHttpRequest(req)
+	client := &http.Client{Timeout: time.Second * 30} // Thirty second timeout
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to execute HTTP request: %w", err)
+		// Note, this only captures network HTTP errors making the request, NOT errors
+		// related to the actual API request itself. See next step for such details.
+		Logf("%s\n", utl.Red2(fmt.Sprintf("Failed to execute API HTTP request: %s", err)))
+		return nil, 0, fmt.Errorf("failed to execute API HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read and process the response
 	result, err := processResponse(resp, verbose)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to process response: %w", err)
+		Logf("%s\n", utl.Red2(fmt.Sprintf("Failed to process API response: %s", err)))
+		return nil, 0, fmt.Errorf("failed to process API response: %w", err)
 	}
 
 	return result, resp.StatusCode, nil
@@ -348,12 +355,6 @@ func logRequestDetails(method, apiUrl string, req *http.Request, payload map[str
 		fmt.Println(utl.Blu("payload") + ":")
 		utl.PrintJsonColor(payload)
 	}
-}
-
-// Helper function to execute the HTTP request
-func executeHttpRequest(req *http.Request) (*http.Response, error) {
-	client := &http.Client{Timeout: time.Second * 30} // Thirty second timeout
-	return client.Do(req)
 }
 
 // Helper function to process the HTTP response

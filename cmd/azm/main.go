@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.9"
+	program_version = "0.8.10"
 )
 
 func printUsage(extended bool) {
@@ -118,14 +118,14 @@ func main() {
 		printUsage(false) // false = display short usage
 	}
 
-	// Set up required global configuration variable
+	// Set up required global configuration pointer variable
 	// For more info see https://github.com/queone/azm/blob/main/pkg/maz/maz_core.go
 	z := maz.NewConfig()
 
 	switch numberOfArguments {
 	case 1: // 1 argument
 		arg1 := os.Args[1]
-		// First, parse those requests that do not need API tokens
+		// Below cases don't need API access
 		switch arg1 {
 		case "-id":
 			maz.DumpLoginValues(z)
@@ -133,20 +133,18 @@ func main() {
 			printUsage(true) // true = display long usage
 		case "-uuid":
 			utl.Die("%s\n", uuid.New().String())
-		}
-		maz.SetupApiTokens(z) // Next, parse requests that do need API tokens
-		switch arg1 {
 		case "-tx":
-			maz.DeleteCurrentCredentials(z)
+			maz.DeleteCurrentCredentials()
+		}
+		maz.SetupApiTokens(z) // Remaining cases need API access
+		switch arg1 {
 		case "-ax", "-dx", "-sx", "-mx", "-ux", "-gx", "-apx", "-spx", "-drx", "-dax", "-xx":
 			mazType := arg1[1 : len(arg1)-1]
 			maz.PurgeMazObjectCacheFiles(mazType, z)
-
 		case "-d", "-a", "-s", "-m", "-u", "-g", "-ap", "-sp", "-dr", "-da",
 			"-dj", "-aj", "-sj", "-mj", "-uj", "-gj", "-apj", "-spj", "-drj", "-daj":
 			specifier := arg1[1:] // Remove arg1 leading hyphen
 			maz.PrintMatchingObjects(specifier, "", z)
-
 		case "-dk", "-ak", "-gk", "-apk":
 			mazType := arg1[1 : len(arg1)-1]
 			maz.CreateSkeletonFile(mazType, "")
@@ -176,7 +174,7 @@ func main() {
 		case "-td":
 			maz.DecodeAndValidateToken(arg2)
 		}
-		maz.SetupApiTokens(z) // Remaining 2-arg requests do need API access
+		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
 		case "-kd", "-ka", "-kg", "-kap":
 			mazType := arg1[2:]
@@ -224,7 +222,7 @@ func main() {
 			z.Username = arg3
 			maz.ConfigureCredsFileForInterativeLogin(z)
 		}
-		maz.SetupApiTokens(z) // Remaining 3-arg requests do need API access
+		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
 		case "-rn", "-rnf":
 			force := false
@@ -263,7 +261,7 @@ func main() {
 			z.ClientSecret = arg4
 			maz.ConfigureCredsFileForAutomatedLogin(z)
 		}
-		maz.SetupApiTokens(z)
+		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
 		case "-apas":
 			maz.AddAppSpSecret(maz.Application, arg2, arg3, arg4, z)
