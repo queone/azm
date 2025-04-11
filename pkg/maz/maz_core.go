@@ -177,7 +177,7 @@ func (m *Config) AddAzHeader(key, value string) *Config {
 }
 
 // Deletes current credentials and token files
-func DeleteCurrentCredentials(z *Config) {
+func DeleteCurrentCredentials() {
 	utl.RemoveFile(filepath.Join(MazConfigDir, TokenCacheFile))  // Remove token file
 	utl.RemoveFile(filepath.Join(MazConfigDir, CredentialsFile)) // Remove credentials file
 	os.Exit(0)
@@ -186,7 +186,6 @@ func DeleteCurrentCredentials(z *Config) {
 // Purges the cache files for given maz object type(s)
 func PurgeMazObjectCacheFiles(mazType string, z *Config) {
 	var hasError bool // Flag to track if any errors occurred
-
 	if mazType == AllMazObjects {
 		for mazType, mazTypeName := range MazTypeNames {
 			hasError = true // Set the flag to true if an error occurs
@@ -313,7 +312,7 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 		utl.Die("Error: Environment variable MAZ_TENANT_ID '%s' is not a valid UUID. "+
 			"Cannot continue.\n", z.TenantId)
 	}
-	Logf("1. Environment variable MAZ_TENANT_ID is set to %s\n", utl.Yel(z.TenantId))
+	Logf("1. Environment variable MAZ_TENANT_ID is set to %s\n", utl.Cya(z.TenantId))
 
 	// Use API login tokens provided via environment variables
 	z.AzToken = mazEnvironmentVars["MAZ_AZ_TOKEN"]
@@ -323,21 +322,21 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 	bothTokensAreValid := azErr == nil && mgErr == nil
 	if bothTokensAreValid {
 		Logf("2. Environment variable MAZ_AZ_TOKEN appears to have a valid token: Suffix = %s\n",
-			utl.Yel(GetTokenSuffix(z.AzToken)))
+			utl.Cya(GetTokenSuffix(z.AzToken)))
 		Logf("3. Environment variable MAZ_MG_TOKEN appears to have a valid token: Suffix = %s\n",
-			utl.Yel(GetTokenSuffix(z.MgToken)))
-		Logf("Attempting %s login\n", utl.Yel("automated token-based"))
+			utl.Cya(GetTokenSuffix(z.MgToken)))
+		Logf("Attempting %s login\n", utl.Cya("automated token-based"))
 		return // Return early since we have all creds for this type of login
 	}
 
 	// Assume the 2 API tokens will be acquired using the other variables, so let's check them
 	z.Interactive = utl.Bool(mazEnvironmentVars["MAZ_INTERACTIVE"])
 	if z.Interactive {
-		Logf("2. Environment variable MAZ_INTERACTIVE is set to %s", utl.Yel(z.Interactive))
+		Logf("2. Environment variable MAZ_INTERACTIVE is set to %s", utl.Cya(z.Interactive))
 		z.Username = strings.ToLower(utl.Str(mazEnvironmentVars["MAZ_USERNAME"]))
 		if z.Username != "" {
-			Logf("3. Environment variable MAZ_USERNAME is set to %s", utl.Yel(z.Username))
-			Logf("Attempting %s login\n", utl.Yel("interactive username"))
+			Logf("3. Environment variable MAZ_USERNAME is set to %s", utl.Cya(z.Username))
+			Logf("Attempting %s login\n", utl.Cya("interactive username"))
 		} else {
 			utl.Die("Error: Environment variable MAZ_USERNAME is blank. Cannot continue " +
 				"with interactive login.\n")
@@ -348,21 +347,21 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 			utl.Die("Error: The chosen login method appears to be via environment variables, "+
 				"but variable MAZ_CLIENT_ID '%s' is not a valid UUID. Cannot continue.\n", z.ClientId)
 		}
-		Logf("2. Environment variable MAZ_CLIENT_ID is set to %s", utl.Yel(z.ClientId))
+		Logf("2. Environment variable MAZ_CLIENT_ID is set to %s", utl.Cya(z.ClientId))
 		z.ClientSecret = utl.Str(mazEnvironmentVars["MAZ_CLIENT_SECRET"])
 		if z.ClientSecret == "" {
 			utl.Die("Error: The chosen login method appears to be via environment variables, " +
 				"but variable MAZ_CLIENT_SECRET is blank. Cannot continue.\n")
 		}
 		Logf("3. Environment variable MAZ_CLIENT_SECRET has a value.\n")
-		Logf("Attempting %s login\n", utl.Yel("automated client_id/secret"))
+		Logf("Attempting %s login\n", utl.Cya("automated client_id/secret"))
 	}
 }
 
 // Configure login credentials from credentials file
 func SetupMazCredentialsFromFile(z *Config) {
 	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
-	Logf("Using credential file %s\n", utl.Yel(credsFile))
+	Logf("Using credential file %s\n", utl.Cya(credsFile))
 	if !utl.FileUsable(credsFile) {
 		utl.Die("Error: Credential file is missing!\n")
 	}
@@ -386,15 +385,15 @@ func SetupMazCredentialsFromFile(z *Config) {
 		utl.Die("Error: Credential file %s parameter %s (%s) is not a valid UUID.\n",
 			utl.Red(credsFile), utl.Red("tenant_id"), z.TenantId)
 	}
-	Logf("1. Credential file parameter 'tenant_id' is set to %s\n", utl.Yel(z.TenantId))
+	Logf("1. Credential file parameter 'tenant_id' is set to %s\n", utl.Cya(z.TenantId))
 
 	z.Interactive = utl.Bool(creds["interactive"])
 	if z.Interactive {
-		Logf("2. Credential file parameter 'interactive' is set to %s\n", utl.Yel(z.Interactive))
+		Logf("2. Credential file parameter 'interactive' is set to %s\n", utl.Cya(z.Interactive))
 		z.Username = strings.ToLower(utl.Str(creds["username"]))
 		if z.Username != "" {
-			Logf("3. Credential file parameter 'username' is set to %s\n", utl.Yel(z.Username))
-			Logf("Attempting %s login\n", utl.Yel("interactive username"))
+			Logf("3. Credential file parameter 'username' is set to %s\n", utl.Cya(z.Username))
+			Logf("Attempting %s login\n", utl.Cya("interactive username"))
 		} else {
 			utl.Die("Error: Credential file parameter 'username' is blank. Cannot " +
 				"continue with interactive login.\n")
@@ -405,7 +404,7 @@ func SetupMazCredentialsFromFile(z *Config) {
 			utl.Die("Error: Credential file parameter %s (%s) is not a valid UUID.\n",
 				utl.Red("client_id"), z.ClientId)
 		}
-		Logf("2. Credential file parameter 'client_id' is set to %s\n", utl.Yel(z.ClientId))
+		Logf("2. Credential file parameter 'client_id' is set to %s\n", utl.Cya(z.ClientId))
 
 		z.ClientSecret = utl.Str(creds["client_secret"])
 		if z.ClientSecret == "" {
@@ -413,7 +412,7 @@ func SetupMazCredentialsFromFile(z *Config) {
 				utl.Red("client_secret"))
 		}
 		Logf("3. Credential file parameter 'client_secret' has a value.\n")
-		Logf("Attempting %s login\n", utl.Yel("automated client_id/secret"))
+		Logf("Attempting %s login\n", utl.Cya("automated client_id/secret"))
 	}
 }
 

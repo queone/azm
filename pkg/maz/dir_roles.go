@@ -50,10 +50,9 @@ func PrintDirRoleDefinition(x AzureObject, z *Config) {
 		"$expand": "principal",
 	}
 	apiUrl := ConstMgUrl + "/v1.0/roleManagement/directory/roleAssignments"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	assignments := utl.Slice(resp["value"])
 	if len(assignments) > 0 {
@@ -98,10 +97,9 @@ func AdRolesCountAzure(z *Config) int64 {
 	// "/v1.0/directoryRoleTemplates" which is a quicker API call and has the accurate count.
 	// It's not clear why this has been made this confusing.
 	apiUrl := ConstMgUrl + "/v1.0/directoryRoleTemplates"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	dirRoles := utl.Slice(resp["value"])
 	return int64(len(dirRoles))

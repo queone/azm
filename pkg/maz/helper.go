@@ -243,12 +243,8 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 // Returns all Azure pages for given API URL call
 func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	list = nil
-	var err error
-	resp, statCode, err := ApiGet(apiUrl, z, nil)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {
-		if err != nil {
-			Logf("%v\n", err)
-		}
 		if statCode != 200 {
 			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", rUp, statCode)
 			fmt.Printf("%s", utl.Yel(msg))
@@ -262,7 +258,7 @@ func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 		if nextLink == "" {
 			break // Break once there is no more pages
 		}
-		resp, statCode, err = ApiGet(nextLink, z, nil) // Get next batch
+		resp, statCode, _ = ApiGet(nextLink, z, nil) // Get next batch
 	}
 	return list
 }
@@ -420,10 +416,9 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 			"$filter": fmt.Sprintf("displayName eq '%s'", targetName),
 			"$top":    "1",
 		}
-		var err error
-		resp, _, err := ApiGet(apiUrl, z, params)
-		if err != nil {
-			Logf("%v\n", err)
+		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		if statCode != 200 {
+			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 		}
 		if list := utl.Slice(resp["value"]); list != nil {
 			if obj := utl.Map(list[0]); obj != nil {

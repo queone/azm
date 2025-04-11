@@ -28,10 +28,9 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print owners of this group
 	apiUrl := ConstMgUrl + "/v1.0/groups/" + id + "/owners"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	owners := utl.Slice(resp["value"])
 	if len(owners) > 0 {
@@ -51,9 +50,9 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print all groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/transitiveMemberOf"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	memberOfList := utl.Slice(resp["value"])
 	if len(memberOfList) > 0 {
@@ -62,9 +61,9 @@ func PrintGroup(x AzureObject, z *Config) {
 
 	// Print members of this group
 	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members" // beta works
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	members := utl.Slice(resp["value"])
 	if len(members) > 0 {

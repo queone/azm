@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # jah.py
 # This script was developed as a proof-of-concept to then develop the code in token_decode.go.
-# This incomplete but could be developed further as a Python alternative.
+# This is incomplete but could be developed further as a Python alternative.
 
 import sys
 import json

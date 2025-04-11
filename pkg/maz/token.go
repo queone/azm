@@ -123,7 +123,7 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 	Logf("Token cache is valid\n")
 
 	service := getServiceApiName(scopes)
-	Logf("Getting access token for service %s\n", utl.Yel(service))
+	Logf("Getting access token for service %s\n", utl.Cya(service))
 
 	// Retry configuration with backoff
 	maxRetries := 3
@@ -155,7 +155,12 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			time.Sleep(retryDelays[attempt-1])
 			continue
 		}
+		Logf("Found %d accounts in cache:\n", len(accounts))
+		for i, account := range accounts {
+			Logf("  Account %d: HomeAccountID=%s, Username=%s\n", i+1, account.HomeAccountID, account.PreferredUsername)
+		}
 
+		Logf("Looking for account with PreferredUsername matching: %s\n", strings.ToLower(username))
 		for _, account := range accounts {
 			if strings.ToLower(account.PreferredUsername) == username {
 				targetAccount = account
@@ -172,11 +177,11 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 			token := result.AccessToken // Actual token
 
 			msg := fmt.Sprintf("Successfully got token from cache (attempt %d)", attempt)
-			Logf("%s\n", utl.Gre(msg))
+			Logf("%s\n", utl.Cya(msg))
 
 			// Verifying the newly acquired token
 			if valid, err := VerifyAzureJwt(token); valid {
-				Logf("%s\n", utl.Gre("Token verification passed"))
+				Logf("%s\n", utl.Cya("Token verification passed"))
 				return token, err
 			} else {
 				Logf("%s\n", utl.Red2("Token verification failed"))
@@ -268,18 +273,18 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	defer cancel()
 
 	service := getServiceApiName(scopes)
-	Logf("Getting access token for service %s\n", utl.Yel(service))
+	Logf("Getting access token for service %s\n", utl.Cya(service))
 
 	Logf("First, try getting token from cache (AcquireTokenSilent)\n")
 	result, err := app.AcquireTokenSilent(ctx, scopes)
 	// Note that a targetAccount is not required; it appears to locate existing cached tokens without it
 	if err == nil {
 		token = result.AccessToken // Actual token
-		Logf("%s\n", utl.Gre("Successfully got token from cache"))
+		Logf("%s\n", utl.Cya("Successfully got token from cache"))
 
 		// Verifying the newly acquired token
 		if valid, err := VerifyAzureJwt(token); valid {
-			Logf("%s\n", utl.Gre("Token verification passed"))
+			Logf("%s\n", utl.Cya("Token verification passed"))
 			return token, err
 		} else {
 			Logf("%s\n", utl.Red2("Token verification failed!"))
@@ -291,7 +296,7 @@ func GetTokenByCredentials(scopes []string, z *Config) (token string, err error)
 	Logf("Fallback to getting a token direct from Microsoft identity platform (AcquireTokenByCredential)\n")
 	result, err = app.AcquireTokenByCredential(ctx, scopes)
 	if err == nil {
-		Logf("%s\n", utl.Gre("Successfully got token from Microsoft"))
+		Logf("%s\n", utl.Cya("Successfully got token from Microsoft"))
 		return result.AccessToken, nil // Return the token string part
 	}
 

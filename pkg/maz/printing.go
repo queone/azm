@@ -401,19 +401,18 @@ func PrintStringMapColor(strMap map[string]string) {
 
 // Prints all objects that match on given specifier
 func PrintMatchingObjects(specifier, filter string, z *Config) {
-	// First, setup all API Tokens to be able to query Azure
-	SetupApiTokens(z) // Old way, all combined
-
 	mazType := specifier
 	printJson := mazType[len(mazType)-1] == 'j' // If last char is 'j', then JSON output is required
 	if printJson {
 		mazType = mazType[:len(mazType)-1] // Remove the 'j' from mazType
 	}
+	Logf("Searching for all %s that match on '%s'\n", utl.Cya(MazTypeNames[mazType]), filter)
 
 	matchingObjects := GetMatchingObjects(mazType, filter, false, z) // false = get from cache, not Azure
 	matchingCount := len(matchingObjects)
 
 	if matchingCount > 1 {
+		Logf("Printing %d object(s)\n", matchingCount)
 		if printJson {
 			//utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
 			utl.PrintYamlColor(matchingObjects)
@@ -440,8 +439,7 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 			singleObj = GetAzureObjectById(mazType, id, z)
 		}
 		if printJson {
-			//utl.PrintJsonColor(singleObj) // Print in JSON format
-			utl.PrintYamlColor(singleObj)
+			utl.PrintJsonColor(singleObj)
 		} else {
 			PrintObject(mazType, singleObj, z) // Print in regular format
 		}

@@ -50,7 +50,7 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 		// If not found, then filter will be used below in obj.HasString(filter)
 	}
 
-	// Get current cache, or initialize a new cache for this type
+	// Get current cache, or initialize a new cache for this maz object type
 	cache, err := GetCache(Subscription, z) // Get subscriptions type cache
 	if err != nil {
 		utl.Die("Error: %s\n", err.Error())
@@ -108,10 +108,9 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
@@ -140,10 +139,9 @@ func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
 func GetAzureSubscriptionByName(targetName string, z *Config) AzureObject {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	subscriptions := utl.Slice(resp["value"])
 	for i := range subscriptions {
@@ -168,10 +166,9 @@ func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
 
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions/" + targetId
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	azObj := AzureObject(resp)
 	azObj["maz_from_azure"] = true
@@ -182,10 +179,9 @@ func GetAzureSubscriptionById(targetId string, z *Config) AzureObject {
 func CountAzureSubscriptions(z *Config) int64 {
 	params := map[string]string{"api-version": "2024-11-01"}
 	apiUrl := ConstAzUrl + "/subscriptions"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	if rawCount := utl.Map(resp["count"]); rawCount != nil {
 		count := utl.Int64(rawCount["value"]) // Get int64 value

@@ -23,28 +23,27 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print certificates details
 	apiUrl := ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/keyCredentials"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	keyCredentials := utl.Slice(resp["value"])
 	PrintCertificateList(keyCredentials)
 
 	// Print secrets details
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/passwordCredentials"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	passwordCredentials := utl.Slice(resp["value"])
 	PrintSecretList(passwordCredentials)
 
 	// Print owners
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/owners"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	owners := utl.Slice(resp["value"])
 	PrintOwners(owners)
@@ -78,9 +77,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Prints groups and roles it is a member of
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/transitiveMemberOf"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	memberOf := utl.Slice(resp["value"])
 	PrintMemberOfs(memberOf)
@@ -96,9 +95,9 @@ func PrintSp(x AzureObject, z *Config) {
 	// 1st, let us gather any 'Delegated' type permission admin grants
 	params := map[string]string{"$filter": "clientId eq '" + id + "'"}
 	apiUrl = ConstMgUrl + "/v1.0/oauth2PermissionGrants"
-	resp, _, err = ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	oauth2PermissionGrants := utl.Slice(resp["value"])
 
@@ -115,9 +114,9 @@ func PrintSp(x AzureObject, z *Config) {
 				oauthId := utl.Str(api["id"])
 				resourceId := utl.Str(api["resourceId"]) // Get API's SP to get its displayName and claim values
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-				r2, _, err := ApiGet(apiUrl2, z, nil)
-				if err != nil {
-					Logf("%v\n", err)
+				r2, statCode, _ := ApiGet(apiUrl2, z, nil)
+				if statCode != 200 {
+					Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 				}
 				apiName := "Unknown"
 				if r2["displayName"] != nil {
@@ -136,9 +135,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// 2nd, let us gather any 'Application' type permission admin grants
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "/appRoleAssignments"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	appRoleAssignments := utl.Slice(resp["value"])
 
@@ -161,9 +160,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 				// Map each role ID to its claim value
 				apiUrl2 := ConstMgUrl + "/v1.0/servicePrincipals/" + resourceId
-				resp2, _, err := ApiGet(apiUrl2, z, nil)
-				if err != nil {
-					Logf("%v\n", err)
+				resp2, statCode, _ := ApiGet(apiUrl2, z, nil)
+				if statCode != 200 {
+					Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 				}
 				appRoles := utl.Slice(resp2["appRoles"])
 				for item := range appRoles {
@@ -241,9 +240,9 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print all Custom Security Attributes for this SP
 	apiUrl = ConstMgUrl + "/v1.0/servicePrincipals/" + id + "?$select=customSecurityAttributes"
-	resp, _, err = ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	customSecurityAttributes := utl.Map(resp["customSecurityAttributes"])
 	if customSecurityAttributes != nil {
@@ -348,10 +347,9 @@ func SpsCountAzure(z *Config) (native, others int64) {
 	// First, get total number of SPs in native tenant
 	z.AddMgHeader("ConsistencyLevel", "eventual")
 	apiUrl := ConstMgUrl + ApiEndpoint[ServicePrincipal] + "/$count"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, nil)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, nil)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	all := utl.Int64(resp["value"])
 
@@ -361,9 +359,9 @@ func SpsCountAzure(z *Config) (native, others int64) {
 		"$count":  "true",
 	}
 	apiUrl = ConstMgUrl + ApiEndpoint[ServicePrincipal]
-	resp, _, err = ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ = ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	native = utl.Int64(resp["@odata.count"])
 

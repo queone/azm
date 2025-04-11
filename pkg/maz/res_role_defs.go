@@ -246,10 +246,9 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	payload := obj // Obviously using the inputed object as the payload
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + firstScope + ApiEndpoint[mazType] + "/" + id
-	var err error
-	resp, statCode, err := ApiPut(apiUrl, z, payload, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiPut(apiUrl, z, payload, params)
+	if statCode != 201 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	if statCode == 201 {
 		msg := fmt.Sprintf("Successfully %s %s!", deployType, MazTypeNames[mazType])
@@ -299,10 +298,9 @@ func DeleteResRoleDefinition(force bool, obj AzureObject, z *Config) {
 	// Delete the object
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + firstScope + ApiEndpoint[mazType] + "/" + id
-	var err error
-	resp, statCode, err := ApiDelete(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiDelete(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	if statCode == 200 {
 		msg := fmt.Sprintf("Successfully DELETED %s!", MazTypeNames[mazType])
@@ -425,10 +423,9 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-		var err error
-		resp, _, err := ApiGet(apiUrl, z, params)
-		if err != nil {
-			Logf("%v\n", err)
+		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		if statCode != 200 {
+			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 		}
 		roles := utl.Slice(resp["value"])
 		count := 0
@@ -486,10 +483,9 @@ func GetAzureResRoleDefinitionByScopeAndName(scope, roleName string, z *Config) 
 		"$filter":     "roleName eq '" + roleName + "'",
 	}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-	var err error
-	resp, _, err := ApiGet(apiUrl, z, params)
-	if err != nil {
-		Logf("%v\n", err)
+	resp, statCode, _ := ApiGet(apiUrl, z, params)
+	if statCode != 200 {
+		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 	}
 	roles := utl.Slice(resp["value"]) // Cast to a slice
 	if len(roles) == 1 {
@@ -522,10 +518,9 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 	}
 	for _, scope := range scopes {
 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-		var err error
-		resp, _, err := ApiGet(apiUrl, z, params)
-		if err != nil {
-			Logf("%v\n", err)
+		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		if statCode != 200 {
+			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 		}
 		roles := utl.Slice(resp["value"])
 		for i := range roles {
@@ -570,10 +565,9 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 	// Check each API URL in the list
 	params := map[string]string{"api-version": "2022-04-01"}
 	for _, apiUrl := range apiUrls {
-		var err error
-		resp, statCode, err := ApiGet(apiUrl, z, params)
-		if err != nil {
-			Logf("%v\n", err)
+		resp, statCode, _ := ApiGet(apiUrl, z, params)
+		if statCode != 200 {
+			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
 		}
 		if statCode == 200 {
 			if role := utl.Map(resp); role != nil {
