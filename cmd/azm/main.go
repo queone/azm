@@ -12,13 +12,19 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.10"
+	program_version = "0.8.11"
 )
 
 func printUsage(extended bool) {
 	n := utl.Whi2(program_name)
 	v := program_version
 	X := utl.Red("X")
+	onlyFor := fmt.Sprintf("%s, %s, %s, and %s/%s combos",
+		utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
+		utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
+	onlyFor2 := fmt.Sprintf("%s, %s, %s, %s, and %s",
+		utl.Red(maz.ResRoleDefinition), utl.Red(maz.DirectoryGroup), utl.Red(maz.Application),
+		utl.Red(maz.ServicePrincipal), utl.Red(maz.DirRoleDefinition))
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Azure IAM CLI utility - github.com/queone/azm\n"+
 		"%s\n"+
@@ -64,18 +70,24 @@ func printUsage(extended bool) {
 		"\n"+
 		"%s (allow managing Azure objects)\n"+
 		"  -%sk [NAME]                       Generate a YAML skeleton file for object type %s. Only\n"+
-		"                                   certain objects are currently supported; optional name for both\n"+
-		"                                   the object and the recommended specfile name\n"+
-		"  -up[f] SPECFILE                  Create or update object by given SPECFILE (only for certain\n"+
-		"                                   objects); use 'f' to suppress confirmation\n"+
+		"                                   certain objects are currently supported; optional NAME is used\n"+
+		"                                   as the object name and basis for the specfile name\n"+
+		// ====
+		"  -up[f] SPECFILE                  Create or update object in given SPECFILE (only for objects\n"+
+		"                                   %s); use 'f' to suppress confirmation\n"+
+		// Need versions of above for named groups
+
+		// ====
 		"  -rm[f] SPECFILE|ID               Delete object by given SPECFILE (only for certain objects);\n"+
 		"                                   delete by given ID; use 'f' to suppress confirmation\n"+
-		"  -rn[f] NAME|ID NEWNAME           Rename object with given NAME or ID to NEWNAME (not all objects\n"+
-		"                                   are supported); use 'f' to suppress confirmation\n"+
-
 		// Need versions of above for named groups
-		// Need versions of above for named appsp
-		// Need versions of above for named res role def
+
+		// ====
+		"  -rn%s[f] NAME|ID NEWNAME          Rename %s object with given NAME or ID to NEWNAME (only for\n"+
+		"                                   objects %s); use 'f' to suppress confirmation\n"+
+		// Need versions of above for named groups
+
+		// ==== Repeat above for appsp and resRoleDefs
 
 		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
 		"                                   date (YYYY-MM-DD) or in X number of days\n"+
@@ -97,7 +109,8 @@ func printUsage(extended bool) {
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
 		"  -?, -h, --help                   Display the full list of options\n",
-		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, X, utl.Whi2("Other Options"), X, X)
+		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, X, onlyFor, X, X, onlyFor2,
+		utl.Whi2("Other Options"), X, X)
 	fmt.Print(usageHeader)
 	if extended {
 		fmt.Print(usageExtended)
@@ -186,10 +199,7 @@ func main() {
 		case "-sfn":
 			maz.GenerateAndPrintSpecfileName(arg2, z)
 		case "-rm", "-rmf":
-			force := false
-			if arg1 == "-rmf" {
-				force = true
-			}
+			force := arg1 == "-rmf" // flag ending in 'f' triggers force mode
 			if utl.FileUsable(arg2) {
 				maz.DeleteObjectBySpecfile(force, arg2, z)
 			} else if utl.ValidUuid(arg2) {
@@ -198,15 +208,8 @@ func main() {
 				maz.DeleteObjectByName(force, arg2, z)
 			}
 		case "-up", "-upf":
-			force := false
-			if arg1 == "-upf" {
-				force = true
-			}
-			if utl.FileUsable(arg2) {
-				maz.ApplyObjectBySpecfile(force, arg2, z)
-			} else {
-				utl.Die("Specfile %s is missing or empty\n", utl.Yel(arg2))
-			}
+			force := arg1 == "-upf"
+			maz.ApplyObjectBySpecfile(force, arg2, z)
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
 		default:
@@ -224,27 +227,21 @@ func main() {
 		}
 		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
-		case "-rn", "-rnf":
-			force := false
-			if arg1 == "-rnf" {
-				force = true
-			}
-			maz.RenameAppSp(force, arg2, arg3, z)
+		case "-rnd", "-rng", "-rnap", "-rnsp", "-rndr",
+			"-rndf", "-rngf", "-rnapf", "-rnspf", "-rndrf":
+			flagBody := arg1[3:] // e.g. "gf"
+			force := strings.HasSuffix(flagBody, "f")
+			mazType := strings.TrimSuffix(flagBody, "f")
+			maz.RenameAzureObject(force, mazType, arg2, arg3, z)
 		case "-apas":
 			maz.AddAppSpSecret(maz.Application, arg2, arg3, "", z)
 		case "-aprs", "-aprsf":
-			force := false
-			if arg1 == "-aprsf" {
-				force = true
-			}
+			force := arg1 == "-aprsf" // flag ending in 'f' triggers force mode
 			maz.RemoveAppSpSecret(maz.Application, arg2, arg3, force, z)
 		case "-spas":
 			maz.AddAppSpSecret(maz.ServicePrincipal, arg2, arg3, "", z)
 		case "-sprs", "-sprsf":
-			force := false
-			if arg1 == "-sprsf" {
-				force = true
-			}
+			force := arg1 == "-sprsf"
 			maz.RemoveAppSpSecret(maz.ServicePrincipal, arg2, arg3, force, z)
 		default:
 			printUnknownCommandError()

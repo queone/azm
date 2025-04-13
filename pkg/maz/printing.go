@@ -414,8 +414,7 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 	if matchingCount > 1 {
 		Logf("Printing %d object(s)\n", matchingCount)
 		if printJson {
-			//utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
-			utl.PrintYamlColor(matchingObjects)
+			utl.PrintJsonColor(matchingObjects) // Print macthing set in JSON format
 		} else {
 			for i := range matchingObjects { // Print matching set in terse format
 				obj := matchingObjects[i]

@@ -287,49 +287,33 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 
-	// Parallel fetching setup
 	const (
 		workerCount   = 10
 		resultBufSize = 10000
 	)
+
 	workQueue := make(chan string, 10)
 	results := make(chan AzureObject, resultBufSize)
 	var wg sync.WaitGroup
 
-	// Launch workers
+	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for url := range workQueue {
-				resp, _ := apiGetWithRetry(url, z, verbose, 3)
-				if value := utl.Slice(resp["value"]); value != nil {
-					for _, item := range value {
-						if obj := utl.Map(item); obj != nil {
-							results <- AzureObject(obj)
-						}
-					}
-				}
-			}
-		}()
+		go deltaWorker(workQueue, results, z, verbose, &wg)
 	}
 
-	// Close results channel when all workers finish
+	// Close results when all workers are done
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
 	workQueue <- apiUrl
-
-	// Process results and handle pagination
 	processRemaining := false
+
 	for {
 		if processRemaining {
-			// Drain remaining results after work completion
-			for obj := range results {
-				deltaSet = append(deltaSet, obj)
-			}
+			deltaSet = drainResults(results)
 			if verbose {
 				fmt.Print(rUp)
 			}
@@ -348,23 +332,16 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 
 		default:
-			resp, err := apiGetWithRetry(apiUrl, z, verbose, 3) // statCode intentionally ignored
+			resp, err := apiGetWithRetry(apiUrl, z, verbose, 3)
 			if err != nil {
 				close(workQueue)
 				processRemaining = true
 				continue
 			}
 
-			// First check for data
-			if value := utl.Slice(resp["value"]); value != nil {
-				for _, item := range value {
-					if obj := utl.Map(item); obj != nil {
-						results <- AzureObject(obj)
-					}
-				}
-			}
+			processApiResponse(resp, results)
 
-			// Then handle pagination
+			// Handle pagination
 			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
 				deltaLinkMap = deltaLink
 				close(workQueue)
@@ -379,6 +356,32 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 		}
 	}
+}
+
+func deltaWorker(workQueue <-chan string, results chan<- AzureObject, z *Config, verbose bool, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for url := range workQueue {
+		resp, _ := apiGetWithRetry(url, z, verbose, 3)
+		processApiResponse(resp, results)
+	}
+}
+
+func processApiResponse(resp map[string]interface{}, results chan<- AzureObject) {
+	if value := utl.Slice(resp["value"]); value != nil {
+		for _, item := range value {
+			if obj := utl.Map(item); obj != nil {
+				results <- AzureObject(obj)
+			}
+		}
+	}
+}
+
+func drainResults(results <-chan AzureObject) AzureObjectList {
+	deltaSet := AzureObjectList{}
+	for obj := range results {
+		deltaSet = append(deltaSet, obj)
+	}
+	return deltaSet
 }
 
 func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (AzureObject, error) {
@@ -560,9 +563,16 @@ func UpdateDirObjectInAzure(mazType, id string, obj AzureObject, z *Config) erro
 }
 
 // Renames directory object of given type in Azure.
-func RenameDirObject(force bool, from, newName, mazType string, z *Config) {
+func RenameDirObject(force bool, mazType, from, newName string, z *Config) {
 	// Note that 'from' can be ID or displayName
+
 	mazTypeName := MazTypeNames[mazType]
+
+	// Only supports renaming DirectoryGroup and DirRoleDefinition
+	// Renaming App/SP is a special case has special function RenameAppSp()
+	if mazType != DirectoryGroup && mazType != DirRoleDefinition {
+		utl.Die("Rename not supported for %s object types\n", utl.Yel(mazTypeName))
+	}
 
 	x := PreFetchAzureObject(mazType, from, z)
 	if x == nil {

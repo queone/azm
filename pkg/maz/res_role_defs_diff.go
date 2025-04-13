@@ -52,8 +52,9 @@ func DiffLists(list1, list2 []interface{}) map[string]string {
 // should have already validated that all the respective fields exist within
 // each object.
 func DiffRoleDefinitionSpecfileVsAzure(obj, azureObj map[string]interface{}) {
-	// Gather the SPECFILE object values
+	// Gather the new object values
 	objProps := utl.Map(obj["properties"])
+	objRoleName := utl.Str(objProps["roleName"])
 	objDesc := utl.Str(objProps["description"])
 	objScopes := utl.Slice(objProps["assignableScopes"])
 	objPermSet := utl.Slice(objProps["permissions"])
@@ -64,7 +65,7 @@ func DiffRoleDefinitionSpecfileVsAzure(obj, azureObj map[string]interface{}) {
 	objDataActions := utl.Slice(objPerms["dataActions"])
 	objNotDataActions := utl.Slice(objPerms["notDataActions"])
 
-	// Gather the Azure object values, using casting functions
+	// Gather the existing Azure object values, using casting functions
 	azureId := utl.Str(azureObj["name"])
 	azureProps := utl.Map(azureObj["properties"])
 	azureRoleName := utl.Str(azureProps["roleName"])
@@ -79,18 +80,28 @@ func DiffRoleDefinitionSpecfileVsAzure(obj, azureObj map[string]interface{}) {
 	azureNotDataActions := utl.Slice(azurePerms["notDataActions"])
 
 	// Display differences
-	fmt.Println("Note the color coding below for what the changes in this specfile will do.")
+	fmt.Println("Color coding highlights the expected changes:")
 	fmt.Printf("%s: %s\n", utl.Blu("id"), utl.Gre(azureId))
 	fmt.Printf("%s: \n", utl.Blu("properties"))
-	fmt.Printf("  %s: %s\n", utl.Blu("roleName"), utl.Gre(azureRoleName))
 
-	fmt.Printf("  %s: %s\n", utl.Blu("description"), utl.Gre(azureDesc))
-	if objDesc != azureDesc {
-		fmt.Printf("  %s: %s\n", utl.Blu("description"), utl.Red(objDesc))
+	// roleName
+	if objRoleName == azureRoleName {
+		fmt.Printf("  %s: %s\n", utl.Blu("roleName"), utl.Gre(azureRoleName))
+	} else {
+		fmt.Printf("  %s: %s  %s\n", utl.Blu("roleName"), utl.Mag(objRoleName),
+			utl.Gra("# Updating"))
 	}
 
-	toBeRemoved := utl.Gra("# To be removed")
-	toBeAdded := utl.Gra("# To be added")
+	// description
+	if objDesc == azureDesc {
+		fmt.Printf("  %s: %s\n", utl.Blu("description"), utl.Gre(azureDesc))
+	} else {
+		fmt.Printf("  %s: %s  %s\n", utl.Blu("description"), utl.Mag(objDesc),
+			utl.Gra("# Updating"))
+	}
+
+	toBeRemoved := utl.Gra("# Removing")
+	toBeAdded := utl.Gra("# Adding")
 
 	// scopes
 	fmt.Printf("  %s:\n", utl.Blu("assignableScopes"))

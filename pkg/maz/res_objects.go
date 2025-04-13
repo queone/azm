@@ -2,7 +2,9 @@ package maz
 
 import (
 	"fmt"
+	"path"
 	"strings"
+	"sync"
 
 	"github.com/queone/utl"
 )
@@ -138,4 +140,105 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 		}
 	}
 	return nil // Nothing found, return empty object
+}
+
+// Fetch Azure resources across all role scopes concurrently, with optional verbose logging.
+func fetchAzureObjectsAcrossScopes(
+	endpointSuffix string,
+	z *Config,
+	params map[string]string,
+	verbose bool,
+	mgroupIdMap, subIdMap map[string]string,
+) AzureObjectList {
+	var (
+		list      = AzureObjectList{}
+		ids       = utl.StringSet{} // Tracks unique object names to prevent duplicates
+		callCount = 1               // For tracking and printing API call counts
+		wg        sync.WaitGroup    // WaitGroup for synchronizing goroutines
+		mu        sync.Mutex        // Mutex to safely update shared state across goroutines
+		results   = make(chan AzureObjectList, 10)
+		scopes    = GetAzureResRoleScopes(z) // All scopes to search across
+	)
+
+	// Launch a goroutine for each scope
+	for _, scope := range scopes {
+		wg.Add(1)
+		go func(scope string) {
+			defer wg.Done()
+
+			apiUrl := ConstAzUrl + scope + endpointSuffix
+			resp, statCode, _ := ApiGet(apiUrl, z, params)
+			if statCode != 200 {
+				Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
+				return
+			}
+
+			items := utl.Slice(resp["value"])
+			if items == nil {
+				return // Skip if no items found
+			}
+
+			scopeList := AzureObjectList{}
+			count := 0
+
+			// Process each item in the response
+			for _, obj := range items {
+				objMap := utl.Map(obj)
+				if objMap == nil {
+					continue // Skip if object isn't a map
+				}
+				id := utl.Str(objMap["name"])
+
+				// Use mutex to safely check/update deduplication set
+				mu.Lock()
+				if ids.Exists(id) {
+					mu.Unlock()
+					continue // Skip duplicates
+				}
+				ids.Add(id)
+				mu.Unlock()
+
+				scopeList = append(scopeList, objMap)
+				count++
+			}
+
+			// Verbose output for progress tracking
+			if verbose && count > 0 {
+				scopeName := scope
+				scopeType := "Subscription"
+				if strings.HasPrefix(scope, "/providers") {
+					if name, ok := mgroupIdMap[scope]; ok {
+						scopeName = name
+					}
+					scopeType = "Management Group"
+				} else if strings.HasPrefix(scope, "/subscriptions") {
+					if name, ok := subIdMap[path.Base(scope)]; ok {
+						scopeName = name
+					}
+				}
+				fmt.Printf("%sCall %05d: %05d items under %s %s", rUp, callCount, count, scopeType, scopeName)
+			}
+			callCount++
+
+			// Send collected items from this scope to the result channel
+			results <- scopeList
+		}(scope)
+	}
+
+	// Close the results channel once all goroutines finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect all results from goroutines into the final list
+	for partial := range results {
+		list = append(list, partial...)
+	}
+
+	if verbose {
+		fmt.Print(rUp) // Clear last verbose line
+	}
+
+	return list
 }

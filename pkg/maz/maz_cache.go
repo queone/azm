@@ -3,6 +3,7 @@ package maz
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 
@@ -15,6 +16,23 @@ type Cache struct {
 	deltaLinkFile string
 	data          AzureObjectList
 	mu            sync.Mutex
+}
+
+// Extracts the Azure object's ID
+func ExtractID(obj AzureObject) string {
+	// Try 'id' first
+	if id := path.Base(utl.Str(obj["id"])); id != "" {
+		return id
+	}
+	// Fallback to 'name'
+	if id := path.Base(utl.Str(obj["name"])); id != "" {
+		return id
+	}
+	// Fallback to 'subscriptionId'
+	if id := path.Base(utl.Str(obj["subscriptionId"])); id != "" {
+		return id
+	}
+	return ""
 }
 
 // Initializes a Cache instance for a given type.
@@ -163,7 +181,8 @@ func (c *Cache) Delete(id string) error {
 func (c *Cache) DeleteById(id string) {
 	newData := make(AzureObjectList, 0, len(c.data))
 	for _, obj := range c.data {
-		if utl.Str(obj["id"]) != id {
+		existingId := ExtractID(obj)
+		if existingId != id {
 			newData = append(newData, obj)
 		}
 	}
@@ -175,23 +194,19 @@ func (c *Cache) Upsert(obj AzureObject) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	id := utl.Str(obj["id"])
+	id := ExtractID(obj)
 	if id == "" {
-		id = utl.Str(obj["name"]) // Some objects use 'name' for ID
-		if id == "" {
-			id = utl.Str(obj["subscriptionId"]) // Subscriptions use this for ID
-			if id == "" {
-				return fmt.Errorf("object with blank ID not added to cache")
-			}
-		}
+		return fmt.Errorf("object with blank ID not added to cache")
 	}
 
 	// Check if the object already exists in the cache
 	existingObj := c.data.FindById(id) // Use FindById to locate the existing object
 	if existingObj != nil {
+		Logf("UPDATE cache object %s\n", utl.Mag(id))
 		// Merge the new object into the existing one in place
 		MergeAzureObjects(obj, *existingObj)
 	} else {
+		Logf("ADD cache object %s\n", utl.Mag(id))
 		c.data = append(c.data, obj) // Add the new object to the cache
 	}
 
@@ -229,15 +244,9 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 }
 
 func (c *Cache) upsertLocked(obj AzureObject) error {
-	id := utl.Str(obj["id"])
+	id := ExtractID(obj)
 	if id == "" {
-		id = utl.Str(obj["name"])
-		if id == "" {
-			id = utl.Str(obj["subscriptionId"])
-			if id == "" {
-				return fmt.Errorf("object with blank ID not added to cache")
-			}
-		}
+		return fmt.Errorf("object with blank ID not added to cache")
 	}
 
 	if existingObj := c.data.FindById(id); existingObj != nil {
@@ -289,16 +298,10 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 
 		// Bulk append without per-item processing, with proper ID checking
 		for _, obj := range mergeSet {
-			id := utl.Str(obj["id"])
+			id := ExtractID(obj)
 			if id == "" {
-				id = utl.Str(obj["name"])
-				if id == "" {
-					id = utl.Str(obj["subscriptionId"])
-					if id == "" {
-						fmt.Printf("WARNING: object with blank ID not added to cache\n")
-						continue
-					}
-				}
+				fmt.Printf("WARNING: object with blank ID not added to cache\n")
+				continue
 			}
 			c.data = append(c.data, obj)
 		}
