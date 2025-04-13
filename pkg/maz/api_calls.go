@@ -16,61 +16,113 @@ import (
 )
 
 // ApiCall alias to do a GET
-func ApiGet(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("GET", apiUrl, z, nil, params, false) // false = quiet
+func ApiGet(
+	apiUrl string,
+	z *Config,
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("GET", apiUrl, z, nil, params, false)
 }
 
 // ApiCall alias to do a GET with debugging on
-func ApiGetVerbose(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("GET", apiUrl, z, nil, params, true) // true = verbose, for debugging
+func ApiGetVerbose(
+	apiUrl string,
+	z *Config,
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("GET", apiUrl, z, nil, params, true)
 }
 
 // ApiCall alias to do a PATCH
-func ApiPatch(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("PATCH", apiUrl, z, payload, params, false) // false = quiet
+func ApiPatch(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("PATCH", apiUrl, z, payload, params, false)
 }
 
 // ApiCall alias to do a PATCH with debugging on
-func ApiPatchVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("PATCH", apiUrl, z, payload, params, true) // true = verbose, for debugging
+func ApiPatchVerbose(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("PATCH", apiUrl, z, payload, params, true)
 }
 
 // ApiCall alias to do a POST
-func ApiPost(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("POST", apiUrl, z, payload, params, false) // false = quiet
+func ApiPost(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("POST", apiUrl, z, payload, params, false)
 }
 
 // ApiCall alias to do a POST with debugging on
-func ApiPostVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("POST", apiUrl, z, payload, params, true) // true = verbose, for debugging
+func ApiPostVerbose(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("POST", apiUrl, z, payload, params, true)
 }
 
 // ApiCall alias to do a PUT
-func ApiPut(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("PUT", apiUrl, z, payload, params, false) // false = quiet
+func ApiPut(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("PUT", apiUrl, z, payload, params, false)
 }
 
 // ApiCall alias to do a PUT with debugging on
-func ApiPutVerbose(apiUrl string, z *Config, payload map[string]interface{}, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("PUT", apiUrl, z, payload, params, true) // true = verbose, for debugging
+func ApiPutVerbose(
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("PUT", apiUrl, z, payload, params, true)
 }
 
 // ApiCall alias to do a DELETE
-func ApiDelete(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("DELETE", apiUrl, z, nil, params, false) // false = quiet
+func ApiDelete(
+	apiUrl string,
+	z *Config,
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("DELETE", apiUrl, z, nil, params, false)
 }
 
 // ApiCall alias to do a DELETE with debugging on
-func ApiDeleteVerbose(apiUrl string, z *Config, params map[string]string) (map[string]interface{}, int, error) {
-	return ApiCall("DELETE", apiUrl, z, nil, params, true) // true = verbose, for debugging
+func ApiDeleteVerbose(
+	apiUrl string,
+	z *Config,
+	params map[string]string,
+) (map[string]interface{}, int, error) {
+	return ApiCall("DELETE", apiUrl, z, nil, params, true)
 }
 
 // // Makes an API call and returns the result object, statusCode, and error.
-// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+// func ApiCall(
+// 	method string,
+// 	apiUrl string,
+// 	z *Config,
+// 	payload map[string]interface{},
+// 	params map[string]string,
+// 	verbose bool,
+// ) (map[string]interface{}, int, error) {
 // 	if !strings.HasPrefix(apiUrl, "http") {
 // 		return nil, 0, fmt.Errorf("%s Error: Bad URL, %s", utl.Trace(), apiUrl)
 // 	}
-
 // 	// Map headers to corresponding API endpoint
 // 	var headers map[string]string
 // 	if strings.HasPrefix(apiUrl, ConstMgUrl) {
@@ -254,7 +306,14 @@ func PrintParams(params url.Values) {
 
 // =========================================================================
 // Makes an API call and returns the result object, statusCode, and error.
-func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+func ApiCall(
+	method string,
+	apiUrl string,
+	z *Config,
+	payload map[string]interface{},
+	params map[string]string,
+	verbose bool,
+) (map[string]interface{}, int, error) {
 	Logf("%s %s\n", method, apiUrl) // Basic logging info
 
 	// Validate URL
@@ -346,7 +405,13 @@ func setQueryParameters(req *http.Request, params map[string]string) {
 }
 
 // Helper function to log request details in verbose mode
-func logRequestDetails(method, apiUrl string, req *http.Request, payload map[string]interface{}, params map[string]string) {
+func logRequestDetails(
+	method string,
+	apiUrl string,
+	req *http.Request,
+	payload map[string]interface{},
+	params map[string]string,
+) {
 	fmt.Println(utl.Blu("==== REQUEST ================================="))
 	fmt.Println(method + " " + apiUrl)
 	PrintHeaders(req.Header)
@@ -437,27 +502,57 @@ func logResponseDetails(resp *http.Response, result map[string]interface{}) {
 // 	StatusCode int
 // 	Error      error
 // }
-// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) ApiResponse {
-// 	// Function implementation
+// func ApiCall(
+//     method string,
+//     apiUrl string,
+//     z *Config,
+//     payload map[string]interface{},
+//     params map[string]string,
+//     verbose bool,
+// ) ApiResponse {
+//     // Function implementation
 // }
-// response := ApiCall("GET", "https://api.example.com", z, nil, nil, true)
+
+// response := ApiCall(
+//     "GET",
+//     "https://api.example.com",
+//     z,
+//     nil,
+//     nil,
+//     true,
+// )
 // if response.Error != nil {
 //     fmt.Println("Error:", response.Error)
 // } else {
 //     fmt.Println("Result:", response.Result)
 // }
-//
+
 // 3. Break Down Large Functions
-//
-// func BuildRequest(method, apiUrl string, payload map[string]interface{}, params map[string]string) (*http.Request, error) {
+
+// func BuildRequest(
+//     method string,
+//     apiUrl string,
+//     payload map[string]interface{},
+//     params map[string]string,
+// ) (*http.Request, error) {
 //     // Build and return the HTTP request
 // }
 
-// func SendRequest(req *http.Request, verbose bool) (map[string]interface{}, int, error) {
+// func SendRequest(
+//     req *http.Request,
+//     verbose bool,
+// ) (map[string]interface{}, int, error) {
 //     // Send the HTTP request and return the response
 // }
 
-// func ApiCall(method, apiUrl string, z *Config, payload map[string]interface{}, params map[string]string, verbose bool) (map[string]interface{}, int, error) {
+// func ApiCall(
+//     method string,
+//     apiUrl string,
+//     z *Config,
+//     payload map[string]interface{},
+//     params map[string]string,
+//     verbose bool,
+// ) (map[string]interface{}, int, error) {
 //     req, err := BuildRequest(method, apiUrl, payload, params)
 //     if err != nil {
 //         return nil, 0, err

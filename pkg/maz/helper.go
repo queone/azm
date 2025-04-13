@@ -10,6 +10,10 @@ import (
 
 // Creates or updates an Azure object by given specfile
 func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
+	if !utl.FileUsable(specfile) {
+		utl.Die("Specfile %s is missing or empty\n", utl.Yel(specfile))
+	}
+
 	_, mazType, obj := GetObjectFromFile(specfile)
 	switch mazType {
 	case ResRoleDefinition:
@@ -21,9 +25,11 @@ func ApplyObjectBySpecfile(force bool, specfile string, z *Config) {
 	case DirectoryGroup:
 		UpsertGroup(force, obj, z)
 	default:
-		utl.Die("Option only available for resource role definitions and" +
-			" assignments, directory groups, and directory AppSPs. This specfile" +
-			" doesn't contain any of those types of objects.\n")
+		onlyFor := fmt.Sprintf("%s, %s, %s, and %s/%s combos",
+			utl.Red(ResRoleDefinition), utl.Red(ResRoleAssignment), utl.Red(DirectoryGroup),
+			utl.Red(Application), utl.Red(ServicePrincipal))
+		utl.Die("The current implementation is only for objects %s, but none of these were "+
+			"found in the specfile.\n", onlyFor)
 	}
 	os.Exit(0)
 }
@@ -472,4 +478,19 @@ func GetIdNameMap(mazType string, z *Config) map[string]string {
 		}
 	}
 	return idNameMap
+}
+
+// Renames Azure object
+func RenameAzureObject(force bool, mazType, currentName, newName string, z *Config) {
+	// Missing mazTypes are deliberately unsupported because one, they don't have
+	// display names, or simply because renaming them brings on too many complexities.
+	switch mazType {
+	case ResRoleDefinition:
+		RenameResRoleDefinition(force, currentName, newName, z)
+	case Application, ServicePrincipal:
+		// This renaming is special becase of the relationship between the App and the SP
+		RenameAppSp(force, currentName, newName, z)
+	case DirectoryGroup, DirRoleDefinition:
+		RenameDirObject(force, mazType, currentName, newName, z)
+	}
 }

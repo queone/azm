@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.8.11
+Release Date: 2025-apr-13
+- Renamed MAZ_LOG to MAZLOG
+- Streamlined and genericized object renaming option; only supported on a select set of objects
+- Refactored Azure role assignment and definition fetch logic to use a shared, parallelized helper with improved clarity, reusability, and verbose diagnostics
+
 ### v0.8.10
 Release Date: 2025-apr-11
 - Now Log access permission errors rather than masking them silently

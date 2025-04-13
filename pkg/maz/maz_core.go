@@ -496,13 +496,13 @@ func SplitJWT(tokenString string) ([]string, error) {
 	return parts, nil
 }
 
-// Check if MAZ_LOG logging is enabled
+// Check if MAZLOG logging is enabled
 func isMazLoggingEnabled() bool {
-	val := strings.ToLower(os.Getenv("MAZ_LOG"))
+	val := strings.ToLower(os.Getenv("MAZLOG"))
 	return val == "1" || val == "true" || val == "yes"
 }
 
-// Prints colorized, formatted debugging messages to stderr when MAZ_LOG is enabled
+// Prints colorized, formatted debugging messages to stderr when MAZLOG is enabled
 func Logf(format string, args ...interface{}) {
 	if !isMazLoggingEnabled() {
 		return
