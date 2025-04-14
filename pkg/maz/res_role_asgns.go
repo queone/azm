@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/queone/utl"
@@ -94,28 +95,46 @@ func IsResRoleAssignment(obj AzureObject) bool {
 }
 
 // Prints a human-readable report of all Azure resource role assignments in the tenant
+// Prints a human-readable report of all Azure resource role assignments in the tenant
+// Prints a human-readable report of all Azure resource role assignments in the tenant
 func PrintResRoleAssignmentReport(z *Config) {
-	roleIdMap := GetIdNameMap(ResRoleDefinition, z) // Get all role definition id:name pairs
-	subIdMap := GetIdNameMap(Subscription, z)       // Get all subscription id:name pairs
-	groupIdMap := GetIdNameMap(DirectoryGroup, z)   // Get all groups id:name pairs
-	userIdMap := GetIdNameMap(DirectoryUser, z)     // Get all users id:name pairs
-	spIdMap := GetIdNameMap(ServicePrincipal, z)    // Get all SPs id:name pairs
+	totalStart := time.Now()
 
-	assignments := GetMatchingResRoleAssignments("", false, z) // Get all the assignments. false = quietly
+	start := time.Now()
+	roleIdMap := GetIdNameMap(ResRoleDefinition, z)
+	Logf("Fetched role definition ID map      in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	start = time.Now()
+	subIdMap := GetIdNameMap(Subscription, z)
+	Logf("Fetched subscription ID map         in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	start = time.Now()
+	groupIdMap := GetIdNameMap(DirectoryGroup, z)
+	Logf("Fetched group ID map                in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	start = time.Now()
+	userIdMap := GetIdNameMap(DirectoryUser, z)
+	Logf("Fetched user ID map                 in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	start = time.Now()
+	spIdMap := GetIdNameMap(ServicePrincipal, z)
+	Logf("Fetched service principal ID map    in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	Logf("Total ID map fetch time             in %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(totalStart).Milliseconds())))
+
+	assignments := GetMatchingResRoleAssignments("", false, z)
 
 	for i := range assignments {
-		assignment := assignments[i]               // No need to cast; should already be AzureObject type
-		props := utl.Map(assignment["properties"]) // Try casting props as a map
+		assignment := assignments[i]
+		props := utl.Map(assignment["properties"])
 		if assignment == nil || props == nil {
-			continue // Skip if either isn't valid
+			continue
 		}
 
-		// Grab the 3 key attributes
 		roleDefinitionId := path.Base(utl.Str(props["roleDefinitionId"]))
 		principalId := utl.Str(props["principalId"])
 		principalType := utl.Str(props["principalType"])
 
-		// Use principal type to get its more human-readable display name
 		principalName := "ID-Not-Found"
 		switch principalType {
 		case "Group":
@@ -126,10 +145,8 @@ func PrintResRoleAssignmentReport(z *Config) {
 			principalName = spIdMap[principalId]
 		}
 
-		// Make scope a bit more readable also
 		scope := utl.Str(props["scope"])
 		if strings.HasPrefix(scope, "/subscriptions") {
-			// Replace subscription ID with its name, but keep the rest of the resource path
 			split := strings.Split(scope, "/")
 			scope = subIdMap[split[2]] + " " + strings.Join(split[3:], "/")
 		}
@@ -383,7 +400,7 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 	}
 
 	if verbose {
-		fmt.Printf("%sFetched %d unique role assignments across all scopes\n", rUp, len(list))
+		fmt.Printf("%sFetched %d unique role assignments across all scopes\n", clrLine, len(list))
 	}
 
 	// Trim and cache results
@@ -458,12 +475,12 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 // 			} else if strings.HasPrefix(scope, "/subscriptions") {
 // 				scopeName = subIdMap[path.Base(scope)]
 // 			}
-// 			fmt.Printf("%sCall %05d: %05d assignments under %s %s", rUp, callCount, count, scopeType, scopeName)
+// 			fmt.Printf("%sCall %05d: %05d assignments under %s %s", clrLine, callCount, count, scopeType, scopeName)
 // 		}
 // 		callCount++
 // 	}
 // 	if verbose {
-// 		fmt.Print(rUp) // Go up to overwrite progress line
+// 		fmt.Print(clrLine) // Go up to overwrite progress line
 // 	}
 
 // 	// Trim and prepare all objects for caching

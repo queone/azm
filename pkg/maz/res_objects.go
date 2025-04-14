@@ -216,7 +216,7 @@ func fetchAzureObjectsAcrossScopes(
 						scopeName = name
 					}
 				}
-				fmt.Printf("%sCall %05d: %05d items under %s %s", rUp, callCount, count, scopeType, scopeName)
+				fmt.Printf("%sCall %05d: %05d items under %s %s", clrLine, callCount, count, scopeType, scopeName)
 			}
 			callCount++
 
@@ -237,7 +237,7 @@ func fetchAzureObjectsAcrossScopes(
 	}
 
 	if verbose {
-		fmt.Print(rUp) // Clear last verbose line
+		fmt.Print(clrLine) // Clear last verbose line
 	}
 
 	return list

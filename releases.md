@@ -1,5 +1,10 @@
 ## Releases
 
+### v0.8.12
+Release Date: 2025-apr-14
+- Added benchmark timing with aligned output and a total summary line (all in ms and yellow-highlighted) to measure how long it takes to build Azure resource ID maps in PrintResRoleAssignmentReport
+- Improved printUsage formatting for cleaner alignment and accurate color-coded output
+
 ### v0.8.11
 Release Date: 2025-apr-13
 - Renamed MAZ_LOG to MAZLOG

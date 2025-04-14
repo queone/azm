@@ -49,9 +49,15 @@ func DeleteObjectBySpecfile(force bool, specfile string, z *Config) {
 		displayName := utl.Str(obj["displayName"])
 		DeleteDirObject(force, displayName, mazType, z)
 	default:
-		utl.Die("Option only available for resource role definitions and" +
-			" assignments, directory groups, and directory AppSPs. This specfile" +
-			" doesn't contain any of those types of objects.\n")
+		utl.Die("This option is only available for the following object types:\n"+
+			"  %s  %s\n  %s  %s\n  %s  %s\n  %s  %s\n  %s  %s\n  %s  %s\n  %s  %s\n",
+			utl.Yel(fmt.Sprintf("%-2s", ResRoleDefinition)), MazTypeNames[ResRoleDefinition],
+			utl.Yel(fmt.Sprintf("%-2s", ResRoleAssignment)), MazTypeNames[ResRoleAssignment],
+			utl.Yel(fmt.Sprintf("%-2s", DirectoryGroup)), MazTypeNames[DirectoryGroup],
+			utl.Yel(fmt.Sprintf("%-2s", Application)), MazTypeNames[Application],
+			utl.Yel(fmt.Sprintf("%-2s", ServicePrincipal)), MazTypeNames[ServicePrincipal],
+			utl.Yel(fmt.Sprintf("%-2s", DirRoleDefinition)), MazTypeNames[DirRoleDefinition],
+			utl.Yel(fmt.Sprintf("%-2s", DirRoleAssignment)), MazTypeNames[DirRoleAssignment])
 	}
 	os.Exit(0)
 }
@@ -252,7 +258,7 @@ func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {
 		if statCode != 200 {
-			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", rUp, statCode)
+			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", clrLine, statCode)
 			fmt.Printf("%s", utl.Yel(msg))
 		}
 		// Forever loop until there are no more pages

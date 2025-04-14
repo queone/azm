@@ -315,7 +315,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 		if processRemaining {
 			deltaSet = drainResults(results)
 			if verbose {
-				fmt.Print(rUp)
+				fmt.Print(clrLine)
 			}
 			return deltaSet, deltaLinkMap
 		}
@@ -328,7 +328,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 			}
 			deltaSet = append(deltaSet, obj)
 			if verbose && len(deltaSet)%100 == 0 {
-				fmt.Printf("%sCall %05d : count %07d", rUp, callCount, len(deltaSet))
+				fmt.Printf("%sCall %05d : count %07d", clrLine, callCount, len(deltaSet))
 			}
 
 		default:
@@ -395,7 +395,7 @@ func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (Azure
 		}
 		Logf("%v\n", err)
 		if verbose {
-			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", rUp, i+1, maxRetries, err)
+			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", clrLine, i+1, maxRetries, err)
 		}
 		time.Sleep(time.Second * time.Duration(1<<i))
 	}
