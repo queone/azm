@@ -12,91 +12,119 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.11"
+	program_version = "0.8.12"
+
+	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
 
 func printUsage(extended bool) {
 	n := utl.Whi2(program_name)
 	v := program_version
 	X := utl.Red("X")
-	onlyFor := fmt.Sprintf("%s, %s, %s, and %s/%s combos",
-		utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
-		utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
-	onlyFor2 := fmt.Sprintf("%s, %s, %s, %s, and %s",
-		utl.Red(maz.ResRoleDefinition), utl.Red(maz.DirectoryGroup), utl.Red(maz.Application),
-		utl.Red(maz.ServicePrincipal), utl.Red(maz.DirRoleDefinition))
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Azure IAM CLI utility - github.com/queone/azm\n"+
 		"%s\n"+
-		"  %s [options] [arguments]\n"+
-		"\n"+
-		"  This utility simplifies the querying and management of various Azure IAM-related objects.\n"+
-		"  In many options %s is a placeholder for a 1-2 character code that specifies the type of\n"+
-		"  Azure object to act on. The available codes are:\n\n"+
+		"  %s [options] [arguments]\n", n, v, utl.Whi2("Usage"), n)
+	usageHeader += fmt.Sprintf("\n"+
+		"  This tool helps with querying and managing Azure IAM-related objects. Many options use %s\n"+
+		"  as a placeholder for a 1–2 letter code indicating the object type. Supported types:\n\n"+
 		"    %s = Resource Role Definitions     %s = Resource Role Assignments\n"+
 		"    %s = Resource Subscriptions        %s = Resource Management Groups\n"+
 		"    %s = Directory Users               %s = Directory Groups\n"+
 		"    %s = Directory Applications        %s = Directory Service Principals\n"+
 		"    %s = Directory Role Definitions    %s = Directory Role Assignments\n\n"+
-		"  In those options, replace %s with the corresponding code to specify the object type.\n"+
-		"\n"+
-		"%s\n"+
+		"  Replace %s with the relevant code in supported options.\n"+
+		"\n", X,
+		utl.Red(fmt.Sprintf("%2s", maz.ResRoleDefinition)), utl.Red(fmt.Sprintf("%2s", maz.ResRoleAssignment)),
+		utl.Red(fmt.Sprintf("%2s", maz.Subscription)), utl.Red(fmt.Sprintf("%2s", maz.ManagementGroup)),
+		utl.Red(fmt.Sprintf("%2s", maz.DirectoryUser)), utl.Red(fmt.Sprintf("%2s", maz.DirectoryGroup)),
+		utl.Red(fmt.Sprintf("%2s", maz.Application)), utl.Red(fmt.Sprintf("%2s", maz.ServicePrincipal)),
+		utl.Red(fmt.Sprintf("%2s", maz.DirRoleDefinition)), utl.Red(fmt.Sprintf("%2s", maz.DirRoleAssignment)), X)
+	usageHeader += fmt.Sprintf("%s\n"+
 		"  Try experimenting with different options and arguments, such as:\n"+
+		"\n"+
 		"  %s -id                                      To display the currently configured login values\n"+
-		"  %s -ap                                      To list all directory applications registered in\n"+
-		"                                               current tenant\n"+
-		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  To show resource Role definition with this\n"+
-		"                                               given UUID\n"+
-		"  %s -d Reader                                To show all resource Role definitions with\n"+
-		"                                               'Reader' in their names\n"+
-		"  %s -g MyGroup                               To show any directory group with the filter\n"+
-		"                                               'MyGroup' in its attributes\n"+
+		"  %s -ap                                      To list all Apps in current tenant\n"+
+		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  Show resource role definition with this UUID\n"+
+		"  %s -d Reader                                Show all roles with 'Reader' in the name\n"+
+		"  %s -g MyGroup                               Show any directory group matching 'MyGroup'\n"+
 		"  %s -s                                       To list all subscriptions in current tenant\n"+
 		"  %s -?                                       To display the full list of options\n",
-		n, v, utl.Whi2("Usage"), n, X,
-		utl.Red("d "), utl.Red("a "), utl.Red("s "), utl.Red("m "), utl.Red("u "),
-		utl.Red("g "), utl.Red("ap"), utl.Red("sp"), utl.Red("dr"), utl.Red("da"), X,
 		utl.Whi2("Quick Examples"), n, n, n, n, n, n, n)
-	usageExtended := fmt.Sprintf("\n%s (allow reading Azure objects)\n"+
-		"  UUID                             Show all Azure objects associated with the given UUID\n"+
-		"  -%s[j] [FILTER]                   List all %s objects tersely; optional JSON output; optional\n"+
-		"                                   match on FILTER string for Id, DisplayName, and other attributes.\n"+
-		"                                   If the result is a single object, it is printed in more detail.\n"+
-		"  -vs SPECFILE                     Compare YAML specfile to what's in Azure. Only for certain objects.\n"+
+
+	set1 := fmt.Sprintf("%s, %s, %s, %s, and %s",
+		utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
+		utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
+
+	usageExtended := fmt.Sprintf("\n%s\n"+
+		// "%s (allow reading Azure objects)\n"+
+		"  Use optional [j] for JSON output\n"+
+		"\n"+
+		"  -%s[j] [FILTER]                   List all %s objects tersely (ID, name, etc.); optional match\n"+
+		"                                   on FILTER string for Id, DisplayName, and other attributes. If\n"+
+		"                                   the result is a single object, it is fetched directly from Azure\n"+
+		"                                   and printed in more detail.\n"+
+		"  -vs SPECFILE                     Compare specfile to Azure (%s only)\n"+
+		"  UUID                             Show all Azure objects linked to the given UUID\n"+
 		"  -ar                              Resource role assignment report with resolved attribute names\n"+
 		"  -mt                              List Management Group and subscriptions tree\n"+
-		"  -pags                            List all Azure AD Privileged Access Groups\n"+
-		"  -st                              Show count of all objects in local cache and Azure tenant\n"+
+		"  -pags                            List all Entra ID Privileged Access Groups\n"+
+		"  -st                              Show count of all objects in local cache and Azure tenant\n",
+		utl.Whi2("Read Options"), X, X, set1)
+
+	// set2 := fmt.Sprintf("%s, %s, %s, %s, and %s",
+	// 	utl.Red(maz.ResRoleDefinition), utl.Red(maz.DirectoryGroup), utl.Red(maz.Application),
+	// 	utl.Red(maz.ServicePrincipal), utl.Red(maz.DirRoleDefinition))
+
+	// set3 := fmt.Sprintf("%s, %s, %s, %s, %s, %s, and %s",
+	// 	utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
+	// 	utl.Red(maz.Application), utl.Red(maz.ServicePrincipal),
+	// 	utl.Red(fmt.Sprintf("%-2s", maz.DirRoleDefinition)),
+	// 	utl.Red(fmt.Sprintf("%-2s", maz.DirRoleAssignment)))
+
+	usageExtended += fmt.Sprintf("\n%s\n"+
+		// "%s (allow managing Azure objects)\n"+
+		"  Use optional [f] to bypass confirmation prompts (e.g., -rmf to skip confirm)\n"+
 		"\n"+
-		"%s (allow managing Azure objects)\n"+
-		"  -%sk [NAME]                       Generate a YAML skeleton file for object type %s. Only\n"+
-		"                                   certain objects are currently supported; optional NAME is used\n"+
-		"                                   as the object name and basis for the specfile name\n"+
-		// ====
-		"  -up[f] SPECFILE                  Create or update object in given SPECFILE (only for objects\n"+
-		"                                   %s); use 'f' to suppress confirmation\n"+
-		// Need versions of above for named groups
+		"  -%sk [NAME]                       Generate YAML skeleton (%s only); NAME optional\n",
+		utl.Whi2("Write Options"), X, set1)
 
-		// ====
-		"  -rm[f] SPECFILE|ID               Delete object by given SPECFILE (only for certain objects);\n"+
-		"                                   delete by given ID; use 'f' to suppress confirmation\n"+
-		// Need versions of above for named groups
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -up[f] SPECFILE                  Create/update object defined in specfile (%s only)\n",
+		clrPrevLine, set1)
 
-		// ====
-		"  -rn%s[f] NAME|ID NEWNAME          Rename %s object with given NAME or ID to NEWNAME (only for\n"+
-		"                                   objects %s); use 'f' to suppress confirmation\n"+
-		// Need versions of above for named groups
+	// Work-in-progress: Group -up[f] additions...
+	// usageExtended += fmt.Sprintf("\n%s"+
+	// 	"\n"+
+	// 	"  -up[f] [NAME|ID [DESC] [ASSIGN]]  Update/Create group for given SPECFILE or NAME/ID. See below\n"+
+	// 	"\n"+
+	// 	"    DESC sets the description and is optional. If it or NAME contain spaces, enclose them\n"+
+	// 	"    in quotes. ASSIGN sets the isAssignableToRole and is also optional and can be set to\n"+
+	// 	"    true if you have Privileged Role Administrator privileges; by default it is false. If\n"+
+	// 	"    you have to set ASSIGN then DESC is mandatory even if empty. See examples below:\n"+
+	// 	"\n"+
+	// 	"    azgrp -up my_group1\n"+
+	// 	"    azgrp -up \"my group2\" \"my desc\"\n"+
+	// 	"    azgrp -up my_group3 \"my desc\" true\n"+
+	// 	"    azgrp -up my_group4 \"\" true\n\n", clrPrevLine)
 
-		// ==== Repeat above for appsp and resRoleDefs
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -rm[f] SPECFILE                  Delete object defined in specfile (%s only)\n"+
+		"  -rm[f] ID|NAME                   Delete object (assignments don't support NAME)\n",
+		clrPrevLine, set1)
 
-		"  -apas ID SECRET_NAME [EXPIRY]    Add a secret to an App with the given ID; optional expiry\n"+
-		"                                   date (YYYY-MM-DD) or in X number of days\n"+
-		"  -aprs[f] ID SECRET_ID            Remove a secret from an App with the given ID\n"+
-		"  -spas ID SECRET_NAME [EXPIRY]    Add a secret to an SP with the given ID; optional expiry\n"+
-		"                                   date (YYYY-MM-DD) or in X number of days\n"+
-		"  -sprs[f] ID SECRET_ID            Remove a secret from an SP with the given ID\n"+
-		"\n"+
-		"%s\n"+
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -up[f] SPECFILE                  Create/update object defined in specfile (%s only)\n",
+		clrPrevLine, set1)
+
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -apas ID NAME [EXPIRY]           Add secret to App ID; optional expiry (YYYY-MM-DD or in X days)\n"+
+		"  -aprs[f] ID SECRET_ID            Remove secret from App ID\n"+
+		"  -spas ID NAME [EXPIRY]           Add secret to SP ID; optional expiry (YYYY-MM-DD or in X days)\n"+
+		"  -sprs[f] ID SECRET_ID            Remove secret from SP ID\n"+
+		"\n", clrPrevLine)
+
+	usageExtended += fmt.Sprintf("%s\n"+
 		"  -id                              Display the currently configured login values\n"+
 		"  -id TenantId Username            Set up user credentials for interactive login\n"+
 		"  -id TenantId ClientId Secret     Configure ID for automated login\n"+
@@ -108,13 +136,15 @@ func printUsage(extended bool) {
 		"  -td \"TokenString\"                Decode given JWT token string\n"+
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
-		"  -?, -h, --help                   Display the full list of options\n",
-		utl.Whi2("Read Options"), X, X, utl.Whi2("Write Options"), X, X, onlyFor, X, X, onlyFor2,
+		"  -?, -h, --help                   Display the full list of options\n"+
+		"  LOGGING NOTE                     Use MAZLOG=1 to see extended logging\n",
 		utl.Whi2("Other Options"), X, X)
+
 	fmt.Print(usageHeader)
 	if extended {
 		fmt.Print(usageExtended)
 	}
+
 	os.Exit(0)
 }
 
@@ -125,6 +155,7 @@ func printUnknownCommandError() {
 }
 
 func main() {
+	maz.Logf("Login is enabled\n")
 	numberOfArguments := len(os.Args[1:]) // Exclude the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {
 		// Don't accept less than 1, or more than 4 arguments

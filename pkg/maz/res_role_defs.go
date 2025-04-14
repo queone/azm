@@ -536,12 +536,12 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 // 			} else if strings.HasPrefix(scope, "/subscriptions") {
 // 				scopeName = subIdMap[path.Base(scope)]
 // 			}
-// 			fmt.Printf("%sCall %05d: %05d definitions under %s %s", rUp, callCount, count, scopeType, scopeName)
+// 			fmt.Printf("%sCall %05d: %05d definitions under %s %s", clrLine, callCount, count, scopeType, scopeName)
 // 		}
 // 		callCount++
 // 	}
 // 	if verbose {
-// 		fmt.Print(rUp) // Go up to overwrite progress line
+// 		fmt.Print(clrLine) // Go up to overwrite progress line
 // 	}
 
 // 	// Trim and prepare all objects for caching

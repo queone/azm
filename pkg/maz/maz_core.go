@@ -34,8 +34,7 @@ const (
 	//   - https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in
 	//   - https://stackoverflow.com/questions/30454771/how-does-azure-powershell-work-with-username-password-based-auth
 
-	rUp = "\x1B[2K\r" // Clears the line completely and move cursor to the start of the line
-	// See https://stackoverflow.com/questions/1508490/erase-the-current-printed-console-line
+	clrLine = "\x1B[2K\r" // Clear current line and move cursor to line start
 
 	ConstMgCacheFileAgePeriod = 1800  // Half hour
 	ConstAzCacheFileAgePeriod = 86400 // One day
