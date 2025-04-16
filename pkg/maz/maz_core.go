@@ -1,8 +1,22 @@
-// Package maz is a library of functions for interacting with essential Azure APIs via
-// REST calls. Currently it supports two APIs, the Azure Resource Management (ARM) API
-// and the MS Graph API, but can be extended to support additional APIs. This package
-// obviously also includes code to get an Azure JWT token using the MSAL library, to
-// then use against either the 2 currently supported Azure APIs.
+// Package maz provides helper functions for working with key Azure APIs
+// using REST calls. It currently supports the Azure Resource Manager (ARM)
+// API and the Microsoft Graph API, with room for future expansion.
+//
+// The package also includes logic for obtaining Azure JWT tokens via the
+// MSAL library, which can then be used to authenticate requests to the
+// supported APIs.
+//
+// REFERENCES:
+// stackoverflow.com/questions/30454771/how-does-azure-powershell-work-with-username-password-based-auth
+// learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in
+// learn.microsoft.com/en-us/graph/aad-advanced-queries?tabs=http
+// learn.microsoft.com/en-us/graph/delta-query-overview
+// learn.microsoft.com/en-us/graph/api/group-post-groups?view=graph-rest-1.0&tabs=http
+// learn.microsoft.com/en-us/graph/api/resources/serviceprincipal?view=graph-rest-1.0#properties
+// learn.microsoft.com/en-us/rest/api/authorization/role-assignments/create
+// learn.microsoft.com/en-us/rest/api/subscription/subscriptions?view=rest-subscription-2021-10-01
+// learn.microsoft.com/en-us/rest/api/azureresourcegraph/resourcegraph/operation-groups
+// learn.microsoft.com/en-us/azure/governance/resource-graph/concepts/query-language#query-options
 
 package maz
 
@@ -28,11 +42,8 @@ const (
 	MgApiToken      = "MgApiToken"
 	UnknownApiToken = "UnknownApiToken"
 
-	ConstAzPowerShellClientId = "1950a258-227b-4e31-a9cf-717495945fc2" // 'Microsoft Azure PowerShell' ClientId
-	//ConstAzPowerShellClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" // 'Microsoft Azure CLI' ClientId
-	// Interactive login can use either of above ClientIds. See below references:
-	//   - https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in
-	//   - https://stackoverflow.com/questions/30454771/how-does-azure-powershell-work-with-username-password-based-auth
+	ConstAzPowerShellClientId = "1950a258-227b-4e31-a9cf-717495945fc2" // 'Microsoft Azure PowerShell'
+	//ConstAzPowerShellClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" // 'Microsoft Azure CLI'
 
 	clrLine = "\x1B[2K\r" // Clear current line and move cursor to line start
 
@@ -437,8 +448,8 @@ func SetupAzureArmToken(z *Config) {
 	if _, err := SplitJWT(z.AzToken); err != nil {
 		Logf("AZ token suffix = %s\n", utl.Cya(GetTokenSuffix(z.AzToken)))
 		scope := []string{ConstAzUrl + "/.default"}
-		// Appending '/.default' allows using all static and consented permissions of the identity in
-		// use. See https://learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
+		// Appending '/.default' allows using all static and consented permissions of the identity
+		// in use. See learn.microsoft.com/en-us/azure/active-directory/develop/msal-v1-app-scopes
 		var err error
 		z.AzToken, err = GetApiToken(scope, z) // Get the Azure ARM token
 		if err != nil {

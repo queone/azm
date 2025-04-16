@@ -86,8 +86,8 @@ func PrintSp(x AzureObject, z *Config) {
 
 	// Print API permissions that have been granted admin consent
 	// ======================================================================
-	// - https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
-	// - https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
+	// - learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals
+	// - learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
 	// This is a bit long-winded and requires to major subsections for gathering both Delegated and
 	// Application type admin consents ...
 	var apiPerms [][]string = [][]string{}

@@ -97,36 +97,21 @@ func PrintPags(z *Config) {
 	}
 }
 
-// Creates or updates an Azure directory group from given command-line arguments.
-func UpsertGroupFromArgs(force, isAssignableToRole bool, id, description string, z *Config) {
+// Creates an Azure directory group from given command-line arguments.
+func CreateDirGroupFromArgs(force, isAssignableToRole bool, name, description string, z *Config) {
 	// Note that id may be a UUID or a displayName
 
-	// Initialize the obj, and add any user-supplied attributes
+	// Initialize obj variable, and add user-supplied attributes
 	obj := make(AzureObject)
 	obj["description"] = description
 	obj["isAssignableToRole"] = isAssignableToRole
+	// Add other required required attributes for creation.
+	obj["displayName"] = name
+	obj["mailEnabled"] = false
+	obj["mailNickname"] = "NotSet"
+	obj["securityEnabled"] = true
 
-	x := PreFetchAzureObject(DirectoryGroup, id, z)
-	if x != nil {
-		// It exists, let's update
-		// Note: At the moment, via CLI args, the *only* UPDATEable field is 'description'
-		UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z)
-		// TODO: Have above return obj and/or err or both?
-		// if azObj, err := UpdateDirObject(force, utl.Str(x["id"]), obj, DirectoryGroup, z); err :=1 nil {
-		// 	fmt.Printf("%s\n", err)
-		// 	if azObj == nil {
-		// 		fmt.Println("The object was still updated.")
-		// 	}
-		// }
-	} else {
-		// Doesn't exist, let's create
-		// Initialize the object with the minimum required attributes for creation.
-		obj["displayName"] = id // Note that 'id' in this case is actually the displayName
-		obj["mailEnabled"] = false
-		obj["mailNickname"] = "NotSet"
-		obj["securityEnabled"] = true
-		CreateDirObject(force, obj, DirectoryGroup, z)
-	}
+	CreateDirObject(force, obj, DirectoryGroup, z)
 }
 
 // Creates or updates an Azure directory group from given object

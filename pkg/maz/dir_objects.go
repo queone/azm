@@ -281,7 +281,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
-// described at https://docs.microsoft.com/en-us/graph/delta-query-overview
+// described at docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectList, AzureObject) {
 	callCount := 1
 	deltaSet := AzureObjectList{}

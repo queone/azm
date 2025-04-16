@@ -29,7 +29,7 @@ func CacheResourceObjects(mazType string) {
 func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 	// We were previously using the ARM API directly for these types of query, but
 	// now gradually switching to the more performant Azure Resource Graph API way.
-	// https://learn.microsoft.com/en-us/azure/governance/resource-graph/overview
+	// See learn.microsoft.com/en-us/azure/governance/resource-graph/overview
 
 	// Build payload query string
 	var query string

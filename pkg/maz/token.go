@@ -18,8 +18,8 @@ import (
 // cache accessor implementation, and it can be based on below provided example.
 
 // ==== Direct from Microsoft code ================================================
-// https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/cache/cache.go
-// https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/tests/devapps/sample_cache_accessor.go
+// github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/cache/cache.go
+// github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/tests/devapps/sample_cache_accessor.go
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 type TokenCache struct {
@@ -106,7 +106,7 @@ func getServiceApiName(scopes []string) string {
 
 // Acquire Azure JWT token with Username via a browser popup window.
 func GetTokenInteractively(scopes []string, z *Config) (token string, err error) {
-	// See https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/public/public.go
+	// See github.com/AzureAD/microsoft-authentication-library-for-go/blob/main/apps/public/public.go
 	authorityUrl := ConstAuthUrl + z.TenantId
 	username := z.Username
 
@@ -236,8 +236,8 @@ func GetTokenInteractively(scopes []string, z *Config) (token string, err error)
 }
 
 // Initiates an Azure JWT token acquisition with provided parameters, using a Client ID plus a
-// Client Secret. This is the 'Confidential' app auth flow and is documented at:
-// https://github.com/AzureAD/microsoft-authentication-library-for-go/blob/dev/apps/confidential/confidential.go
+// Client Secret. This is the 'Confidential' app auth flow and it's documented at
+// github.com/AzureAD/microsoft-authentication-library-for-go/blob/dev/apps/confidential/confidential.go
 func GetTokenByCredentials(scopes []string, z *Config) (token string, err error) {
 	authorityUrl := ConstAuthUrl + z.TenantId
 	clientId := z.ClientId
