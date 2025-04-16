@@ -1,5 +1,9 @@
 ## Releases
 
+### v0.8.13
+Release Date: 2025-apr-14
+- Integrated azgrp functions
+
 ### v0.8.12
 Release Date: 2025-apr-14
 - Added benchmark timing with aligned output and a total summary line (all in ms and yellow-highlighted) to measure how long it takes to build Azure resource ID maps in PrintResRoleAssignmentReport

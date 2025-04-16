@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.12"
+	program_version = "0.8.13"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
@@ -57,7 +57,6 @@ func printUsage(extended bool) {
 		utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
 
 	usageExtended := fmt.Sprintf("\n%s\n"+
-		// "%s (allow reading Azure objects)\n"+
 		"  Use optional [j] for JSON output\n"+
 		"\n"+
 		"  -%s[j] [FILTER]                   List all %s objects tersely (ID, name, etc.); optional match\n"+
@@ -72,18 +71,7 @@ func printUsage(extended bool) {
 		"  -st                              Show count of all objects in local cache and Azure tenant\n",
 		utl.Whi2("Read Options"), X, X, set1)
 
-	// set2 := fmt.Sprintf("%s, %s, %s, %s, and %s",
-	// 	utl.Red(maz.ResRoleDefinition), utl.Red(maz.DirectoryGroup), utl.Red(maz.Application),
-	// 	utl.Red(maz.ServicePrincipal), utl.Red(maz.DirRoleDefinition))
-
-	// set3 := fmt.Sprintf("%s, %s, %s, %s, %s, %s, and %s",
-	// 	utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
-	// 	utl.Red(maz.Application), utl.Red(maz.ServicePrincipal),
-	// 	utl.Red(fmt.Sprintf("%-2s", maz.DirRoleDefinition)),
-	// 	utl.Red(fmt.Sprintf("%-2s", maz.DirRoleAssignment)))
-
 	usageExtended += fmt.Sprintf("\n%s\n"+
-		// "%s (allow managing Azure objects)\n"+
 		"  Use optional [f] to bypass confirmation prompts (e.g., -rmf to skip confirm)\n"+
 		"\n"+
 		"  -%sk [NAME]                       Generate YAML skeleton (%s only); NAME optional\n",
@@ -93,20 +81,15 @@ func printUsage(extended bool) {
 		"  -up[f] SPECFILE                  Create/update object defined in specfile (%s only)\n",
 		clrPrevLine, set1)
 
-	// Work-in-progress: Group -up[f] additions...
-	// usageExtended += fmt.Sprintf("\n%s"+
-	// 	"\n"+
-	// 	"  -up[f] [NAME|ID [DESC] [ASSIGN]]  Update/Create group for given SPECFILE or NAME/ID. See below\n"+
-	// 	"\n"+
-	// 	"    DESC sets the description and is optional. If it or NAME contain spaces, enclose them\n"+
-	// 	"    in quotes. ASSIGN sets the isAssignableToRole and is also optional and can be set to\n"+
-	// 	"    true if you have Privileged Role Administrator privileges; by default it is false. If\n"+
-	// 	"    you have to set ASSIGN then DESC is mandatory even if empty. See examples below:\n"+
-	// 	"\n"+
-	// 	"    azgrp -up my_group1\n"+
-	// 	"    azgrp -up \"my group2\" \"my desc\"\n"+
-	// 	"    azgrp -up my_group3 \"my desc\" true\n"+
-	// 	"    azgrp -up my_group4 \"\" true\n\n", clrPrevLine)
+	G := utl.Red(maz.DirectoryGroup)
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -up%s NAME [DESC] [ASSIGN]        Create a group (ASSIGN sets the isAssignableToRole flag):\n"+
+		"                                   DESC: Optional description (required if ASSIGN is used)\n"+
+		"                                   ASSIGN: Optional; set to 'true' to make group role-assignable\n"+
+		"                                           (requires Privileged Role Administrator role)\n"+
+		"                                   Examples: azgrp -up%s my_group1\n"+
+		"                                             azgrp -up%s my_role_group \"\" true\n",
+		clrPrevLine, G, G, G)
 
 	usageExtended += fmt.Sprintf("\n%s"+
 		"  -rm[f] SPECFILE                  Delete object defined in specfile (%s only)\n"+
@@ -114,8 +97,7 @@ func printUsage(extended bool) {
 		clrPrevLine, set1)
 
 	usageExtended += fmt.Sprintf("\n%s"+
-		"  -up[f] SPECFILE                  Create/update object defined in specfile (%s only)\n",
-		clrPrevLine, set1)
+		"  -rn%s[f] NAME|ID NEWNAME          Rename object (%s only)\n", clrPrevLine, X, set1)
 
 	usageExtended += fmt.Sprintf("\n%s"+
 		"  -apas ID NAME [EXPIRY]           Add secret to App ID; optional expiry (YYYY-MM-DD or in X days)\n"+
@@ -243,6 +225,12 @@ func main() {
 			maz.ApplyObjectBySpecfile(force, arg2, z)
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
+		case "-upg":
+			force := true // safe, no prompt needed
+			isAssignableToRole := false
+			name := arg2
+			description := name // Make the description same as name
+			maz.CreateDirGroupFromArgs(force, isAssignableToRole, name, description, z)
 		default:
 			printUnknownCommandError()
 		}
@@ -264,6 +252,12 @@ func main() {
 			force := strings.HasSuffix(flagBody, "f")
 			mazType := strings.TrimSuffix(flagBody, "f")
 			maz.RenameAzureObject(force, mazType, arg2, arg3, z)
+		case "-upg":
+			force := true // safe, no prompt needed
+			isAssignableToRole := false
+			name := arg2
+			description := arg3
+			maz.CreateDirGroupFromArgs(force, isAssignableToRole, name, description, z)
 		case "-apas":
 			maz.AddAppSpSecret(maz.Application, arg2, arg3, "", z)
 		case "-aprs", "-aprsf":
@@ -291,6 +285,12 @@ func main() {
 		}
 		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
+		case "-upg":
+			force := true // safe, no prompt needed
+			isAssignableToRole := utl.Bool(arg4)
+			name := arg2
+			description := arg3
+			maz.CreateDirGroupFromArgs(force, isAssignableToRole, name, description, z)
 		case "-apas":
 			maz.AddAppSpSecret(maz.Application, arg2, arg3, arg4, z)
 		case "-spas":

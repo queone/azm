@@ -174,7 +174,7 @@ func CreateSkeletonFile(mazType, name string) {
 			"# Example Azure directory group specfile object definition\n" +
 			"#\n" +
 			"# First four parameters are mandatory, but there are many other options:\n" +
-			"# See https://learn.microsoft.com/en-us/graph/api/resources/group?view=graph-rest-1.0#properties\n" +
+			"# See learn.microsoft.com/en-us/graph/api/resources/group\n" +
 			"#\n" +
 			"displayName: " + objName + "\n" +
 			"mailEnabled: false\n" +
@@ -193,8 +193,8 @@ func CreateSkeletonFile(mazType, name string) {
 			"#\n" +
 			"# Optional Parameters:\n" +
 			"#   For a full list of available parameters see respective Microsoft Graph API pages:\n" +
-			"#   - Application: https://learn.microsoft.com/en-us/graph/api/resources/application?view=graph-rest-1.0#properties\n" +
-			"#   - Service Principal: https://learn.microsoft.com/en-us/graph/api/resources/servicePrincipal?view=graph-rest-1.0#properties\n" +
+			"#   - Application: learn.microsoft.com/en-us/graph/api/resources/application\n" +
+			"#   - Service Principal: learn.microsoft.com/en-us/graph/api/resources/servicePrincipal\n" +
 			"#\n" +
 			"displayName: " + objName + "\n" +
 			"signInAudience: AzureADMyOrg\n")

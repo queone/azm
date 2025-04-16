@@ -490,7 +490,7 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 // 	ids := utl.StringSet{}    // Keep track of unique IDs to eliminate duplicate objects
 // 	callCount := 1            // Track number of API calls for verbose output
 
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
+// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
 
 // 	// Set up these maps for more informative verbose output
 // 	var mgroupIdMap, subIdMap map[string]string
@@ -609,8 +609,8 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 
 // 	// NOTE: It is possible for a role with the same roleName to exist in multiple scopes
 // 	// within the Azure ARM API. That is the reason why a list of matchingRoles is required.
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
+// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
+// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
 
 // 	matchingRoles := AzureObjectList{} // Initialize an empty AzureObjectList
 // 	ids := utl.StringSet{}             // Keep track of unique IDs to eliminate duplicates
@@ -686,8 +686,8 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 
 // 	// Fallback to using the ARM API way if above returns nothing.
 
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
+// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
+// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
 
 // 	// Create a list of API URLs to check
 // 	apiUrls := []string{

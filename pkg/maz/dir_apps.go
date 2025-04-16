@@ -166,8 +166,8 @@ func PrintOAuth2PermissionScopes(api map[string]interface{}, displayName string)
 
 // Prints API permissions that have already been assigned to this application
 func PrintAssignedApiPermissions(requiredResourceAccess interface{}, z *Config) {
-	// https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
-	// https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
+	// learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals
+	// learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
 
 	APIs := utl.Slice(requiredResourceAccess) // Cast to a slice
 	if len(APIs) > 0 {

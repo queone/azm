@@ -43,8 +43,8 @@ func PrintDirRoleDefinition(x AzureObject, z *Config) {
 	}
 
 	// Print assignments
-	// https://learn.microsoft.com/en-us/azure/active-directory/roles/view-assignments
-	// https://github.com/microsoftgraph/microsoft-graph-docs-contrib/blob/main/api-reference/v1.0/api/rbacapplication-list-roleassignments.md
+	// learn.microsoft.com/en-us/azure/active-directory/roles/view-assignments
+	// github.com/microsoftgraph/microsoft-graph-docs-contrib/blob/main/api-reference/v1.0/api/rbacapplication-list-roleassignments.md
 	params := map[string]string{
 		"$filter": "roleDefinitionId eq '" + utl.Str(x["templateId"]) + "'",
 		"$expand": "principal",

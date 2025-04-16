@@ -261,7 +261,7 @@ func DeleteAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	}
 
 	// Delete the assignment by scope and 'name' (stand-alone UUID)
-	// https://learn.microsoft.com/en-us/rest/api/authorization/role-assignments/delete
+	// See learn.microsoft.com/en-us/rest/api/authorization/role-assignments/delete
 	params := map[string]string{"api-version": "2022-04-01"}
 	apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments/" + azureId
 	resp, statCode, _ := ApiDelete(apiUrl, z, params)
@@ -421,7 +421,7 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 // 	ids := utl.StringSet{}    // Keep track of unique resourceIds (API SPs)
 // 	callCount := 1            // Track number of API calls for verbose output
 
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
+// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
 
 // 	// Set up these maps for more informative verbose output
 // 	var mgroupIdMap, subIdMap map[string]string
@@ -571,7 +571,7 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 // 	// Fallback to using the ARM API way if above returns nothing. Unfortunately, below
 // 	// will still not be able to retrieve assignments hidden deep under resourceGroups.
 
-// 	// https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
+// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
 
 // 	// Create a list of API URLs to check
 // 	apiUrls := []string{

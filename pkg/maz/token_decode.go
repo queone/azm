@@ -177,7 +177,7 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 // Validate whether the issuer URL structure matches the tenant ID.
 func validateIssuerStructure(iss string, tid string) bool {
 	// For more details about what is happening here please read below doc
-	// https://que.one/azure/ms-token-validation.html and source it references.
+	// que.one/azure/ms-token-validation.html and its referenced sources
 	Logf("Validating iss/tid structure\n")
 	if tid == "" || iss == "" {
 		fmt.Println("Missing tid or iss")
