@@ -309,7 +309,7 @@ func CreateAppSpByName(force bool, displayName string, z *Config) {
 				utl.Die("%s\n", "Operation aborted by user")
 			}
 		} else {
-			fmt.Printf("Creating App/SP pair with above parameters...")
+			fmt.Printf("Creating App/SP pair with above parameters...\n")
 		}
 
 		app := CreateDirObjectInAzure(Application, obj, z)

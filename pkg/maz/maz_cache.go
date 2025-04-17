@@ -20,16 +20,17 @@ type Cache struct {
 
 // Extracts the Azure object's ID
 func ExtractID(obj AzureObject) string {
+	// 'id' may be a full path or just a raw ID (e.g., Entra role assignment IDs)
 	// Try 'id' first
-	if id := path.Base(utl.Str(obj["id"])); id != "" {
+	if id := path.Base(utl.Str(obj["id"])); id != "" && id != "." && id != "/" {
 		return id
 	}
 	// Fallback to 'name'
-	if id := path.Base(utl.Str(obj["name"])); id != "" {
+	if id := path.Base(utl.Str(obj["name"])); id != "" && id != "." && id != "/" {
 		return id
 	}
 	// Fallback to 'subscriptionId'
-	if id := path.Base(utl.Str(obj["subscriptionId"])); id != "" {
+	if id := path.Base(utl.Str(obj["subscriptionId"])); id != "" && id != "." && id != "/" {
 		return id
 	}
 	return ""
@@ -196,7 +197,13 @@ func (c *Cache) Upsert(obj AzureObject) error {
 
 	id := ExtractID(obj)
 	if id == "" {
-		return fmt.Errorf("object with blank ID not added to cache")
+		return fmt.Errorf("invalid object ID (empty) — not cached")
+	}
+	if id == "." {
+		return fmt.Errorf("invalid object ID ('.') — not cached")
+	}
+	if id == "/" {
+		return fmt.Errorf("invalid object ID ('/') — not cached")
 	}
 
 	// Check if the object already exists in the cache
