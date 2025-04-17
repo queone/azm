@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.8.13"
+	program_version = "0.9.0"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
@@ -59,12 +59,13 @@ func printUsage(extended bool) {
 	usageExtended := fmt.Sprintf("\n%s\n"+
 		"  Use optional [j] for JSON output\n"+
 		"\n"+
+		"  UUID                             Show all Azure objects linked to the given UUID\n"+
+		"  -lc UUID                         Show all cached objects linked to the given UUID\n"+
 		"  -%s[j] [FILTER]                   List all %s objects tersely (ID, name, etc.); optional match\n"+
 		"                                   on FILTER string for Id, DisplayName, and other attributes. If\n"+
 		"                                   the result is a single object, it is fetched directly from Azure\n"+
 		"                                   and printed in more detail.\n"+
 		"  -vs SPECFILE                     Compare specfile to Azure (%s only)\n"+
-		"  UUID                             Show all Azure objects linked to the given UUID\n"+
 		"  -ar                              Resource role assignment report with resolved attribute names\n"+
 		"  -mt                              List Management Group and subscriptions tree\n"+
 		"  -pags                            List all Entra ID Privileged Access Groups\n"+
@@ -90,6 +91,10 @@ func printUsage(extended bool) {
 		"                                   Examples: azgrp -up%s my_group1\n"+
 		"                                             azgrp -up%s my_role_group \"\" true\n",
 		clrPrevLine, G, G, G)
+
+	usageExtended += fmt.Sprintf("\n%s"+
+		"  -up%s NAME, -up%s NAME           Create App/SP pair with the given name (defaults for all else)\n",
+		clrPrevLine, utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
 
 	usageExtended += fmt.Sprintf("\n%s"+
 		"  -rm[f] SPECFILE                  Delete object defined in specfile (%s only)\n"+
@@ -202,6 +207,8 @@ func main() {
 		}
 		maz.SetupApiTokens(z) // Remaining cases need API access
 		switch arg1 {
+		case "-lc":
+			maz.PrintCachedObjectsWithId(arg2, z)
 		case "-kd", "-ka", "-kg", "-kap":
 			mazType := arg1[2:]
 			maz.CreateSkeletonFile(mazType, arg2)
@@ -223,14 +230,14 @@ func main() {
 		case "-up", "-upf":
 			force := arg1 == "-upf"
 			maz.ApplyObjectBySpecfile(force, arg2, z)
+		case "-upap", "-upsp":
+			// Create AppSp pair with given name (no prompt, safe to force)
+			maz.CreateAppSpByName(true, arg2, z)
+		case "-upg":
+			// Create group with given name (no prompt), not assignable to role; description = name
+			maz.CreateDirGroupFromArgs(true, false, arg2, arg2, z)
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
-		case "-upg":
-			force := true // safe, no prompt needed
-			isAssignableToRole := false
-			name := arg2
-			description := name // Make the description same as name
-			maz.CreateDirGroupFromArgs(force, isAssignableToRole, name, description, z)
 		default:
 			printUnknownCommandError()
 		}

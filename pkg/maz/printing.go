@@ -444,3 +444,14 @@ func PrintMatchingObjects(specifier, filter string, z *Config) {
 		}
 	}
 }
+
+// Search and print all locally cached object with given ID
+func PrintCachedObjectsWithId(id string, z *Config) {
+	list := FindCachedObjectsById(id, z)
+	count := len(list)
+	for i, obj := range list {
+		fmt.Printf("%s\n", utl.Gra(fmt.Sprintf("# Object %d of %d with this ID", i+1, count)))
+		mazType := utl.Str(obj["maz_type"])
+		PrintObject(mazType, obj, z)
+	}
+}

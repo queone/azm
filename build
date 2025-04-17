@@ -54,9 +54,9 @@ CurrentTag=`git tag | sort -V | tail -1`
 IFS='.' read -r Major Minor Patch <<< "${CurrentTag#v}"
 NextTag="v$Major.$Minor.$((Patch+1))"
 if [ "$ProgramVersion" != "${NextTag#v}" ]; then
-    printf "==> Program version ${Gre}$ProgramVersion${Rst} and next tag ${Yel}$NextTag${Rst} do ${Red}NOT${Rst} match!\n"
+    printf "==> Program version ${Gre}$ProgramVersion${Rst} and next tag ${Red}$NextTag${Rst} do NOT match!\n"
 fi
 printf "==> To release as ${Gre}$NextTag${Rst}, adjust comment and run below one-liner:\n"
-printf "\n    TAG=${Gre}$NextTag${Rst} && git add . && git commit -m \"${Yel}<insert comment>${Rst}\" && git tag \$TAG && git push origin \$TAG && git push\n\n"
+printf "\n    TAG=${Gre}$NextTag${Rst} && git add . && git commit -m \"${Gre}<insert comment>${Rst}\" && git tag \$TAG && git push origin \$TAG && git push\n\n"
 
 exit 0

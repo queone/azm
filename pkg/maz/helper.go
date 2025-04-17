@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/queone/utl"
 )
@@ -169,28 +170,67 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 	return idMap
 }
 
+// Returns a list of locally cached objects that match the given ID
+func FindCachedObjectsById(id string, z *Config) AzureObjectList {
+	Logf("Searching cache for object with ID: %s\n", utl.Mag(id))
+
+	start := time.Now()
+
+	list := AzureObjectList{}
+	for _, mazType := range MazTypes {
+		mazTypeName := MazTypeNames[mazType]
+		cache, err := GetCache(mazType, z)
+		if err != nil {
+			Logf("Error. Could not load %s local cache\n", utl.Mag(mazTypeName))
+		}
+		count := cache.Count()
+		Logf("%s cached object count: %d\n", utl.Mag(mazTypeName), count)
+		if count > 0 {
+			if existingObj := cache.data.FindById(id); existingObj != nil {
+				obj := *existingObj
+				Logf("Found object with ID %s of type: %s\n", id, utl.Mag(mazTypeName))
+				obj["maz_type"] = mazType // Extend object with maz_type as an ADDITIONAL field
+				list = append(list, obj)
+			}
+		}
+	}
+
+	Logf("ID search took %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+
+	return list
+}
+
 // Returns a list of Azure objects that match the given ID. Only object types that are
 // supported by this maz package are searched.
 func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 	// Note that multiple objects may be returned because: 1) A single appId can be shared by
-	// both an App and an SP, 2) Although unlikely, UUID collisions can occur, resulting in
+	// both an App and an SP, and 2) though unlikely, UUID collisions can occur, resulting in
 	// multiple objects with the same UUID.
 
-	// Focus on the last element, in case it's a fully-qualified long ID
-	uuid := path.Base(id)
-	if !utl.ValidUuid(uuid) {
-		return nil, fmt.Errorf("invalid id %s", id)
+	// Look in the local cache first
+	list := FindCachedObjectsById(id, z)
+	count := len(list)
+	Logf("Found %s cache object with ID %s\n", utl.Mag(count), id)
+	if count > 0 {
+		return list, nil
 	}
 
-	list := AzureObjectList{}
+	// Fallback to searching directly in Azure
+	Logf("Searching Azure for object with ID: %s\n", utl.Mag(id))
+
+	start := time.Now()
+
 	for _, mazType := range MazTypes {
 		obj := GetAzureObjectById(mazType, id, z)
-		if obj != nil && obj["id"] != nil { // Valid objects have an 'id' attribute
-			// Found one of these types with this ID
+		objId := ExtractID(obj)
+		if objId != "" {
+			Logf("ID %s associated with object type: %s\n", objId, utl.Mag(MazTypeNames[mazType]))
 			obj["maz_type"] = mazType // Extend object with maz_type as an ADDITIONAL field
 			list = append(list, obj)
 		}
 	}
+
+	Logf("ID search took %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
 
 	return list, nil
 }

@@ -1,7 +1,14 @@
 ## Releases
 
+### v0.9.0
+Release Date: 2025-apr-17
+- Fixed cache issue whereby objects with ID that were empty, or had "." or "/" were being cached; fixed in ExtractID()
+- maz_cache.go ExtractID() wasn't considering the unique Entra role assignment IDs that are not GUIDs
+- Added azm options to create directory group (-upg) or App/PS pairs by name (-upap, -upsp)
+- New azm -lc option to search locally cached objects via new FindCachedObjectsById()
+
 ### v0.8.13
-Release Date: 2025-apr-14
+Release Date: 2025-apr-15
 - Integrated azgrp functions
 
 ### v0.8.12

@@ -95,8 +95,6 @@ func IsResRoleAssignment(obj AzureObject) bool {
 }
 
 // Prints a human-readable report of all Azure resource role assignments in the tenant
-// Prints a human-readable report of all Azure resource role assignments in the tenant
-// Prints a human-readable report of all Azure resource role assignments in the tenant
 func PrintResRoleAssignmentReport(z *Config) {
 	totalStart := time.Now()
 
@@ -194,7 +192,7 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	} else {
 		utl.Die("This role assignment %s exists with ID %s\n", utl.Yel("already"), utl.Yel(id))
 	}
-	obj["name"] = id // So Print function can print it and we can see it in below prompt
+	obj["name"] = id // This, so that it's printable in below prompt
 
 	// Prompt to create
 	PrintResRoleAssignment(obj, z)
