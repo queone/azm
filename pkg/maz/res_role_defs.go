@@ -484,81 +484,6 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 	}
 }
 
-// OLD SEQUENTIAL VERSIONS
-// func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
-// 	list := AzureObjectList{} // List of role definitions to cache
-// 	ids := utl.StringSet{}    // Keep track of unique IDs to eliminate duplicate objects
-// 	callCount := 1            // Track number of API calls for verbose output
-
-// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions-list
-
-// 	// Set up these maps for more informative verbose output
-// 	var mgroupIdMap, subIdMap map[string]string
-// 	if verbose {
-// 		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
-// 		subIdMap = GetIdNameMap(Subscription, z)
-// 	}
-
-// 	// Search in each resource scope
-// 	scopes := GetAzureResRoleScopes(z)
-
-// 	// Collate every unique role definition in each scope
-// 	params := map[string]string{"api-version": "2022-04-01"}
-// 	for _, scope := range scopes {
-// 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-// 		resp, statCode, _ := ApiGet(apiUrl, z, params)
-// 		if statCode != 200 {
-// 			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
-// 		}
-// 		roles := utl.Slice(resp["value"])
-// 		count := 0
-// 		for i := range roles {
-// 			obj := roles[i]
-// 			if role := utl.Map(obj); role != nil {
-// 				// Root out potential duplicates
-// 				id := utl.Str(role["name"])
-// 				if ids.Exists(id) {
-// 					continue
-// 					// Skip this repeated one. This can happen because of the way Azure resource
-// 					// hierarchy inheritance works, and the same role is seen from multiple places.
-// 				}
-// 				list = append(list, role) // Add object to the list
-// 				ids.Add(id)               // Mark this id as seen
-// 				count++
-// 			}
-// 		}
-// 		if verbose && count > 0 {
-// 			scopeName := scope
-// 			scopeType := "Subscription"
-// 			if strings.HasPrefix(scope, "/providers") {
-// 				scopeName = mgroupIdMap[scope]
-// 				scopeType = "Management Group"
-// 			} else if strings.HasPrefix(scope, "/subscriptions") {
-// 				scopeName = subIdMap[path.Base(scope)]
-// 			}
-// 			fmt.Printf("%sCall %05d: %05d definitions under %s %s", clrLine, callCount, count, scopeType, scopeName)
-// 		}
-// 		callCount++
-// 	}
-// 	if verbose {
-// 		fmt.Print(clrLine) // Go up to overwrite progress line
-// 	}
-
-// 	// Trim and prepare all objects for caching
-// 	for i := range list {
-// 		// Directly modify the object in the original list
-// 		list[i] = list[i].TrimForCache(ResRoleDefinition)
-// 	}
-
-// 	// Update the cache with the entire list of definitions
-// 	cache.data = list
-
-// 	// Save the cache
-// 	if err := cache.Save(); err != nil {
-// 		utl.Die("Error saving updated resource role definitions cache: %v\n", err.Error())
-// 	}
-// }
-
 // Retrieves resource role definition by scope and name
 func GetAzureResRoleDefinitionByScopeAndName(scope, roleName string, z *Config) (string, AzureObject) {
 	params := map[string]string{
@@ -589,7 +514,7 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 		"$filter":     "roleName eq '" + roleName + "'",
 	}
 
-	// Fetch all matching role definitions across scopes in parallel
+	// Fetch all role definitions across scopes concurrently using parallel goroutines function
 	defs := fetchAzureObjectsAcrossScopes(
 		"/providers/Microsoft.Authorization/roleDefinitions",
 		z,
@@ -601,48 +526,6 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 
 	return defs
 }
-
-// OLD SEQUENTIAL VERSIONS
-// func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectList {
-// 	// Get all the scopes in the tenant hierarchy
-// 	scopes := GetAzureResRoleScopes(z)
-
-// 	// NOTE: It is possible for a role with the same roleName to exist in multiple scopes
-// 	// within the Azure ARM API. That is the reason why a list of matchingRoles is required.
-// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
-
-// 	matchingRoles := AzureObjectList{} // Initialize an empty AzureObjectList
-// 	ids := utl.StringSet{}             // Keep track of unique IDs to eliminate duplicates
-
-// 	// Search each of the tenant scopes
-// 	params := map[string]string{
-// 		"api-version": "2022-04-01",
-// 		"$filter":     "roleName eq '" + roleName + "'",
-// 	}
-// 	for _, scope := range scopes {
-// 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleDefinitions"
-// 		resp, statCode, _ := ApiGet(apiUrl, z, params)
-// 		if statCode != 200 {
-// 			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
-// 		}
-// 		roles := utl.Slice(resp["value"])
-// 		for i := range roles {
-// 			obj := roles[i]
-// 			if role := utl.Map(obj); role != nil {
-// 				id := utl.Str(role["name"])
-// 				if ids.Exists(id) {
-// 					continue
-// 					// Skip this repeated one. This can happen because of the way Azure resource
-// 					// hierarchy inherantance works, and the same role is seen from multiple places.
-// 				}
-// 				matchingRoles = append(matchingRoles, AzureObject(role)) // Append unique role
-// 				ids.Add(id)                                              // Mark this id as seen
-// 			}
-// 		}
-// 	}
-// 	return matchingRoles
-// }
 
 // Retrieves a role definition by its unique ID from the Azure resource hierarchy.
 func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
@@ -656,7 +539,7 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 		"api-version": "2022-04-01",
 	}
 
-	// Search through role definitions across all scopes
+	// Fetch all role definitions across scopes concurrently using parallel goroutines function
 	defs := fetchAzureObjectsAcrossScopes(
 		"/providers/Microsoft.Authorization/roleDefinitions",
 		z,
@@ -676,45 +559,3 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 
 	return nil // Nothing found
 }
-
-// OLD SEQUENTIAL VERSIONS
-// func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
-// 	// 1st try with new function that calls Azure Resource Graph API
-// 	if role := GetAzureResObjectById(ResRoleDefinition, targetId, z); role != nil {
-// 		return role // Return immediately if we found it
-// 	}
-
-// 	// Fallback to using the ARM API way if above returns nothing.
-
-// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-// 	// - learn.microsoft.com/en-us/azure/role-based-access-control/role-definitions
-
-// 	// Create a list of API URLs to check
-// 	apiUrls := []string{
-// 		// The 1st is the standard roleDefinitions endpoint
-// 		ConstAzUrl + "/providers/Microsoft.Authorization/roleDefinitions/" + targetId,
-// 	}
-// 	for _, scope := range GetAzureResRoleScopes(z) {
-// 		// The others are all other scopes in the tenant resource hierarchy
-// 		apiUrls = append(apiUrls, ConstAzUrl+scope+"/providers/Microsoft.Authorization/roleDefinitions/"+targetId)
-// 	}
-
-// 	// Check each API URL in the list
-// 	params := map[string]string{"api-version": "2022-04-01"}
-// 	for _, apiUrl := range apiUrls {
-// 		resp, statCode, _ := ApiGet(apiUrl, z, params)
-// 		if statCode != 200 {
-// 			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
-// 		}
-// 		if statCode == 200 {
-// 			if role := utl.Map(resp); role != nil {
-// 				if id := utl.Str(role["name"]); id == targetId {
-// 					role["maz_from_azure"] = true
-// 					return AzureObject(role) // Return immediately on 1st match
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	return nil // Nothing found, return empty object
-// }

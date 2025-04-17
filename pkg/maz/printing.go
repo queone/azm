@@ -13,7 +13,7 @@ func PrintCountStatus(z *Config) {
 	c1Width := 44 // Column 1 width
 	c2Width := 10 // Column 2 width
 	c3Width := 10 // Column 3 width
-	fmt.Printf("%s\n", utl.Gra("# Please note that enumerating some Azure resources can be slow"))
+	fmt.Printf("%s\n", utl.Gra("# Please wait, enumerating some Azure resources can be slow"))
 	fmt.Print(utl.Whi2(utl.PostSpc("Objects", c1Width)+
 		utl.PreSpc("Local", c2Width)+
 		utl.PreSpc("Azure", c3Width)) + "\n")

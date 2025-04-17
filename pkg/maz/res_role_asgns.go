@@ -374,7 +374,7 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 		subIdMap = GetIdNameMap(Subscription, z)
 	}
 
-	// Fetch all assignments across scopes
+	// Fetch all assignments across scopes concurrently using parallel goroutines function
 	allAssignments := fetchAzureObjectsAcrossScopes(
 		"/providers/Microsoft.Authorization/roleAssignments",
 		z,
@@ -412,89 +412,6 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 		utl.Die("Error saving updated resource role assignment cache: %v\n", err.Error())
 	}
 }
-
-// OLD SEQUENTIAL VERSIONS
-// func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
-// 	list := AzureObjectList{} // List of role assignments to cache
-// 	ids := utl.StringSet{}    // Keep track of unique resourceIds (API SPs)
-// 	callCount := 1            // Track number of API calls for verbose output
-
-// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest
-
-// 	// Set up these maps for more informative verbose output
-// 	var mgroupIdMap, subIdMap map[string]string
-// 	if verbose {
-// 		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
-// 		subIdMap = GetIdNameMap(Subscription, z)
-// 	}
-
-// 	// Search in each resource scope
-// 	scopes := GetAzureResRoleScopes(z)
-
-// 	// Collate every unique role assignment object in each scope
-// 	params := map[string]string{"api-version": "2022-04-01"}
-// 	for _, scope := range scopes {
-// 		apiUrl := ConstAzUrl + scope + "/providers/Microsoft.Authorization/roleAssignments"
-// 		resp, statCode, _ := ApiGet(apiUrl, z, params)
-// 		if statCode != 200 {
-// 			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
-// 			continue // If any issues retrieving items for this scope, skip to next one
-// 		}
-// 		assignments := utl.Slice(resp["value"]) // Try casting as a slice type
-// 		if assignments == nil {
-// 			continue // If not a slice, skip to next scope
-// 		}
-
-// 		count := 0
-// 		for i := range assignments {
-// 			obj := assignments[i]
-// 			assignment := utl.Map(obj) // Try casting as a map type
-// 			if assignment == nil {
-// 				continue // Skip if not a map
-// 			}
-// 			// Root out potential duplicates
-// 			id := utl.Str(assignment["name"])
-// 			if ids.Exists(id) {
-// 				continue // Skip this entry if it's a repeat
-// 				// Skip this repeated one. This can happen because of the way Azure resource
-// 				// hierarchy inheritance works, and the same role is seen from multiple places.
-// 			}
-// 			list = append(list, assignment)
-// 			ids.Add(id) // Mark this id as seen
-// 			count++
-// 		}
-
-// 		if verbose && count > 0 {
-// 			scopeName := scope
-// 			scopeType := "subscription"
-// 			if strings.HasPrefix(scope, "/providers") {
-// 				scopeName = mgroupIdMap[scope]
-// 				scopeType = "Management Group"
-// 			} else if strings.HasPrefix(scope, "/subscriptions") {
-// 				scopeName = subIdMap[path.Base(scope)]
-// 			}
-// 			fmt.Printf("%sCall %05d: %05d assignments under %s %s", clrLine, callCount, count, scopeType, scopeName)
-// 		}
-// 		callCount++
-// 	}
-// 	if verbose {
-// 		fmt.Print(clrLine) // Go up to overwrite progress line
-// 	}
-
-// 	// Trim and prepare all objects for caching
-// 	for i := range list {
-// 		// Directly modify the object in the original list
-// 		list[i] = list[i].TrimForCache(ResRoleAssignment)
-// 	}
-
-// 	// Update the cache with the entire list of assignments
-// 	cache.data = list
-
-// 	// Save the cache
-// 	if err := cache.Save(); err != nil {
-// 		utl.Die("Error saving updated resource role assignment cache: %v\n", err.Error())
-// 	}
-// }
 
 // Retrieves Azure resource role assignment by matching on the three values that
 // make up a unique assignment: roleDefinitionId, principalId, and scope
@@ -547,6 +464,7 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 	// Construct the suffix once to be reused across all scopes
 	suffix := "/providers/Microsoft.Authorization/roleAssignments/" + targetId
 
+	// Fetch all assignments across scopes concurrently using parallel goroutines function
 	assignments := fetchAzureObjectsAcrossScopes(suffix, z, params, false, nil, nil)
 
 	for _, assignment := range assignments {
@@ -558,43 +476,3 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 
 	return nil // Nothing found
 }
-
-// OLD SEQUENTIAL VERSIONS
-// func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
-// 	// 1st try with new function that calls Azure Resource Graph API
-// 	if assignment := GetAzureResObjectById(ResRoleAssignment, targetId, z); assignment != nil {
-// 		return assignment // Return immediately if we found it
-// 	}
-
-// 	// Fallback to using the ARM API way if above returns nothing. Unfortunately, below
-// 	// will still not be able to retrieve assignments hidden deep under resourceGroups.
-
-// 	// See learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles
-
-// 	// Create a list of API URLs to check
-// 	apiUrls := []string{
-// 		// The 1st is the standard roleAssignments endpoint
-// 		ConstAzUrl + "/providers/Microsoft.Authorization/roleAssignments/" + targetId,
-// 	}
-// 	for _, scope := range GetAzureResRoleScopes(z) {
-// 		// The others are all other scopes in the tenant resource hierarchy
-// 		apiUrls = append(apiUrls, ConstAzUrl+scope+"/providers/Microsoft.Authorization/roleAssignments/"+targetId)
-// 	}
-
-// 	// Check each API URL in the list
-// 	params := map[string]string{"api-version": "2022-04-01"}
-// 	for _, apiUrl := range apiUrls {
-// 		resp, statCode, _ := ApiGet(apiUrl, z, params)
-// 		if statCode != 200 {
-// 			Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
-// 		}
-// 		if statCode == 200 {
-// 			if assignment := utl.Map(resp); assignment != nil {
-// 				assignment["maz_from_azure"] = true
-// 				return AzureObject(assignment) // Return immediately on 1st match
-// 			}
-// 		}
-// 	}
-
-// 	return nil // Nothing found, return empty object
-// }
