@@ -142,7 +142,8 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 	return nil // Nothing found, return empty object
 }
 
-// Fetch Azure resources across all role scopes concurrently, with optional verbose logging.
+// Fetch Azure resources across all role scopes concurrently using parallel goroutines,
+// with optional verbose logging.
 func fetchAzureObjectsAcrossScopes(
 	endpointSuffix string,
 	z *Config,

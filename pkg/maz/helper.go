@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/queone/utl"
@@ -136,7 +137,7 @@ func DeleteObjectByName(force bool, name string, z *Config) {
 	}
 }
 
-// Returns a map of id:mazType objects sharing given name. Only 4 types of
+// Returns a map of id:mazType objects sharing given name. Only 5 types of
 // objects are supported: resource role definitions, App & SP pairs, directory
 // groups and role definitions.
 func FindAzureObjectsByName(name string, z *Config) map[string]string {
@@ -154,6 +155,7 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 			}
 		}
 	}
+
 	// Get any other supported object with that name and add them to our growing list
 	for _, mazType := range []string{Application, ServicePrincipal, DirectoryGroup, DirRoleDefinition} {
 		matchingSet := GetObjectFromAzureByName(mazType, name, z)
@@ -167,35 +169,61 @@ func FindAzureObjectsByName(name string, z *Config) map[string]string {
 			}
 		}
 	}
+
 	return idMap
 }
 
 // Returns a list of locally cached objects that match the given ID
 func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 	Logf("Searching cache for object with ID: %s\n", utl.Mag(id))
-
 	start := time.Now()
 
-	list := AzureObjectList{}
+	// Parallel search using goroutines
+
+	var mu sync.Mutex         // Used to safely append to 'list' from multiple goroutines
+	list := AzureObjectList{} // Final list of matching objects
+	var wg sync.WaitGroup     // WaitGroup to wait for all goroutines to complete
+
 	for _, mazType := range MazTypes {
-		mazTypeName := MazTypeNames[mazType]
-		cache, err := GetCache(mazType, z)
-		if err != nil {
-			Logf("Error. Could not load %s local cache\n", utl.Mag(mazTypeName))
-		}
-		count := cache.Count()
-		Logf("%s cached object count: %d\n", utl.Mag(mazTypeName), count)
-		if count > 0 {
-			if existingObj := cache.data.FindById(id); existingObj != nil {
-				obj := *existingObj
-				Logf("Found object with ID %s of type: %s\n", id, utl.Mag(mazTypeName))
-				obj["maz_type"] = mazType // Extend object with maz_type as an ADDITIONAL field
-				list = append(list, obj)
+		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
+		wg.Add(1)          // Register one more goroutine with the WaitGroup
+
+		// Start a goroutine to search this type's cache in parallel
+		go func() {
+			defer wg.Done() // Signal completion of this goroutine
+
+			mazTypeName := MazTypeNames[mazType]
+
+			// Load the cached data for this type
+			cache, err := GetCache(mazType, z)
+			if err != nil {
+				Logf("Error. Could not load %s local cache\n", utl.Mag(mazTypeName))
+				return
 			}
-		}
+
+			count := cache.Count()
+			Logf("%s cached object count: %d\n", utl.Mag(mazTypeName), count)
+
+			// If there's anything cached, search for the matching ID
+			if count > 0 {
+				if existingObj := cache.data.FindById(id); existingObj != nil {
+					obj := *existingObj
+					Logf("Found object with ID %s of type: %s\n", id, utl.Mag(mazTypeName))
+					obj["maz_type"] = mazType // Add the type as an extra field
+
+					// Protect shared slice with a mutex while appending
+					mu.Lock()
+					list = append(list, obj)
+					mu.Unlock()
+				}
+			}
+		}()
 	}
 
-	Logf("ID search took %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+	wg.Wait() // Wait for all goroutines to finish
+
+	microseconds := fmt.Sprintf("%15s", utl.Commafy(time.Since(start).Microseconds()))
+	Logf("ID search took %s µs\n", utl.Cya(microseconds))
 
 	return list
 }
@@ -204,8 +232,10 @@ func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 // supported by this maz package are searched.
 func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 	// Note that multiple objects may be returned because: 1) A single appId can be shared by
-	// both an App and an SP, and 2) though unlikely, UUID collisions can occur, resulting in
-	// multiple objects with the same UUID.
+	// both an App and an SP, and 2) although unlikely, UUID collisions can occur, resulting
+	// in multiple objects with the same UUID.
+
+	// Parallel search using goroutines
 
 	// Look in the local cache first
 	list := FindCachedObjectsById(id, z)
@@ -217,20 +247,44 @@ func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 
 	// Fallback to searching directly in Azure
 	Logf("Searching Azure for object with ID: %s\n", utl.Mag(id))
-
 	start := time.Now()
 
+	var mu sync.Mutex     // Used to safely append to 'list' from multiple goroutines
+	var wg sync.WaitGroup // WaitGroup to wait for all goroutines to complete
+
 	for _, mazType := range MazTypes {
-		obj := GetAzureObjectById(mazType, id, z)
-		objId := ExtractID(obj)
-		if objId != "" {
-			Logf("ID %s associated with object type: %s\n", objId, utl.Mag(MazTypeNames[mazType]))
-			obj["maz_type"] = mazType // Extend object with maz_type as an ADDITIONAL field
-			list = append(list, obj)
-		}
+		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
+		wg.Add(1)          // Register one more goroutine with the WaitGroup
+
+		// Start a goroutine to query Azure for this type in parallel
+		go func() {
+			defer wg.Done() // Signal completion of this goroutine
+
+			mazObjectType := utl.Mag(MazTypeNames[mazType])
+
+			// Get object of this type from Azure by ID
+			obj := GetAzureObjectById(mazType, id, z)
+			if obj == nil {
+				Logf("There are no %s objects with this ID\n", mazObjectType)
+				return // Exit the goroutine early if no object found
+			}
+
+			if objId := ExtractID(obj); objId != "" {
+				Logf("ID %s associated with object type: %s\n", objId, mazObjectType)
+				obj["maz_type"] = mazType // Extend object with maz_type as an ADDITIONAL field
+
+				// Protect shared slice with a mutex while appending
+				mu.Lock()
+				list = append(list, obj)
+				mu.Unlock()
+			}
+		}()
 	}
 
-	Logf("ID search took %s ms\n", utl.Cya(fmt.Sprintf("%6d", time.Since(start).Milliseconds())))
+	wg.Wait() // Wait for all goroutines to finish
+
+	microseconds := fmt.Sprintf("%15s", utl.Commafy(time.Since(start).Microseconds()))
+	Logf("ID search took %s µs\n", utl.Cya(microseconds))
 
 	return list, nil
 }
@@ -485,7 +539,8 @@ func GetObjectIdFromName(mazType, targetName string, z *Config) string {
 
 // Returns an id:name map of the given object type.
 func GetIdNameMap(mazType string, z *Config) map[string]string {
-	// This doesn't apply to ResRoleAssignment nor DirRoleAssignment
+	// Resource (ResRoleAssignment) nor directory (DirRoleAssignment) role
+	// assignments have name, so this doesn't apply to them
 
 	var dirObjects AzureObjectList
 	idNameMap := make(map[string]string)

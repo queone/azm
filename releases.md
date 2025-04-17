@@ -1,5 +1,11 @@
 ## Releases
 
+### v0.9.1
+Release Date: 2025-apr-17
+- Parallelized cache and Azure ID search for faster lookups across object types
+- Leveraging new utl.Commafy function to pretty print MAZLOG microseconds
+- Cleaned up older commented out code
+
 ### v0.9.0
 Release Date: 2025-apr-17
 - Fixed cache issue whereby objects with ID that were empty, or had "." or "/" were being cached; fixed in ExtractID()

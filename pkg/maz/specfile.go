@@ -92,13 +92,6 @@ func GenerateAndPrintSpecfileName(specifier string, z *Config) {
 	// Print the generated file name
 	fmt.Printf("Recommended specfile name = %s\n", utl.Yel(specfileName))
 
-	// // FUTURE OPTION
-	// // Let's clean up the object, which could be from Azure, with excess attributes
-	// normalizedObj, err := normalizeObject(mazType, obj, z)
-	// if err != nil {
-	// utl.Die("Error cleaning object: %v", err)
-	// }
-
 	// Save the object in new recommended specfile name
 	if utl.FileUsable(specfileName) {
 		fmt.Println("Above file already exists. Content not overwritten.")
@@ -166,48 +159,3 @@ func getManagementGroupName(scope string) string {
 	}
 	return ""
 }
-
-// func normalizeObject(mazType string, obj AzureObject, z *Config) (AzureObject, error) {
-// 	if obj == nil {
-// 		return nil, fmt.Errorf("object is nil")
-// 	}
-
-// 	norm := make(AzureObject)
-
-// 	switch mazType {
-// 	case ResRoleAssignment:
-// 		// Extract only properties.roleDefinitionId, properties.principalId, and properties.scope
-// 		if props, ok := obj["properties"].(map[string]interface{}); ok {
-// 			normProps := make(map[string]interface{})
-// 			if val, exists := props["roleDefinitionId"]; exists {
-// 				rootId := path.Base(utl.Str(val))
-// 				//name := GetObjectNameFromId(ResRoleDefinition, rootId, z) // Get role definition name
-// 				// How to deal with YAML comments?
-// 				normProps["roleDefinitionId"] = rootId
-// 			}
-// 			if val, exists := props["principalId"]; exists {
-
-// 				normProps["principalId"] = val
-// 			}
-// 			if val, exists := props["scope"]; exists {
-// 				normProps["scope"] = val
-// 			}
-// 			norm["properties"] = normProps
-// 		} else {
-// 			return nil, fmt.Errorf("missing properties in role assignment")
-// 		}
-
-// 	// Add cases for other mazTypes as needed
-// 	case DirectoryGroup:
-// 		// Example for groups - extract just displayName and id
-// 		norm["id"] = obj["id"]
-// 		norm["displayName"] = obj["displayName"]
-
-// 	// Add more cases for other object types...
-
-// 	default:
-// 		return nil, fmt.Errorf("unsupported mazType: %s", mazType)
-// 	}
-
-// 	return norm, nil
-// }
