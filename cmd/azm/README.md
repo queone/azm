@@ -543,3 +543,25 @@ This utility along with the required libraries are obviously very useful to me. 
 
 
 
+# Password Expiry Reporting
+The `azm -apr` option allows reporting of password expiries for both Apps and SPs combined.
+
+```bash
+  -apr[c] [DAYS]                   Password expiry report for Apps/SPs; CSV optional; limit by DAYS$ pwrep -ap
+```
+
+The reporting is printed in 2 different formats: in regular table text as shown below, or in a [Comma-separated_values (CSV)](https://en.wikipedia.org/wiki/Comma-separated_values) optional format, which can be redirected to a file for further processing: 
+
+```bash
+azm -apr
+TYPE   NAME                  CLIENT_ID                              SECRET_ID                              SECRET_NAME      EXPIRY
+ap     localtest-sp          f706dd63-a9d5-4ba2-b57a-476225d5f23b   42f0558c-bf40-4bc3-bc60-03003932d07d   MyName2          2026-01-01 00:00
+ap     sp-validator          20726181-d443-426e-a07d-6e13f592cc57   a9a775c7-aaa1-47cc-ac0f-edad9749a4d9   Initial          2024-11-24 16:27
+ap     tf-az-sp00            43e6a637-587f-49bf-b4f1-ae5473d2b9b4   bb5b4b41-4cea-4949-bbf6-086cf8e1605b   today            2023-01-23 04:59
+ap     tf-az-sp00            43e6a637-587f-49bf-b4f1-ae5473d2b9b4   5e77300b-0d36-4f81-889d-30ec4818423c   Joe's Test       2023-04-23 00:30
+ap     tf-az-sp00            43e6a637-587f-49bf-b4f1-ae5473d2b9b4   673cb88c-4845-4798-b980-5dc3480b7feb   Initial          2024-10-27 22:43
+sp     sp_site_extension     5c6daa9d-27c6-4b5b-9f76-c1ef09af406e   a7775243-61e7-452b-9f74-3a236d2f2625                    2025-09-25 02:06
+sp     sp_site_reader        ce882285-1954-4b07-a38e-615bd0e931f1   07db8e95-0375-4e1b-8a99-f5aec348fc8e   2nd_secret       2024-05-19 00:00
+sp     sp_site_reader        ce882285-1954-4b07-a38e-615bd0e931f1   bfc7f9fa-57ba-4785-b08f-1bec4f9aef98   new-secret       2024-10-01 15:45
+```
+- Already expired secrets are highligted in <span style="color:red">red color text</span> .
