@@ -132,7 +132,7 @@ An even better security practive when using the SP logon method is to leverage a
 
 (TODO: Need OIDC setup example, and how configure the SP on the Azure side with federated login.)
 
-These login methods and the environment variables are described in more length in the [maz package README](https://github.com/queone/maz).
+These login methods and the environment variables are described in more length in the [maz package README](https://github.com/queone/azm/blob/main/pkg/maz/README.md).
 
 
 ### Quick Examples
@@ -193,7 +193,7 @@ The program is stable enough to be relied on as a quick, useful utility. There a
 ### Feedback
 The primary goal of this utility is to serve as a study aid for coding Azure utilities in the Go language, so the code is deliberately kept simple and clear for this reason.
 
-This utility also serves as a quick little _Swiss Army knife_ for managing Azure App/SP pairs. Note that the bulk of the code is actually in the [maz](https://github.com/queone/maz) library, and other supporting packages. Please visit those repos for more info.
+This utility also serves as a quick little _Swiss Army knife_ for managing Azure App/SP pairs. Note that the bulk of the code is actually in the [maz](https://github.com/queone/azm/blob/main/pkg/maz/README.md) library, and other supporting packages. Please visit those repos for more info.
 
 This is published as an open source project, so feel free to clone and use on your own, with proper attributions. Feel free to reach out if you have any questions or comments.
 
@@ -206,7 +206,7 @@ This is published as an open source project, so feel free to clone and use on yo
 - Only focuses on the smaller set of Azure objects that are related to IAM 
 - Do quick and dirty searches of any IAM related object types in the azure tenant
 - Supports leveraging OIDC Github Action workflows with no passwords for a configured Azure Service Principal
-- Developed as part of a framework library for acquiring Azure [JWT](https://jwt.io/) token using the [MSAL library for Go](https://github.com/AzureAD/microsoft-authentication-library-for-go) (leverages [maz](https://github.com/queone/maz/blob/main/README.md) library)
+- Developed as part of a framework library for acquiring Azure [JWT](https://jwt.io/) token using the [MSAL library for Go](https://github.com/AzureAD/microsoft-authentication-library-for-go) (leverages [maz](https://github.com/queone/azm/blob/main/pkg/maz/README.md) library)
 - Quickly get a token to access an Azure tenant's **Resources** Services API via endpoint <https://management.azure.com> ([REST API](https://learn.microsoft.com/en-us/rest/api/azure/))
 - Quickly get a token to access an Azure tenant's **Security** Services API via endpoint <https://graph.microsoft.com> ([MS Graph](https://learn.microsoft.com/en-us/graph/overview))
 
@@ -342,7 +342,7 @@ An even better security practive when using the SP logon method is to leverage a
 
 (TODO: Need OIDC setup example, and how configure the SP on the Azure side with federated login.)
 
-These login methods and the environment variables are described in more length in the [maz](https://github.com/queone/maz) package README.
+These login methods and the environment variables are described in more length in the [maz README](https://github.com/queone/azm/blob/main/pkg/maz/README.md).
 
 
 ### Quick Examples
@@ -537,7 +537,7 @@ At any rate, no matter how stable any code is, it is always worth remembering co
 ### Coding Philosophy and Feedback
 The primary goal of this utility is to serve as a study aid for coding Azure utilities in Go, as well as to serve as a quick _Swiss Army knife* utility for managin tenant IAM objects. If you look through the code I think you will find that is relatively straightforward. There is a deliberate effor to keep the code as clear as possible, and simple to understand and maintain.
 
-Note that the bulk of the code is actually in the [maz](https://github.com/queone/maz) library, and other packages. Please visit that repo for more info.
+Note that the bulk of the code is actually in the [maz](https://github.com/queone/azm/blob/main/pkg/maz/README.md) library, and other packages. Please visit that repo for more info.
 
 This utility along with the required libraries are obviously very useful to me. I don't think I'm going to formalize the way to contribute to this project, but if you find it useful and have some improvement suggestion please let me know. Anyway, this is published as an open source project, so feel free to clone and use on your own, with proper attributions.
 
