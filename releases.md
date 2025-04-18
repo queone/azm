@@ -1,5 +1,10 @@
 ## Releases
 
+### v0.9.2
+Release Date: 2025-apr-18
+- Comments to better explain the parallelization in batch fetching Azure dir objects
+- Integrated pwrep password expiry report functions with new -apr & -aprc options
+
 ### v0.9.1
 Release Date: 2025-apr-17
 - Parallelized cache and Azure ID search for faster lookups across object types

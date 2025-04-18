@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "0.9.1"
+	program_version = "0.9.2"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
@@ -67,6 +67,7 @@ func printUsage(extended bool) {
 		"                                   and printed in more detail.\n"+
 		"  -vs SPECFILE                     Compare specfile to Azure (%s only)\n"+
 		"  -ar                              Resource role assignment report with resolved attribute names\n"+
+		"  -apr[c] [DAYS]                   Password expiry report for Apps/SPs; CSV optional; limit by DAYS\n"+
 		"  -mt                              List Management Group and subscriptions tree\n"+
 		"  -pags                            List all Entra ID Privileged Access Groups\n"+
 		"  -st                              Show count of all objects in local cache and Azure tenant\n",
@@ -181,6 +182,9 @@ func main() {
 			maz.CreateSkeletonFile(mazType, "")
 		case "-ar":
 			maz.PrintResRoleAssignmentReport(z)
+		case "-apr", "-aprc":
+			csvMode := arg1 == "-aprc" // flag ending in 'c' triggers CSV mode
+			maz.PrintPasswordExpiryReport(csvMode, "", z)
 		case "-mt":
 			maz.PrintAzureMgmtGroupTree(z)
 		case "-pags":
@@ -238,6 +242,9 @@ func main() {
 			maz.CreateDirGroupFromArgs(true, false, arg2, arg2, z)
 		case "-vs":
 			maz.CompareSpecfileToAzure(arg2, z)
+		case "-apr", "-aprc":
+			csvMode := arg1 == "-aprc" // flag ending in 'c' triggers CSV mode
+			maz.PrintPasswordExpiryReport(csvMode, arg2, z)
 		default:
 			printUnknownCommandError()
 		}
