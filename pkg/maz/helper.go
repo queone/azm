@@ -178,7 +178,8 @@ func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 	Logf("Searching cache for object with ID: %s\n", utl.Mag(id))
 	start := time.Now()
 
-	// Parallel search using goroutines
+	// WHAT EXACTLY ARE WE PARALLELIZING?: For each MazType, we're loading its cache and
+	// searching for a matching object ID concurrently, to speed up the overall lookup.
 
 	var mu sync.Mutex         // Used to safely append to 'list' from multiple goroutines
 	list := AzureObjectList{} // Final list of matching objects
@@ -235,7 +236,8 @@ func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 	// both an App and an SP, and 2) although unlikely, UUID collisions can occur, resulting
 	// in multiple objects with the same UUID.
 
-	// Parallel search using goroutines
+	// WHAT EXACTLY ARE WE PARALLELIZING?: For each MazType, we're querying Azure in parallel
+	// to find an object with the given ID, since the same ID might exist under different types.
 
 	// Look in the local cache first
 	list := FindCachedObjectsById(id, z)

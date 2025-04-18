@@ -290,7 +290,11 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	const (
 		workerCount   = 10
 		resultBufSize = 10000
+		mainWorkerID  = -1
 	)
+
+	// WHAT EXACTLY ARE WE PARALLELIZING?: Multiple API URLs (e.g. paged results) are fetched
+	// in parallel using a pool of deltaWorker goroutines, speeding up large directory syncs.
 
 	workQueue := make(chan string, 10)
 	results := make(chan AzureObject, resultBufSize)
@@ -299,7 +303,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go deltaWorker(workQueue, results, z, verbose, &wg)
+		go deltaWorker(i, workQueue, results, z, verbose, &wg)
 	}
 
 	// Close results when all workers are done
@@ -339,7 +343,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 				continue
 			}
 
-			processApiResponse(resp, results)
+			processApiResponse(resp, results, mainWorkerID)
 
 			// Handle pagination
 			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
@@ -358,24 +362,47 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	}
 }
 
-func deltaWorker(workQueue <-chan string, results chan<- AzureObject, z *Config, verbose bool, wg *sync.WaitGroup) {
+// Processes a stream of API URLs from the work queue and sends parsed objects to the results
+// channel.
+func deltaWorker(workerID int, workQueue <-chan string, results chan<- AzureObject, z *Config, verbose bool, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for url := range workQueue {
 		resp, _ := apiGetWithRetry(url, z, verbose, 3)
-		processApiResponse(resp, results)
+		Logf("Worker %02s finished: %s\n", utl.Mag(utl.ToStr(workerID)), utl.Mag(url))
+		processApiResponse(resp, results, workerID)
 	}
 }
 
-func processApiResponse(resp map[string]interface{}, results chan<- AzureObject) {
+// Extracts directory objects from the raw API response and pushes them to the results channel.
+func processApiResponse(resp map[string]interface{}, results chan<- AzureObject, workerID int) {
+	// Optionally tag each object with metadata (e.g. fetch source or worker ID) to help with
+	// future debugging or analysis. These fields are omitted for now but can be re-enabled easily.
+
+	// source := utl.Str(resp["@odata.context"]) // Could also use "@odata.deltaLink" or similar
+
 	if value := utl.Slice(resp["value"]); value != nil {
 		for _, item := range value {
 			if obj := utl.Map(item); obj != nil {
+
+				// obj["fetched_from"] = source // Enable to include source URL/context
+
+				// // Track which goroutine fetched it
+				// fetchedBy := "main"
+				// if workerID >= 0 {
+				// 	fetchedBy = fmt.Sprintf("worker-%02d", workerID)
+				// }
+				// obj["fetched_by"] = fetchedBy
+				_ = workerID // keep compiler happy for now
+
+				// Logf("Fetched by worker %02\n", workerID) // Or maybe just Log it?
+
 				results <- AzureObject(obj)
 			}
 		}
 	}
 }
 
+// Reads all remaining objects from the results channel and accumulates them into a list.
 func drainResults(results <-chan AzureObject) AzureObjectList {
 	deltaSet := AzureObjectList{}
 	for obj := range results {
@@ -384,6 +411,7 @@ func drainResults(results <-chan AzureObject) AzureObjectList {
 	return deltaSet
 }
 
+// Performs an HTTP GET with retry and exponential backoff, up to a maximum number of attempts.
 func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (AzureObject, error) {
 	var resp AzureObject
 	var err error

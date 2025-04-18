@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/queone/utl"
 )
@@ -242,4 +243,141 @@ func fetchAzureObjectsAcrossScopes(
 	}
 
 	return list
+}
+
+// Generate a password expiry report for all Apps and Service Principals in the tenant.
+func PrintPasswordExpiryReport(csvMode bool, daysStr string, z *Config) {
+	var combinedList AzureObjectList
+
+	// Normalize and parse days
+	if daysStr == "" {
+		daysStr = "-1"
+	}
+	daysInt, err := utl.StringToInt64(daysStr)
+	if err != nil {
+		Logf("Invalid 'days' value: %s. Defaulting to -1 (show all).\n", utl.Mag(daysStr))
+		daysInt = -1
+	}
+
+	// OLD SEQUENTIAL METHOD
+	// apps := GetMatchingDirObjects(Application, "", true, z)
+	// Logf("Apps count %5s\n", utl.Mag(utl.ToStr(len(apps))))
+	// for _, app := range apps {
+	// 	app["maz_type"] = Application
+	// 	combinedList = append(combinedList, app)
+	// }
+
+	// sps := GetMatchingDirObjects(ServicePrincipal, "", true, z)
+	// Logf("SPs count  %5s\n", utl.Mag(utl.ToStr(len(sps))))
+	// for _, sp := range sps {
+	// 	sp["maz_type"] = ServicePrincipal
+	// 	combinedList = append(combinedList, sp)
+	// }
+
+	// WHAT EXACTLY ARE WE PARALLELIZING?: For each MazType, Apps and SPs, we're querying
+	// cache and Azure in parallel get the list of those object types.
+	// ====
+	var mu sync.Mutex     // Used to safely append to 'list' from multiple goroutines
+	var wg sync.WaitGroup // WaitGroup to wait for all goroutines to complete
+
+	for _, mazType := range []string{Application, ServicePrincipal} {
+		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
+		wg.Add(1)          // Register one more goroutine with the WaitGroup
+
+		// Start a goroutine to query cache/Azure for this type in parallel
+		go func() {
+			defer wg.Done()
+			objs := fetchAndTagDirObjects(mazType, z)
+			// Above helper function avoids the performance hit of locking/unlocking
+			// each if we were to do that here
+			Logf("%-3s count %5s\n", mazType, utl.Mag(utl.ToStr(len(objs))))
+			mu.Lock()
+			combinedList = append(combinedList, objs...)
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait() // Wait for all goroutines to finish
+	// ====
+
+	Logf("Combined count  %5s\n", utl.Mag(utl.ToStr(len(combinedList))))
+
+	// Print header
+	if csvMode {
+		fmt.Printf("\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"\n",
+			"TYPE", "NAME", "CLIENT_ID", "SECRET_ID", "SECRET_NAME", "EXPIRY")
+	} else {
+		fmt.Printf("%-6s %-40s %-38s %-38s %-38s %s\n",
+			"TYPE", "NAME", "CLIENT_ID", "SECRET_ID", "SECRET_NAME", "EXPIRY")
+	}
+
+	for _, obj := range combinedList {
+		if secrets := utl.Slice(obj["passwordCredentials"]); len(secrets) > 0 {
+			PrintExpiringSecrets(csvMode,
+				utl.Str(obj["maz_type"]),
+				utl.Str(obj["displayName"]),
+				utl.Str(obj["id"]),
+				utl.Str(obj["appId"]),
+				daysInt,
+				secrets,
+			)
+		}
+	}
+}
+
+// Fetch and tag directory objects for the given type in parallel-safe format.
+func fetchAndTagDirObjects(mazType string, z *Config) AzureObjectList {
+	list := GetMatchingDirObjects(mazType, "", true, z)
+	for _, obj := range list {
+		obj["maz_type"] = mazType
+	}
+	return list
+}
+
+// Print details of secrets that are expiring within the specified number of days.
+func PrintExpiringSecrets(csvMode bool, mazType, name, id, appId string, days int64, secrets []interface{}) {
+	now := time.Now().Unix()
+
+	for _, item := range secrets {
+		sec := utl.Map(item)
+		if sec == nil {
+			Logf("Improperly formed secret entry. Skipping.\n")
+			continue
+		}
+
+		// Extract the relevant fields from the secret
+		secretId := utl.Str(sec["keyId"])
+		secretName := utl.Str(sec["displayName"])
+		if secretName == "" {
+			secretName = "<blank>"
+		}
+		expiryRaw := utl.Str(sec["endDateTime"])
+
+		// Convert the expiry date to other formats for processing and printing
+		expiryTime, err := time.Parse(time.RFC3339, expiryRaw)
+		if err != nil {
+			Logf("Error parsing endDateTime: %s\n", expiryRaw)
+			continue
+		}
+		expiryInt := expiryTime.Unix()
+		expiryStr := UnixDateTimeString(expiryInt)
+		Logf("endDateTime raw | int64 | formatted : [ %s | %d | %s ]\n",
+			expiryRaw, expiryInt, expiryStr)
+
+		daysDiff := (expiryInt - now) / 86400
+		cExpiryStr := expiryStr
+		if daysDiff <= 0 {
+			cExpiryStr = utl.Red(expiryStr)
+		}
+
+		if days == -1 || daysDiff <= days {
+			if csvMode {
+				fmt.Printf("\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"\n",
+					mazType, name, appId, secretId, secretName, expiryStr)
+			} else {
+				fmt.Printf("%-6s %-40s %-38s %-38s %-38s %s\n",
+					mazType, name, appId, secretId, secretName, cExpiryStr)
+			}
+		}
+	}
 }
