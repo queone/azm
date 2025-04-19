@@ -323,7 +323,7 @@ func GetMatchingResRoleAssignments(filter string, force bool, z *Config) (list A
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureResRoleAssignments(cache, true, z) // true = be verbose
+		CacheAzureResRoleAssignments(cache, z)
 	}
 
 	// Filter the objects based on the provided filter
@@ -364,22 +364,18 @@ func GetMatchingResRoleAssignments(filter string, force bool, z *Config) (list A
 
 // Retrieves all Azure resource role assignments in current tenant and saves them
 // to local cache. Note that we are updating the cache via its pointer, so no return values.
-func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
+func CacheAzureResRoleAssignments(cache *Cache, z *Config) {
 	params := map[string]string{"api-version": "2022-04-01"}
 
-	// Prepare ID name maps if verbose output is enabled
-	var mgroupIdMap, subIdMap map[string]string
-	if verbose {
-		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
-		subIdMap = GetIdNameMap(Subscription, z)
-	}
+	// Prepare ID name maps for more informative logging
+	mgroupIdMap := GetIdNameMap(ManagementGroup, z)
+	subIdMap := GetIdNameMap(Subscription, z)
 
 	// Fetch all assignments across scopes concurrently using parallel goroutines function
 	allAssignments := fetchAzureObjectsAcrossScopes(
 		"/providers/Microsoft.Authorization/roleAssignments",
 		z,
 		params,
-		verbose,
 		mgroupIdMap,
 		subIdMap,
 	)
@@ -397,9 +393,7 @@ func CacheAzureResRoleAssignments(cache *Cache, verbose bool, z *Config) {
 		ids.Add(id)
 	}
 
-	if verbose {
-		fmt.Printf("%sFetched %d unique role assignments across all scopes\n", clrLine, len(list))
-	}
+	Logf("Fetched %d unique role assignments across all scopes\n", len(list))
 
 	// Trim and cache results
 	for i := range list {
@@ -465,7 +459,7 @@ func GetAzureResRoleAssignmentById(targetId string, z *Config) AzureObject {
 	suffix := "/providers/Microsoft.Authorization/roleAssignments/" + targetId
 
 	// Fetch all assignments across scopes concurrently using parallel goroutines function
-	assignments := fetchAzureObjectsAcrossScopes(suffix, z, params, false, nil, nil)
+	assignments := fetchAzureObjectsAcrossScopes(suffix, z, params, nil, nil)
 
 	for _, assignment := range assignments {
 		if id := utl.Str(assignment["name"]); id == targetId {

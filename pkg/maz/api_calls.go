@@ -2,12 +2,12 @@ package maz
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -21,16 +21,7 @@ func ApiGet(
 	z *Config,
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	return ApiCall("GET", apiUrl, z, nil, params, false)
-}
-
-// ApiCall alias to do a GET with debugging on
-func ApiGetVerbose(
-	apiUrl string,
-	z *Config,
-	params map[string]string,
-) (map[string]interface{}, int, error) {
-	return ApiCall("GET", apiUrl, z, nil, params, true)
+	return ApiCall("GET", apiUrl, z, nil, params)
 }
 
 // ApiCall alias to do a PATCH
@@ -40,17 +31,7 @@ func ApiPatch(
 	payload map[string]interface{},
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	return ApiCall("PATCH", apiUrl, z, payload, params, false)
-}
-
-// ApiCall alias to do a PATCH with debugging on
-func ApiPatchVerbose(
-	apiUrl string,
-	z *Config,
-	payload map[string]interface{},
-	params map[string]string,
-) (map[string]interface{}, int, error) {
-	return ApiCall("PATCH", apiUrl, z, payload, params, true)
+	return ApiCall("PATCH", apiUrl, z, payload, params)
 }
 
 // ApiCall alias to do a POST
@@ -60,17 +41,7 @@ func ApiPost(
 	payload map[string]interface{},
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	return ApiCall("POST", apiUrl, z, payload, params, false)
-}
-
-// ApiCall alias to do a POST with debugging on
-func ApiPostVerbose(
-	apiUrl string,
-	z *Config,
-	payload map[string]interface{},
-	params map[string]string,
-) (map[string]interface{}, int, error) {
-	return ApiCall("POST", apiUrl, z, payload, params, true)
+	return ApiCall("POST", apiUrl, z, payload, params)
 }
 
 // ApiCall alias to do a PUT
@@ -80,17 +51,7 @@ func ApiPut(
 	payload map[string]interface{},
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	return ApiCall("PUT", apiUrl, z, payload, params, false)
-}
-
-// ApiCall alias to do a PUT with debugging on
-func ApiPutVerbose(
-	apiUrl string,
-	z *Config,
-	payload map[string]interface{},
-	params map[string]string,
-) (map[string]interface{}, int, error) {
-	return ApiCall("PUT", apiUrl, z, payload, params, true)
+	return ApiCall("PUT", apiUrl, z, payload, params)
 }
 
 // ApiCall alias to do a DELETE
@@ -99,82 +60,7 @@ func ApiDelete(
 	z *Config,
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	return ApiCall("DELETE", apiUrl, z, nil, params, false)
-}
-
-// ApiCall alias to do a DELETE with debugging on
-func ApiDeleteVerbose(
-	apiUrl string,
-	z *Config,
-	params map[string]string,
-) (map[string]interface{}, int, error) {
-	return ApiCall("DELETE", apiUrl, z, nil, params, true)
-}
-
-// Extracts API error message as "<code> <message>".
-func ApiErrorMsg(obj map[string]interface{}) string {
-	err := utl.Map(obj["error"])
-	if err == nil {
-		return ""
-	}
-
-	// Prefer details[0] if available
-	if details := utl.Slice(err["details"]); len(details) > 0 {
-		if d := utl.Map(details[0]); d != nil {
-			code, msg := utl.Str(d["code"]), utl.Str(d["message"])
-			if code != "" && msg != "" {
-				return fmt.Sprintf("%s: %s", code, msg)
-			}
-		}
-	}
-
-	// Fall back to top-level error
-	code, msg := utl.Str(err["code"]), utl.Str(err["message"])
-	if code != "" || msg != "" {
-		return fmt.Sprintf("%s: %s", code, msg)
-	}
-
-	return ""
-}
-
-// Prints HTTP headers specific to API calls. Simplifies ApiCall function.
-func PrintHeaders(headers http.Header) {
-	if headers == nil {
-		return
-	}
-	fmt.Println(utl.Blu("headers") + ":")
-	for k, v := range headers {
-		fmt.Printf("  %s:\n", utl.Blu(k))
-		count := len(v) // Array of string
-		if count == 1 {
-			fmt.Printf("    - %s\n", utl.Gre(string(v[0]))) // In YAML-like output, 1st entry gets the dash
-		}
-		if count > 2 {
-			for _, i := range v[1:] {
-				fmt.Printf("      %s\n", utl.Gre(string(i)))
-			}
-		}
-	}
-}
-
-// Prints HTTP parameters specific to API calls. Simplifies ApiCall function.
-func PrintParams(params url.Values) {
-	if params == nil {
-		return
-	}
-	fmt.Println(utl.Blu("params") + ":")
-	for k, v := range params {
-		fmt.Printf("  %s:\n", utl.Blu(k))
-		count := len(v) // Array of string
-		if count == 1 {
-			fmt.Printf("    - %s\n", utl.Gre(string(v[0]))) // In YAML-like output, 1st entry gets the dash
-		}
-		if count > 2 {
-			for _, i := range v[1:] {
-				fmt.Printf("      %s\n", utl.Gre(string(i)))
-			}
-		}
-	}
+	return ApiCall("DELETE", apiUrl, z, nil, params)
 }
 
 // Makes an API call and returns the result object, statusCode, and error.
@@ -184,7 +70,6 @@ func ApiCall(
 	z *Config,
 	payload map[string]interface{},
 	params map[string]string,
-	verbose bool,
 ) (map[string]interface{}, int, error) {
 	Logf("%s %s\n", method, apiUrl) // Basic logging info
 
@@ -208,10 +93,7 @@ func ApiCall(
 	setRequestHeaders(req, headers)
 	setQueryParameters(req, params)
 
-	// Log request details if verbose mode is enabled
-	if verbose {
-		logRequestDetails(method, apiUrl, req, payload, params)
-	}
+	logRequestDetails(req, payload, params)
 
 	client := &http.Client{Timeout: time.Second * 30} // Thirty second timeout
 	resp, err := client.Do(req)
@@ -223,7 +105,7 @@ func ApiCall(
 	}
 	defer resp.Body.Close()
 
-	result, err := processResponse(resp, verbose)
+	result, err := processResponse(resp)
 	if err != nil {
 		Logf("%s\n", utl.Red2(fmt.Sprintf("Failed to process API response: %s", err)))
 		return nil, 0, fmt.Errorf("failed to process API response: %w", err)
@@ -276,26 +158,66 @@ func setQueryParameters(req *http.Request, params map[string]string) {
 	req.URL.RawQuery = reqParams.Encode()
 }
 
-// Helper function to log request details in verbose mode
-func logRequestDetails(
-	method string,
-	apiUrl string,
-	req *http.Request,
-	payload map[string]interface{},
-	params map[string]string,
-) {
-	fmt.Println(utl.Blu("==== REQUEST ================================="))
-	fmt.Println(method + " " + apiUrl)
-	PrintHeaders(req.Header)
-	PrintParams(req.URL.Query())
-	if payload != nil {
-		fmt.Println(utl.Blu("payload") + ":")
-		utl.PrintJsonColor(payload)
+// Helper function to log request details
+func logRequestDetails(req *http.Request, payload map[string]interface{}, params map[string]string) {
+	var b strings.Builder
+
+	// Add method and URL line
+	b.WriteString("REQUEST\n")
+
+	// Clone the request to avoid modifying the original
+	clonedReq := req.Clone(context.Background())
+
+	// Partially redact Authorization header (show first 4 and last 4 chars)
+	if authHeader := clonedReq.Header.Get("Authorization"); authHeader != "" {
+		redactedAuth := partiallyRedactToken(authHeader)
+		clonedReq.Header.Set("Authorization", redactedAuth)
 	}
+
+	// Dump and trim request headers (now with redacted auth)
+	if reqDump, err := httputil.DumpRequest(clonedReq, false); err == nil {
+		rawHeaders := strings.TrimRight(string(reqDump), "\n")
+		b.WriteString(rawHeaders)
+		b.WriteString("\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Failed to dump REQUEST headers: %s\n", err))
+	}
+
+	// Log full payload if present
+	if payload != nil {
+		if jsonBytes, err := utl.JsonToBytesIndent(payload, 2); err == nil {
+			b.WriteString("Request payload:\n")
+			b.WriteString(string(jsonBytes))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(fmt.Sprintf("Failed to print request payload: %s\n", err))
+		}
+	}
+
+	// Log query parameters if present
+	if len(params) > 0 {
+		b.WriteString("Query parameters:\n")
+		for k, v := range params {
+			b.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+		}
+	}
+
+	// Single Logf call
+	Logf("%s", b.String())
+}
+
+// Helper function to partially redact a token (shows first 10 and last 4 chars)
+func partiallyRedactToken(token string) string {
+	if len(token) <= 8 {
+		return "***__<REDACTED>__***" // Too short to split meaningfully
+	}
+	firstPart := token[:10]
+	lastPart := token[len(token)-4:]
+	return firstPart + "__<REDACTED>__" + lastPart
 }
 
 // Helper function to process the HTTP response
-func processResponse(resp *http.Response, verbose bool) (map[string]interface{}, error) {
+func processResponse(resp *http.Response) (map[string]interface{}, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
@@ -313,25 +235,73 @@ func processResponse(resp *http.Response, verbose bool) (map[string]interface{},
 		}
 	}
 
-	// Log response details if verbose mode is enabled
-	if verbose {
-		logResponseDetails(resp, result)
-	}
+	logResponseDetails(resp, result)
 
 	return result, nil
 }
 
-// Helper function to log response details in verbose mode
+// Helper function to log response details
 func logResponseDetails(resp *http.Response, result map[string]interface{}) {
-	fmt.Println(utl.Blu("==== RESPONSE ================================"))
-	fmt.Printf("%s: %d %s\n", utl.Blu("status"), resp.StatusCode, http.StatusText(resp.StatusCode))
-	fmt.Println(utl.Blu("result") + ":")
-	utl.PrintJsonColor(result)
-	resHeaders, err := httputil.DumpResponse(resp, false)
-	if err != nil {
-		fmt.Println("failed to dump response:", err)
-		return
+	var b strings.Builder
+
+	// Dump and trim response headers
+	if resHeaders, err := httputil.DumpResponse(resp, false); err == nil {
+		trimmed := strings.TrimRight(string(resHeaders), "\n")
+		b.WriteString("RESPONSE\n")
+		b.WriteString(trimmed)
+		b.WriteString("\n")
+	} else {
+		b.WriteString(fmt.Sprintf("RESPONSE\nFailed to dump headers: %s\n", err))
 	}
-	fmt.Println(utl.Blu("headers") + ":")
-	fmt.Println(string(resHeaders))
+
+	// Build a simplified version of the result
+	simplified := make(map[string]interface{})
+	for k, v := range result {
+		switch val := v.(type) {
+		case []interface{}:
+			simplified[k] = fmt.Sprintf("[%d items]", len(val))
+		case map[string]interface{}:
+			simplified[k] = "{...}"
+		default:
+			simplified[k] = val
+		}
+	}
+
+	// Format simplified JSON and append to buffer
+	if pretty, err := utl.JsonToBytesIndent(simplified, 2); err == nil {
+		b.WriteString("Response body is proper JSON. Showing top-level structure only:\n")
+		b.WriteString(string(pretty))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Failed to summarize response JSON body: %s\n", err))
+	}
+
+	// Single Logf call
+	Logf("%s", b.String())
+}
+
+// Extracts API error message as "<code> <message>".
+func ApiErrorMsg(obj map[string]interface{}) string {
+	err := utl.Map(obj["error"])
+	if err == nil {
+		return ""
+	}
+
+	// Prefer details[0] if available
+	if details := utl.Slice(err["details"]); len(details) > 0 {
+		if d := utl.Map(details[0]); d != nil {
+			code, msg := utl.Str(d["code"]), utl.Str(d["message"])
+			if code != "" && msg != "" {
+				return fmt.Sprintf("%s: %s", code, msg)
+			}
+		}
+	}
+
+	// Fall back to top-level error
+	code, msg := utl.Str(err["code"]), utl.Str(err["message"])
+	if code != "" || msg != "" {
+		return fmt.Sprintf("%s: %s", code, msg)
+	}
+
+	return ""
 }

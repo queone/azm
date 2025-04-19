@@ -67,7 +67,7 @@ func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjec
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureMgmtGroups(cache, z, true)
+		CacheAzureMgmtGroups(cache, z)
 	}
 
 	// Filter the objects based on the provided filter
@@ -104,7 +104,7 @@ func GetMatchingAzureMgmtGroups(filter string, force bool, z *Config) AzureObjec
 
 // Retrieves all Azure management groups objects in current tenant and saves them to
 // local cache. Note that we are updating the cache via its pointer, so no return value.
-func CacheAzureMgmtGroups(cache *Cache, z *Config, verbose bool) {
+func CacheAzureMgmtGroups(cache *Cache, z *Config) {
 	list := AzureObjectList{} // List of management group objects to cache
 
 	// Get all managements groups from Azure

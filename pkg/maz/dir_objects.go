@@ -172,7 +172,7 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		RefreshLocalCacheWithAzure(mazType, cache, z, true) // Call Azure to refresh cache
+		RefreshLocalCacheWithAzure(mazType, cache, z) // Call Azure to refresh cache
 	}
 
 	// Filter the objects based on the provided filter
@@ -203,8 +203,8 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 }
 
 // Retrieves all directory objects of given type from Azure and syncs them to local cache.
-// Note that we are updating the cache via its pointer. Shows progress if verbose = true.
-func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose bool) {
+// Note that we are updating the cache via its pointer.
+func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 
 	// Use regular pagination for initial sync, delta for updates
@@ -262,7 +262,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 		}
 	}
 
-	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, z, verbose)
+	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, z)
 
 	// Retry delta token save once before dying
 	if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
@@ -282,7 +282,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config, verbose
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
 // described at docs.microsoft.com/en-us/graph/delta-query-overview
-func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectList, AzureObject) {
+func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
 	callCount := 1
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
@@ -303,7 +303,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go deltaWorker(i, workQueue, results, z, verbose, &wg)
+		go deltaWorker(i, workQueue, results, z, &wg)
 	}
 
 	// Close results when all workers are done
@@ -318,9 +318,6 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 	for {
 		if processRemaining {
 			deltaSet = drainResults(results)
-			if verbose {
-				fmt.Print(clrLine)
-			}
 			return deltaSet, deltaLinkMap
 		}
 
@@ -331,12 +328,12 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 				continue
 			}
 			deltaSet = append(deltaSet, obj)
-			if verbose && len(deltaSet)%100 == 0 {
-				fmt.Printf("%sCall %05d : count %07d", clrLine, callCount, len(deltaSet))
+			if len(deltaSet)%100 == 0 {
+				Logf("Call %05d : count %07d\n", callCount, len(deltaSet))
 			}
 
 		default:
-			resp, err := apiGetWithRetry(apiUrl, z, verbose, 3)
+			resp, err := apiGetWithRetry(apiUrl, z, 3)
 			if err != nil {
 				close(workQueue)
 				processRemaining = true
@@ -364,10 +361,10 @@ func FetchDirObjectsDelta(apiUrl string, z *Config, verbose bool) (AzureObjectLi
 
 // Processes a stream of API URLs from the work queue and sends parsed objects to the results
 // channel.
-func deltaWorker(workerID int, workQueue <-chan string, results chan<- AzureObject, z *Config, verbose bool, wg *sync.WaitGroup) {
+func deltaWorker(workerID int, workQueue <-chan string, results chan<- AzureObject, z *Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for url := range workQueue {
-		resp, _ := apiGetWithRetry(url, z, verbose, 3)
+		resp, _ := apiGetWithRetry(url, z, 3)
 		Logf("Worker %02s finished: %s\n", utl.Mag(utl.ToStr(workerID)), utl.Mag(url))
 		processApiResponse(resp, results, workerID)
 	}
@@ -412,7 +409,7 @@ func drainResults(results <-chan AzureObject) AzureObjectList {
 }
 
 // Performs an HTTP GET with retry and exponential backoff, up to a maximum number of attempts.
-func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (AzureObject, error) {
+func apiGetWithRetry(url string, z *Config, maxRetries int) (AzureObject, error) {
 	var resp AzureObject
 	var err error
 
@@ -421,10 +418,7 @@ func apiGetWithRetry(url string, z *Config, verbose bool, maxRetries int) (Azure
 		if err == nil {
 			return resp, nil
 		}
-		Logf("%v\n", err)
-		if verbose {
-			fmt.Printf("%sHTTP error (Retry %d/%d): %v\n", clrLine, i+1, maxRetries, err)
-		}
+		Logf("HTTP error (Retry %d/%d): %v\n", i+1, maxRetries, err)
 		time.Sleep(time.Second * time.Duration(1<<i))
 	}
 	return resp, err

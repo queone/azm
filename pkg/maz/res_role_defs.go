@@ -411,7 +411,7 @@ func GetMatchingResRoleDefinitions(filter string, force bool, z *Config) (list A
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureResRoleDefinitions(cache, true, z) // true = be verbose
+		CacheAzureResRoleDefinitions(cache, z)
 	}
 
 	// Filter the objects based on the provided filter
@@ -439,13 +439,10 @@ func GetMatchingResRoleDefinitions(filter string, force bool, z *Config) (list A
 
 // Retrieves all Azure resource role definition objects in current tenant and saves them
 // to local cache. Note that we are updating the cache via its pointer, so no return values.
-func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
-	// Prepare ID → Name maps for more human-readable verbose output
-	var mgroupIdMap, subIdMap map[string]string
-	if verbose {
-		mgroupIdMap = GetIdNameMap(ManagementGroup, z)
-		subIdMap = GetIdNameMap(Subscription, z)
-	}
+func CacheAzureResRoleDefinitions(cache *Cache, z *Config) {
+	// Prepare ID name maps for more informative logging
+	mgroupIdMap := GetIdNameMap(ManagementGroup, z)
+	subIdMap := GetIdNameMap(Subscription, z)
 
 	// Build API parameters for the role definitions endpoint
 	params := map[string]string{"api-version": "2022-04-01"}
@@ -455,7 +452,6 @@ func CacheAzureResRoleDefinitions(cache *Cache, verbose bool, z *Config) {
 		"/providers/Microsoft.Authorization/roleDefinitions",
 		z,
 		params,
-		verbose,
 		mgroupIdMap,
 		subIdMap,
 	)
@@ -519,9 +515,8 @@ func GetAzureResRoleDefinitionsByName(roleName string, z *Config) AzureObjectLis
 		"/providers/Microsoft.Authorization/roleDefinitions",
 		z,
 		params,
-		false, // no verbose output
-		nil,   // no management group ID map needed
-		nil,   // no subscription ID map needed
+		nil, // no management group ID map needed
+		nil, // no subscription ID map needed
 	)
 
 	return defs
@@ -544,7 +539,6 @@ func GetAzureResRoleDefinitionById(targetId string, z *Config) AzureObject {
 		"/providers/Microsoft.Authorization/roleDefinitions",
 		z,
 		params,
-		false, // no verbose output
 		nil,
 		nil,
 	)
