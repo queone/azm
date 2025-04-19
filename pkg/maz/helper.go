@@ -354,9 +354,9 @@ func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
 	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {
 		if statCode != 200 {
-			msg := fmt.Sprintf("%sHTTP %d: Continuing to try...", clrLine, statCode)
-			fmt.Printf("%s", utl.Yel(msg))
+			Logf("HTTP %d: Continuing to try...\n", statCode)
 		}
+
 		// Forever loop until there are no more pages
 		thisBatch := utl.Slice(resp["value"])
 		if len(thisBatch) > 0 {

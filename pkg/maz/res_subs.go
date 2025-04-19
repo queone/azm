@@ -65,7 +65,7 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 	// Determine if cache is empty or outdated and needs to be refreshed from Azure
 	cacheNeedsRefreshing := force || cache.Count() < 1 || cache.Age() == 0 || cache.Age() > ConstMgCacheFileAgePeriod
 	if internetIsAvailable && cacheNeedsRefreshing {
-		CacheAzureSubscriptions(cache, z, true)
+		CacheAzureSubscriptions(cache, z)
 	}
 
 	// Filter the objects based on the provided filter
@@ -103,7 +103,7 @@ func GetMatchingAzureSubscriptions(filter string, force bool, z *Config) AzureOb
 
 // Retrieves all Azure subscription objects in current tenant and saves them to local
 // cache. Note that we are updating the cache via its pointer, so no return value.
-func CacheAzureSubscriptions(cache *Cache, z *Config, verbose bool) {
+func CacheAzureSubscriptions(cache *Cache, z *Config) {
 	list := AzureObjectList{} // List of subscription objects to cache
 
 	params := map[string]string{"api-version": "2024-11-01"}

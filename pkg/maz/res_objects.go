@@ -143,13 +143,11 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 	return nil // Nothing found, return empty object
 }
 
-// Fetch Azure resources across all role scopes concurrently using parallel goroutines,
-// with optional verbose logging.
+// Fetch Azure resources across all role scopes concurrently, using parallel goroutines.
 func fetchAzureObjectsAcrossScopes(
 	endpointSuffix string,
 	z *Config,
 	params map[string]string,
-	verbose bool,
 	mgroupIdMap, subIdMap map[string]string,
 ) AzureObjectList {
 	var (
@@ -204,8 +202,8 @@ func fetchAzureObjectsAcrossScopes(
 				count++
 			}
 
-			// Verbose output for progress tracking
-			if verbose && count > 0 {
+			// Log progress tracking
+			if count > 0 {
 				scopeName := scope
 				scopeType := "Subscription"
 				if strings.HasPrefix(scope, "/providers") {
@@ -218,7 +216,7 @@ func fetchAzureObjectsAcrossScopes(
 						scopeName = name
 					}
 				}
-				fmt.Printf("%sCall %05d: %05d items under %s %s", clrLine, callCount, count, scopeType, scopeName)
+				Logf("Call %05d: %05d items under %s %s\n", callCount, count, scopeType, scopeName)
 			}
 			callCount++
 
@@ -236,10 +234,6 @@ func fetchAzureObjectsAcrossScopes(
 	// Collect all results from goroutines into the final list
 	for partial := range results {
 		list = append(list, partial...)
-	}
-
-	if verbose {
-		fmt.Print(clrLine) // Clear last verbose line
 	}
 
 	return list

@@ -1,5 +1,10 @@
 ## Releases
 
+### v1.0.0
+Release Date: 2025-apr-18
+- Removed verbose optional output from fetch functions; now sending debug logs to MAZLOG instead.
+- Completed maz/azm consolidation and other major refactoring; now mature enough for v1.0.0
+
 ### v0.9.2
 Release Date: 2025-apr-18
 - Comments to better explain the parallelization in batch fetching Azure dir objects

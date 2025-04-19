@@ -45,8 +45,6 @@ const (
 	ConstAzPowerShellClientId = "1950a258-227b-4e31-a9cf-717495945fc2" // 'Microsoft Azure PowerShell'
 	//ConstAzPowerShellClientId = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" // 'Microsoft Azure CLI'
 
-	clrLine = "\x1B[2K\r" // Clear current line and move cursor to line start
-
 	ConstMgCacheFileAgePeriod = 1800  // Half hour
 	ConstAzCacheFileAgePeriod = 86400 // One day
 

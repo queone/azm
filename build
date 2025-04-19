@@ -26,7 +26,7 @@ staticcheck ./...
 printf "\n==> Compile the maz package library: go build -o /dev/null ./pkg/maz\n"
 go build -o /dev/null ./pkg/maz
 
-# azm now has raf functionality via -sfn arg
+# azm now has raf functionality built-in via -sfn arg
 # UTIL=raf
 # printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
 # (
@@ -42,7 +42,7 @@ printf "\n==> Build/install the ${Gre}$UTIL${Rst} utility\n"
 )
 
 # OPTIONAL: Examples to cross-compile for other OSes/archs:
-# GOOS=darwin|linux|windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${BINDIR}/azm${EXT} 
+# GOOS=darwin|linux|windows GOARCH=amd64|arm64 go build -ldflags "-s -w" -o ${BINDIR}/${UTIL}${EXT} 
 
 # Additional processing for azm utility and overall repo maintenance
 ProgramVersion=$(grep 'prgver.*=' cmd/azm/main.go || grep 'program_version.*=' cmd/azm/main.go | cut -d'"' -f2)
