@@ -186,8 +186,10 @@ func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 	var wg sync.WaitGroup     // WaitGroup to wait for all goroutines to complete
 
 	for _, mazType := range MazTypes {
-		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
-		wg.Add(1)          // Register one more goroutine with the WaitGroup
+		// Capture loop variable locally to avoid closure issues in goroutines.
+		// Without this, all goroutines might see the same (last) value of mazType.
+		mazType := mazType
+		wg.Add(1) // Register one more goroutine with the WaitGroup
 
 		// Start a goroutine to search this type's cache in parallel
 		go func() {
@@ -212,7 +214,9 @@ func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 					Logf("Found object with ID %s of type: %s\n", id, utl.Mag(mazTypeName))
 					obj["maz_type"] = mazType // Add the type as an extra field
 
-					// Protect shared slice with a mutex while appending
+					// Concurrent writes to shared 'list' require synchronization.
+					// The mutex ensures only one goroutine appends at a time,
+					// preventing data races or corruption.
 					mu.Lock()
 					list = append(list, obj)
 					mu.Unlock()

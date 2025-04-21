@@ -12,7 +12,7 @@ import (
 
 const (
 	program_name    = "azm"
-	program_version = "1.0.0"
+	program_version = "1.0.1"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
@@ -143,7 +143,7 @@ func printUnknownCommandError() {
 }
 
 func main() {
-	maz.Logf("Login is enabled\n")
+	maz.PrintRuntimeInfo()
 	numberOfArguments := len(os.Args[1:]) // Exclude the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {
 		// Don't accept less than 1, or more than 4 arguments

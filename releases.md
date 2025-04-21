@@ -1,5 +1,12 @@
 ## Releases
 
+### v1.0.1
+Release Date: 2025-apr-21
+- Added -race to go test build command, to check for potential race conditions
+- Aded more comments to make code easier to maintain
+- Added deduplication of API results by `id` and updated `deltaWorker` to safely enqueue `nextLink` URLs using a shared `visited` map and bidirectional `workQueue`.
+- Updated FetchDirObjectsDelta() to ensure deltaWorker do not call same URLs 
+
 ### v1.0.0
 Release Date: 2025-apr-18
 - Removed verbose optional output from fetch functions; now sending debug logs to MAZLOG instead.

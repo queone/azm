@@ -284,7 +284,6 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 // described at docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
 	callCount := 1
-	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 
 	const (
@@ -299,11 +298,12 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 	workQueue := make(chan string, 10)
 	results := make(chan AzureObject, resultBufSize)
 	var wg sync.WaitGroup
+	var visited sync.Map // Prevent duplicate fetches of same URL
 
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go deltaWorker(i, workQueue, results, z, &wg)
+		go deltaWorker(i, workQueue, results, z, &wg, &visited)
 	}
 
 	// Close results when all workers are done
@@ -312,29 +312,43 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 		close(results)
 	}()
 
-	workQueue <- apiUrl
+	// Seed initial URL if not visited yet
+	if _, seen := visited.LoadOrStore(apiUrl, true); !seen {
+		workQueue <- apiUrl
+	}
+
 	processRemaining := false
+	rawDeltaSet := AzureObjectList{}
 
 	for {
 		if processRemaining {
-			deltaSet = drainResults(results)
-			return deltaSet, deltaLinkMap
+			// Drain remaining results and deduplicate
+			rawDeltaSet = append(rawDeltaSet, drainResults(results)...)
+			uniqueSet := deduplicateByID(rawDeltaSet)
+			Logf("Deduplicated: %d unique out of %d raw\n", len(uniqueSet), len(rawDeltaSet))
+			return uniqueSet, deltaLinkMap
 		}
 
+		// Below select lets us wait on multiple channel operations. If a value is ready on
+		// 'results', we handle it. Otherwise, we fall through to 'default' and make an API call.
 		select {
 		case obj, ok := <-results:
+			// Drain objects from results channel as they arrive
 			if !ok {
+				// Channel closed: switch to final processing phase
 				processRemaining = true
 				continue
 			}
-			deltaSet = append(deltaSet, obj)
-			if len(deltaSet)%100 == 0 {
-				Logf("Call %05d : count %07d\n", callCount, len(deltaSet))
+			rawDeltaSet = append(rawDeltaSet, obj)
+			if len(rawDeltaSet)%100 == 0 {
+				Logf("Call %05d : count %07d\n", callCount, len(rawDeltaSet))
 			}
 
 		default:
+			// No results ready — proactively fetch next page of data
 			resp, err := apiGetWithRetry(apiUrl, z, 3)
 			if err != nil {
+				// On error, stop queue and move to cleanup
 				close(workQueue)
 				processRemaining = true
 				continue
@@ -342,16 +356,20 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 
 			processApiResponse(resp, results, mainWorkerID)
 
-			// Handle pagination
+			// Handle response pagination (deltaLink = end of page)
 			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
 				deltaLinkMap = deltaLink
 				close(workQueue)
 				processRemaining = true
 			} else if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
-				workQueue <- nextLink
-				callCount++
+				// More data available — queue next link if not visited
+				if _, seen := visited.LoadOrStore(nextLink, true); !seen {
+					workQueue <- nextLink
+					callCount++
+				}
 				apiUrl = nextLink
 			} else {
+				// No more pages
 				close(workQueue)
 				processRemaining = true
 			}
@@ -361,13 +379,43 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 
 // Processes a stream of API URLs from the work queue and sends parsed objects to the results
 // channel.
-func deltaWorker(workerID int, workQueue <-chan string, results chan<- AzureObject, z *Config, wg *sync.WaitGroup) {
+func deltaWorker(
+	workerID int,
+	workQueue chan string,
+	results chan<- AzureObject,
+	z *Config,
+	wg *sync.WaitGroup,
+	visited *sync.Map,
+) {
 	defer wg.Done()
 	for url := range workQueue {
 		resp, _ := apiGetWithRetry(url, z, 3)
 		Logf("Worker %02s finished: %s\n", utl.Mag(utl.ToStr(workerID)), utl.Mag(url))
 		processApiResponse(resp, results, workerID)
+
+		// Handle pagination within worker (in case API returns nextLink directly here)
+		if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
+			if _, seen := visited.LoadOrStore(nextLink, true); !seen {
+				workQueue <- nextLink
+			}
+		}
 	}
+}
+
+// Removes duplicate directory objects based on their "id" field.
+func deduplicateByID(input AzureObjectList) AzureObjectList {
+	seen := make(map[string]bool)
+	unique := AzureObjectList{}
+
+	for _, obj := range input {
+		id := utl.Str(obj["id"])
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		unique = append(unique, obj)
+	}
+	return unique
 }
 
 // Extracts directory objects from the raw API response and pushes them to the results channel.
@@ -399,15 +447,6 @@ func processApiResponse(resp map[string]interface{}, results chan<- AzureObject,
 	}
 }
 
-// Reads all remaining objects from the results channel and accumulates them into a list.
-func drainResults(results <-chan AzureObject) AzureObjectList {
-	deltaSet := AzureObjectList{}
-	for obj := range results {
-		deltaSet = append(deltaSet, obj)
-	}
-	return deltaSet
-}
-
 // Performs an HTTP GET with retry and exponential backoff, up to a maximum number of attempts.
 func apiGetWithRetry(url string, z *Config, maxRetries int) (AzureObject, error) {
 	var resp AzureObject
@@ -422,6 +461,15 @@ func apiGetWithRetry(url string, z *Config, maxRetries int) (AzureObject, error)
 		time.Sleep(time.Second * time.Duration(1<<i))
 	}
 	return resp, err
+}
+
+// Reads all remaining objects from the results channel and accumulates them into a list.
+func drainResults(results <-chan AzureObject) AzureObjectList {
+	deltaSet := AzureObjectList{}
+	for obj := range results {
+		deltaSet = append(deltaSet, obj)
+	}
+	return deltaSet
 }
 
 // Deletes directory object of given type in Azure, with a confirmation prompt.

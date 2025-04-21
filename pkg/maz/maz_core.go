@@ -162,6 +162,14 @@ func init() {
 	}
 }
 
+func PrintRuntimeInfo() {
+	Logf("Login is enabled\n")
+	Logf("Compiler: %s\n", runtime.Compiler)
+	Logf("Architecture: %s\n", runtime.GOARCH)
+	Logf("Go version: %s\n", runtime.Version())
+	Logf("GOMAXPROCS: %s\n", utl.Mag(utl.ToStr(runtime.GOMAXPROCS(0))))
+}
+
 // Constructs, initializes, and returns a pointer to a Config instance.
 // The returned pointer can be used as a global configuration object to store
 // credentials, tokens, and other API-related details for the application.
