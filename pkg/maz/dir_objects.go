@@ -313,12 +313,17 @@ func (s *deltaSyncState) incrementCallCount() int {
 	return s.callCount
 }
 
+func (s *deltaSyncState) getCallCount() int {
+	s.callCountMu.Lock()
+	defer s.callCountMu.Unlock()
+	return s.callCount
+}
+
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
 // described at docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
 	Logf("Fetching directory objects delta\n")
-	callCount := 1
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 
@@ -382,7 +387,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 		}
 		deltaSet = append(deltaSet, obj)
 		if len(deltaSet)%100 == 0 {
-			Logf("Call %05d : count %07d\n", callCount, len(deltaSet))
+			Logf("Call %05d : count %07d\n", state.getCallCount(), len(deltaSet))
 		}
 	}
 
