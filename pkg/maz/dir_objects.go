@@ -287,6 +287,9 @@ type deltaSyncState struct {
 	pendingUrls int
 	visited     *sync.Map
 	workQueue   chan string
+
+	callCountMu sync.Mutex
+	callCount   int
 }
 
 func (s *deltaSyncState) incrementPending() {
@@ -301,6 +304,13 @@ func (s *deltaSyncState) decrementPending() {
 	s.pendingUrls--
 	Logf("decrementPending: %d\n", s.pendingUrls)
 	s.pendingMu.Unlock()
+}
+
+func (s *deltaSyncState) incrementCallCount() int {
+	s.callCountMu.Lock()
+	defer s.callCountMu.Unlock()
+	s.callCount++
+	return s.callCount
 }
 
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
@@ -345,7 +355,7 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 			time.Sleep(100 * time.Millisecond)
 			state.pendingMu.Lock()
 			if state.pendingUrls == 0 {
-				Logf("[DEBUG] All pending done. Closing workQueue.\n")
+				Logf("All pending done. Closing workQueue.\n")
 				close(state.workQueue)
 				state.pendingMu.Unlock()
 				return
@@ -403,7 +413,8 @@ func deltaWorker(workerID int, results chan<- AzureObject, z *Config, wg *sync.W
 			continue
 		}
 
-		Logf("Worker %02d finished: %s\n", workerID, url)
+		count := state.incrementCallCount()
+		Logf("Call %05d : Worker %02d finished: %s\n", count, workerID, url)
 		processApiResponse(resp, results, workerID)
 
 		if delta := utl.Str(resp["@odata.deltaLink"]); delta != "" {
