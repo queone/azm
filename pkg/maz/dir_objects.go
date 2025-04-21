@@ -2,6 +2,7 @@ package maz
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -279,10 +280,38 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 	}
 }
 
+// ==== Section that fetches directory objects deltas =====
+
+type deltaSyncState struct {
+	pendingMu   sync.Mutex
+	pendingUrls int
+	visited     *sync.Map
+	workQueue   chan string
+}
+
+func (s *deltaSyncState) incrementPending() {
+	s.pendingMu.Lock()
+	s.pendingUrls++
+	Logf("incrementPending: %d\n", s.pendingUrls)
+	s.pendingMu.Unlock()
+}
+
+func (s *deltaSyncState) decrementPending() {
+	s.pendingMu.Lock()
+	s.pendingUrls--
+	Logf("decrementPending: %d\n", s.pendingUrls)
+	if s.pendingUrls == 0 {
+		Logf("pending == 0, closing workQueue\n")
+		close(s.workQueue)
+	}
+	s.pendingMu.Unlock()
+}
+
 // Retrieves Azure directory object deltas. Returns the set of new or updated items, and
 // a deltaLink for running the next future Azure query. Implements the code logic pattern
 // described at docs.microsoft.com/en-us/graph/delta-query-overview
 func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
+	Logf("Fetching directory objects delta\n")
 	callCount := 1
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
@@ -290,21 +319,28 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 	const (
 		workerCount   = 10
 		resultBufSize = 10000
-		mainWorkerID  = -1
 	)
 
 	// WHAT EXACTLY ARE WE PARALLELIZING?: Multiple API URLs (e.g. paged results) are fetched
 	// in parallel using a pool of deltaWorker goroutines, speeding up large directory syncs.
 
-	workQueue := make(chan string, 10)
 	results := make(chan AzureObject, resultBufSize)
 	var wg sync.WaitGroup
-	visited := &sync.Map{}
+	workQueue := make(chan string, 100)
+	state := &deltaSyncState{
+		visited:   &sync.Map{},
+		workQueue: workQueue, // use shared queue
+	}
+
+	// Mark root URL as visited and enqueue
+	state.visited.Store(apiUrl, true)
+	state.incrementPending() // needed to track the root
+	state.workQueue <- apiUrl
 
 	// Start workers
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
-		go deltaWorker(i, workQueue, results, z, &wg)
+		go deltaWorker(i, results, z, &wg, state)
 	}
 
 	// Close results when all workers are done
@@ -313,101 +349,66 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 		close(results)
 	}()
 
-	// Track URLs we've already seen
-	visited.Store(apiUrl, true)
-	workQueue <- apiUrl
-	processRemaining := false
+	// Drain results
 	dedupe := map[string]struct{}{}
-
-	for {
-		if processRemaining {
-			// Final draining of remaining results
-			for obj := range results {
-				deltaSet = append(deltaSet, obj)
+	for obj := range results {
+		id := utl.Str(obj["id"])
+		if id != "" {
+			if _, exists := dedupe[id]; exists {
+				continue
 			}
-			return deduplicateByID(deltaSet), deltaLinkMap
+			dedupe[id] = struct{}{}
 		}
-
-		// Below select lets us wait on multiple channel operations. If a value is ready on
-		// 'results', we handle it. Otherwise, we fall through to 'default' and make an API call.
-		select {
-		case obj, ok := <-results:
-			// Drain objects from results channel as they arrive
-			if !ok {
-				// Channel closed: switch to final processing phase
-				processRemaining = true
-				continue
-			}
-			id := utl.Str(obj["id"])
-			if id != "" {
-				if _, exists := dedupe[id]; exists {
-					continue
-				}
-				dedupe[id] = struct{}{}
-			}
-			deltaSet = append(deltaSet, obj)
-			if len(deltaSet)%100 == 0 {
-				Logf("Call %05d : count %07d\n", callCount, len(deltaSet))
-			}
-
-		default:
-			// No results ready — proactively fetch next page of data
-			resp, err := apiGetWithRetry(apiUrl, z, 3)
-			if err != nil {
-				// On error, stop queue and move to cleanup
-				close(workQueue)
-				processRemaining = true
-				continue
-			}
-
-			processApiResponse(resp, results, mainWorkerID)
-
-			// Handle response pagination (deltaLink = end of page)
-			if deltaLink := utl.Map(resp["@odata.deltaLink"]); deltaLink != nil {
-				deltaLinkMap = deltaLink
-				close(workQueue)
-				processRemaining = true
-			} else if nextLink := utl.Str(resp["@odata.nextLink"]); nextLink != "" {
-				// More data available — queue next link if not seen
-				if _, seen := visited.LoadOrStore(nextLink, true); !seen {
-					workQueue <- nextLink
-					callCount++
-					apiUrl = nextLink
-				}
-			} else {
-				// No more pages
-				close(workQueue)
-				processRemaining = true
-			}
+		deltaSet = append(deltaSet, obj)
+		if len(deltaSet)%100 == 0 {
+			Logf("Call %05d : count %07d\n", callCount, len(deltaSet))
 		}
 	}
+
+	// Find the final deltaLink (last one seen by any thread)
+	state.visited.Range(func(key, val any) bool {
+		if url, ok := key.(string); ok && strings.Contains(url, "deltaLink") {
+			deltaLinkMap["@odata.deltaLink"] = url
+		}
+		return true
+	})
+
+	return deltaSet, deltaLinkMap
 }
 
 // Processes a stream of API URLs from the work queue and sends parsed objects to the results
-// channel.
-func deltaWorker(workerID int, workQueue chan string, results chan<- AzureObject, z *Config, wg *sync.WaitGroup) {
+// channel. Workers follow pagination by enqueueing @odata.nextLink if unseen.
+func deltaWorker(workerID int, results chan<- AzureObject, z *Config, wg *sync.WaitGroup, state *deltaSyncState) {
 	defer wg.Done()
-	for url := range workQueue {
-		resp, _ := apiGetWithRetry(url, z, 3)
-		Logf("Worker %02s finished: %s\n", utl.Mag(utl.ToStr(workerID)), utl.Mag(url))
-		processApiResponse(resp, results, workerID)
-	}
-}
 
-// Removes duplicate directory objects based on their "id" field.
-func deduplicateByID(input AzureObjectList) AzureObjectList {
-	seen := make(map[string]bool)
-	unique := AzureObjectList{}
+	Logf("Worker %02d starting\n", workerID)
 
-	for _, obj := range input {
-		id := utl.Str(obj["id"])
-		if id == "" || seen[id] {
+	for url := range state.workQueue {
+		resp, err := apiGetWithRetry(url, z, 3)
+		state.decrementPending()
+
+		if err != nil {
+			Logf("Worker %02d error: %v\n", workerID, err)
 			continue
 		}
-		seen[id] = true
-		unique = append(unique, obj)
+
+		Logf("Worker %02d finished: %s\n", workerID, url)
+		processApiResponse(resp, results, workerID)
+
+		if delta := utl.Str(resp["@odata.deltaLink"]); delta != "" {
+			state.visited.Store(delta, true)
+			continue
+		}
+
+		if next := utl.Str(resp["@odata.nextLink"]); next != "" {
+			if _, seen := state.visited.LoadOrStore(next, true); !seen {
+				state.incrementPending()
+				go func(u string) {
+					state.workQueue <- u
+				}(next)
+			}
+		}
 	}
-	return unique
 }
 
 // Extracts directory objects from the raw API response and pushes them to the results channel.
@@ -454,6 +455,8 @@ func apiGetWithRetry(url string, z *Config, maxRetries int) (AzureObject, error)
 	}
 	return resp, err
 }
+
+// =======================================================
 
 // Deletes directory object of given type in Azure, with a confirmation prompt.
 func DeleteDirObject(force bool, id, mazType string, z *Config) {
