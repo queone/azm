@@ -303,7 +303,22 @@ func (s *deltaSyncState) decrementPending() {
 	s.pendingMu.Lock()
 	s.pendingUrls--
 	Logf("decrementPending: %d\n", s.pendingUrls)
+	if s.pendingUrls == 0 {
+		Logf("pending == 0, closing workQueue\n")
+		close(s.workQueue)
+	}
 	s.pendingMu.Unlock()
+}
+
+// Atomically enqueue a URL only if it hasn't been seen before
+func (s *deltaSyncState) enqueueIfUnseen(url string) {
+	_, loaded := s.visited.LoadOrStore(url, true)
+	if !loaded {
+		s.incrementPending()
+		s.workQueue <- url
+	} else {
+		Logf("SKIPPED duplicate URL: %s\n", url)
+	}
 }
 
 func (s *deltaSyncState) incrementCallCount() int {
@@ -344,9 +359,8 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 	}
 
 	// Mark root URL as visited and enqueue
-	state.visited.Store(apiUrl, true)
-	state.incrementPending() // needed to track the root
-	state.workQueue <- apiUrl
+	// Mark root URL as visited and enqueue
+	state.enqueueIfUnseen(apiUrl)
 
 	// Start workers
 	for i := 0; i < workerCount; i++ {
@@ -428,12 +442,7 @@ func deltaWorker(workerID int, results chan<- AzureObject, z *Config, wg *sync.W
 		}
 
 		if next := utl.Str(resp["@odata.nextLink"]); next != "" {
-			if _, seen := state.visited.LoadOrStore(next, true); !seen {
-				state.incrementPending()
-				go func(u string) {
-					state.workQueue <- u
-				}(next)
-			}
+			state.enqueueIfUnseen(next)
 		}
 	}
 }
