@@ -300,10 +300,6 @@ func (s *deltaSyncState) decrementPending() {
 	s.pendingMu.Lock()
 	s.pendingUrls--
 	Logf("decrementPending: %d\n", s.pendingUrls)
-	if s.pendingUrls == 0 {
-		Logf("pending == 0, closing workQueue\n")
-		close(s.workQueue)
-	}
 	s.pendingMu.Unlock()
 }
 
@@ -342,6 +338,21 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 		wg.Add(1)
 		go deltaWorker(i, results, z, &wg, state)
 	}
+
+	// This goroutine watches pending count and closes workQueue when safe
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			state.pendingMu.Lock()
+			if state.pendingUrls == 0 {
+				Logf("[DEBUG] All pending done. Closing workQueue.\n")
+				close(state.workQueue)
+				state.pendingMu.Unlock()
+				return
+			}
+			state.pendingMu.Unlock()
+		}
+	}()
 
 	// Close results when all workers are done
 	go func() {
