@@ -75,7 +75,7 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 		}
 
 		// Save interval configuration
-		const saveInterval = 1000 // Save every 1000 items
+		const saveInterval = 5000 // Save every 5000 items
 		var lastSave int
 
 		// Log progress and save partial delta set periodically
