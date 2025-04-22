@@ -251,27 +251,98 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 	}
 }
 
-func (c *Cache) upsertLocked(obj AzureObject) error {
-	id := ExtractID(obj)
-	if id == "" {
-		return fmt.Errorf("object with blank ID not added to cache")
-	}
+// func (c *Cache) upsertLocked(obj AzureObject) error {
+// 	id := ExtractID(obj)
+// 	if id == "" {
+// 		return fmt.Errorf("object with blank ID not added to cache")
+// 	}
 
-	if existingObj := c.data.FindById(id); existingObj != nil {
-		MergeAzureObjects(obj, *existingObj)
-	} else {
-		c.data = append(c.data, obj)
-	}
-	return nil
-}
+// 	if existingObj := c.data.FindById(id); existingObj != nil {
+// 		MergeAzureObjects(obj, *existingObj)
+// 	} else {
+// 		c.data = append(c.data, obj)
+// 	}
+// 	return nil
+// }
+
+// Merges the deltaSet with the current cache data.
+// func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
+// 	Logf("Normalizing cache...")
+// 	start := time.Now()
+
+// 	// Process changes under single lock
+// 	c.mu.Lock()
+// 	defer c.mu.Unlock()
+
+// 	// Early Exit for Empty Deltas
+// 	if len(deltaSet) == 0 {
+// 		Logf("Empty deltaSet received - no changes to process\n")
+// 		return
+// 	}
+
+// 	// 1. Process deltaSet to track changes
+// 	deletedIds := make(utl.StringSet)                   // Track IDs to delete
+// 	uniqueIds := make(utl.StringSet)                    // Track unique IDs in the deltaSet
+// 	mergeSet := make(AzureObjectList, 0, len(deltaSet)) // List for new/updated objects in deltaSet
+
+// 	for _, obj := range deltaSet {
+// 		id := utl.Str(obj["id"])
+// 		if id == "" {
+// 			continue
+// 		}
+// 		// Check for deletions first (most delta sets are <5% deletions)
+// 		if obj["@removed"] != nil || obj["members@delta"] != nil {
+// 			deletedIds[id] = struct{}{}
+// 			continue
+// 		}
+// 		// Dedupe in mergeSet
+// 		if _, exists := uniqueIds[id]; !exists {
+// 			uniqueIds[id] = struct{}{}
+// 			mergeSet = append(mergeSet, obj)
+// 		}
+// 	}
+
+// 	// Metric collection
+// 	Logf("Delta stats: %d total items, %d new/updated, %d deleted\n",
+// 		len(deltaSet), len(mergeSet), len(deletedIds))
+
+// 	// 2. Batch deletion optimized for AzureObjectList
+// 	if len(deletedIds) > 0 {
+// 		c.BatchDeleteByIds(deletedIds)
+// 	}
+
+// 	// 3. Sequential upsert
+// 	if c.Count() == 0 {
+// 		// Optimized path for initial load
+// 		// Pre-allocate slice
+// 		c.data = make(AzureObjectList, 0, len(mergeSet))
+
+// 		// Bulk append without per-item processing, with proper ID checking
+// 		for _, obj := range mergeSet {
+// 			id := ExtractID(obj)
+// 			if id == "" {
+// 				Logf("WARNING: object with blank ID not added to cache\n")
+// 				continue
+// 			}
+// 			c.data = append(c.data, obj)
+// 		}
+// 	} else {
+// 		for _, obj := range mergeSet {
+// 			if err := c.upsertLocked(obj); err != nil {
+// 				fmt.Printf("WARNING: %v\n", err)
+// 			}
+// 		}
+// 	}
+
+// 	Logf("Normalize completed in %v (%.1f items/sec)\n",
+// 		time.Since(start),
+// 		float64(len(deltaSet))/time.Since(start).Seconds())
+// }
 
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
+	Logf("Normalizing cache...")
 	start := time.Now()
-
-	// Process changes under single lock
-	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	// Early Exit for Empty Deltas
 	if len(deltaSet) == 0 {
@@ -280,12 +351,10 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 	}
 
 	// 1. Process deltaSet to track changes
-	deletedIds := make(utl.StringSet)                   // Track IDs to delete
-	uniqueIds := make(utl.StringSet)                    // Track unique IDs in the deltaSet
-	mergeSet := make(AzureObjectList, 0, len(deltaSet)) // List for new/updated objects in deltaSet
-
+	deletedIds := make(utl.StringSet)             // Track IDs to delete
+	uniqueUpdates := make(map[string]AzureObject) // Track unique ID -> object
 	for _, obj := range deltaSet {
-		id := utl.Str(obj["id"])
+		id := ExtractID(obj)
 		if id == "" {
 			continue
 		}
@@ -294,11 +363,14 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 			deletedIds[id] = struct{}{}
 			continue
 		}
-		// Dedupe in mergeSet
-		if _, exists := uniqueIds[id]; !exists {
-			uniqueIds[id] = struct{}{}
-			mergeSet = append(mergeSet, obj)
-		}
+		// Dedupe in update set (keep last seen object per ID)
+		uniqueUpdates[id] = obj
+	}
+
+	// Build mergeSet from unique map
+	mergeSet := make(AzureObjectList, 0, len(uniqueUpdates))
+	for _, obj := range uniqueUpdates {
+		mergeSet = append(mergeSet, obj)
 	}
 
 	// Metric collection
@@ -306,6 +378,10 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 		len(deltaSet), len(mergeSet), len(deletedIds))
 
 	// 2. Batch deletion optimized for AzureObjectList
+	// Process changes under single lock
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if len(deletedIds) > 0 {
 		c.BatchDeleteByIds(deletedIds)
 	}
@@ -326,9 +402,25 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 			c.data = append(c.data, obj)
 		}
 	} else {
+		// Fast index for current data
+		existingIndex := make(map[string]int, len(c.data))
+		for i, obj := range c.data {
+			id := ExtractID(obj)
+			if id != "" {
+				existingIndex[id] = i
+			}
+		}
+
 		for _, obj := range mergeSet {
-			if err := c.upsertLocked(obj); err != nil {
-				fmt.Printf("WARNING: %v\n", err)
+			id := ExtractID(obj)
+			if id == "" {
+				Logf("WARNING: object with blank ID not processed\n")
+				continue
+			}
+			if idx, exists := existingIndex[id]; exists {
+				c.data[idx] = obj
+			} else {
+				c.data = append(c.data, obj)
 			}
 		}
 	}
