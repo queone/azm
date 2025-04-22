@@ -51,10 +51,15 @@ Microsoft’s Implicit Guidance:
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
 func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectList, AzureObject) {
+
 	Logf("Starting directory objects delta fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 	currentUrl := apiUrl
+
+	// Save interval configuration
+	const saveInterval = 5000 // Save every 5000 items
+	lastSave := 0             // Moved outside the loop
 
 	// Continue fetching until we've processed all pages
 	for currentUrl != "" {
@@ -73,10 +78,6 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 				}
 			}
 		}
-
-		// Save interval configuration
-		const saveInterval = 5000 // Save every 5000 items
-		var lastSave int
 
 		// Log progress and save partial delta set periodically
 		currentCount := len(deltaSet)
@@ -98,6 +99,13 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 
 		// Move to next page if available
 		currentUrl = utl.Str(resp["@odata.nextLink"])
+	}
+
+	// Final save (ensure we capture everything)
+	if len(deltaSet) > 0 && len(deltaSet) != lastSave {
+		if err := SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false); err != nil {
+			Logf("WARNING: Final save failed: %v\n", err)
+		}
 	}
 
 	countStr := utl.Cya(utl.ToStr(len(deltaSet)))
