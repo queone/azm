@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -260,6 +261,15 @@ func logResponseDetails(resp *http.Response, result map[string]interface{}) {
 		case map[string]interface{}:
 			simplified[k] = "{...}"
 		default:
+			// Special case for @odata.deltaLink abbreviation
+			if k == "@odata.deltaLink" {
+				strVal := utl.Str(val)
+				re := regexp.MustCompile(`(?i)/delta\?(.{20})`)
+				if matches := re.FindStringSubmatch(strVal); len(matches) == 2 {
+					simplified[k] = fmt.Sprintf(".../delta?%s{__ABRIDGED__}...", matches[1])
+					break
+				}
+			}
 			simplified[k] = val
 		}
 	}
