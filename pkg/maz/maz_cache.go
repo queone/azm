@@ -1,6 +1,7 @@
 package maz
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -18,6 +19,52 @@ type Cache struct {
 	partialFilePath string // file path for saving in-progress deltaSet
 	data            AzureObjectList
 	mu              sync.Mutex
+}
+
+// Cache initialization flow:
+// 1. NewCache() - Creates instance with paths
+// 2. Either:
+//    a) GetCache() - Normal usage (loads or creates)
+//    b) Manual setup - For special cases (resume, purge, etc)
+
+// Creates a Cache instance with properly initialized paths but doesn't load data
+func NewCache(mazType string, z *Config) (*Cache, error) {
+	if z == nil || z.TenantId == "" {
+		return nil, errors.New("invalid config: missing tenant ID")
+	}
+
+	suffix, ok := CacheSuffix[mazType]
+	if !ok {
+		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
+	}
+
+	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
+	return &Cache{
+		filePath:        cacheFile,
+		deltaLinkFile:   cacheFile[:len(cacheFile)-4] + "_link.bin",
+		partialFilePath: cacheFile[:len(cacheFile)-4] + "_partial.bin",
+		data:            AzureObjectList{},
+	}, nil
+}
+
+// Loads or creates a cache, initializing all required paths
+func GetCache(mazType string, z *Config) (*Cache, error) {
+	cache, err := NewCache(mazType, z)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cache.Load(); err != nil {
+		if os.IsNotExist(err) {
+			// Initialize new cache file
+			if err := cache.Save(); err != nil {
+				return nil, fmt.Errorf("failed to create new cache file: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("unexpected error while loading cache: %w", err)
+		}
+	}
+	return cache, nil
 }
 
 // Extracts the Azure object's ID
@@ -38,69 +85,6 @@ func ExtractID(obj AzureObject) string {
 	return ""
 }
 
-// Initializes a Cache instance for a given type.
-// If the cache file exists, it loads the existing cache; otherwise, it creates a new one.
-func GetCache(mazType string, z *Config) (*Cache, error) {
-	// Ensure the type is valid
-	suffix, ok := CacheSuffix[mazType]
-	if !ok {
-		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
-	}
-
-	// Construct both file paths
-	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
-	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin"      // Replace ".bin" with "_link.bin"
-	partialFilePath := cacheFile[:len(cacheFile)-4] + "_partial.bin" // e.g., "tenant_users_partial.bin"
-
-	// Initialize cache fields
-	cache := &Cache{
-		filePath:        cacheFile,
-		deltaLinkFile:   deltaLinkFile,
-		partialFilePath: partialFilePath,
-		data:            AzureObjectList{},
-	}
-
-	// Try loading the cache
-	if err := cache.Load(); err != nil {
-		if os.IsNotExist(err) {
-			// If the file doesn't exist, initialize an empty cache and create the file
-			cache.data = AzureObjectList{}
-			if saveErr := cache.Save(); saveErr != nil {
-				return nil, fmt.Errorf("failed to create new cache file: %w", saveErr)
-			}
-		} else {
-			return nil, fmt.Errorf("unexpected error while loading cache: %w", err)
-		}
-	}
-	return cache, nil
-}
-
-// Purges files associated with cache for a given type.
-func PurgeCacheFiles(mazType string, z *Config) error {
-	// Validate the input type and get the suffix.
-	suffix, ok := CacheSuffix[mazType]
-	if !ok {
-		msg := "invalid object type code"
-		Logf("Error: %s %s\n", msg, utl.Red(mazType))
-		return fmt.Errorf("%s: %s", msg, mazType)
-	}
-
-	// Create a minimal Cache instance just for file paths
-	cache := &Cache{
-		filePath:        filepath.Join(MazConfigDir, z.TenantId+suffix+".bin"),
-		deltaLinkFile:   filepath.Join(MazConfigDir, z.TenantId+suffix+"_link.bin"),
-		partialFilePath: filepath.Join(MazConfigDir, z.TenantId+suffix+"_partial.bin"),
-	}
-
-	// Use the existing Erase method
-	if err := cache.Erase(); err != nil {
-		Logf("Error purging cache files: %v\n", err)
-		return fmt.Errorf("purge failed: %w", err)
-	}
-
-	return nil
-}
-
 // Attempts to resume cache normalization from a partial delta set file if available.
 func (c *Cache) ResumeFromPartialDelta(mazType string) error {
 	// If a usable partial file exists, always normalize it into the cache
@@ -109,22 +93,40 @@ func (c *Cache) ResumeFromPartialDelta(mazType string) error {
 		partialSet, err := LoadFileBinaryList(c.partialFilePath, false)
 		if err == nil && len(partialSet) > 0 {
 			Logf("Loaded %d items from partial delta set. Normalizing...\n", len(partialSet))
+
 			// Normalize the cache with the partial set
 			c.Normalize(mazType, partialSet)
+
 			// Save the cache after normalization
 			if err := c.Save(); err != nil {
 				return fmt.Errorf("error saving cache after partial normalize: %w", err)
 			}
+
 			// Clean up the partial file once processed
-			err = os.Remove(c.partialFilePath)
-			if err != nil {
-				Logf("Error deleting partial file %s: %v\n", c.partialFilePath, err)
+			if removeErr := os.Remove(c.partialFilePath); removeErr != nil {
+				// Retry once if deletion fails (e.g., transient file lock)
+				time.Sleep(500 * time.Millisecond)
+				removeErr = os.Remove(c.partialFilePath)
+				if removeErr != nil {
+					Logf("Error deleting partial file %s after retry: %v\n", c.partialFilePath, removeErr)
+				}
 			}
 		} else {
 			Logf("WARNING: Failed to read partial file: %v — continuing with delta fetch\n", err)
 		}
 	}
 	return nil
+}
+
+// Purges files associated with cache for a given type.
+func PurgeCacheFiles(mazType string, z *Config) error {
+	// Create a minimal Cache instance just for file paths
+	cache, err := NewCache(mazType, z)
+	if err != nil {
+		Logf("Error: %v\n", err)
+		return err
+	}
+	return cache.Erase()
 }
 
 // Deletes files associated with the cache
