@@ -51,7 +51,7 @@ Microsoft’s Implicit Guidance:
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
 func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectList, AzureObject) {
-	Logf("Starting sequential directory objects fetch\n")
+	Logf("Starting directory objects delta fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 	currentUrl := apiUrl
@@ -74,11 +74,21 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 			}
 		}
 
-		// Log progress periodically and save partial delta set
-		if len(deltaSet)%1000 == 0 {
-			countStr := utl.Cya(utl.ToStr(len(deltaSet)))
+		// Save interval configuration
+		const saveInterval = 1000 // Save every 1000 items
+		var lastSave int
+
+		// Log progress and save partial delta set periodically
+		currentCount := len(deltaSet)
+		if currentCount-lastSave >= saveInterval {
+			countStr := utl.Cya(utl.ToStr(currentCount))
 			Logf("Processed %s items (current URL: %s)\n", countStr, currentUrl)
-			SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false)
+
+			if err := SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false); err != nil {
+				Logf("WARNING: Failed to save partial delta set: %v\n", err)
+			}
+
+			lastSave = currentCount // Update last save position
 		}
 
 		// Check for delta link first (higher priority than nextLink)
@@ -203,7 +213,7 @@ func getWorkerConfig() (workers, bufSize int) {
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
 func FetchDirObjectsDeltaParallel(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
-	Logf("Fetching directory objects delta\n")
+	Logf("Starting directory objects delta fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 
