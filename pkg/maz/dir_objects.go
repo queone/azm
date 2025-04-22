@@ -159,7 +159,7 @@ func initializeCacheWithResume(mazType string, z *Config) (*Cache, error) {
 			return nil, err
 		}
 
-		// Use existing Normalize() to merge the partial data
+		Logf("Normalize the cache with the partial delta set\n")
 		cache.Normalize(mazType, tempCache.data)
 		return cache, nil
 	}
@@ -306,6 +306,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 		}
 	}
 
+	Logf("Normalize the cache with the normal delta set\n")
 	cache.Normalize(mazType, deltaSet)
 	if err := cache.Save(); err != nil {
 		utl.Die("Error saving cache: %v", err)
