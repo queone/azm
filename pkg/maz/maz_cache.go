@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/queone/utl"
 )
@@ -111,23 +112,23 @@ func (c *Cache) Erase() error {
 	return nil
 }
 
-// LoadDeltaLink loads the delta link from the file, if it exists and is valid.
+// Loads the delta link map from the file, if it exists and is valid.
 func (c *Cache) LoadDeltaLink() (AzureObject, error) {
 	if !utl.FileUsable(c.deltaLinkFile) || utl.FileAge(c.deltaLinkFile) >= (3660*24*27) {
 		// Delta link file is either unusable or expired
 		// Note that deltaLink file age has to be within 30 days (we do 27)
 		return nil, nil
 	}
-	deltaLinkMap, err := LoadFileBinaryObject(c.deltaLinkFile)
+	deltaLinkMap, err := LoadFileBinaryMap(c.deltaLinkFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load delta link: %w", err)
 	}
 	return deltaLinkMap, nil
 }
 
-// SaveDeltaLink saves the provided delta link to the file.
+// Saves the provided delta link map to the file.
 func (c *Cache) SaveDeltaLink(deltaLinkMap AzureObject) error {
-	return SaveFileBinaryObject(c.deltaLinkFile, deltaLinkMap, 0600)
+	return SaveFileBinaryMap(c.deltaLinkFile, deltaLinkMap, 0600)
 }
 
 // Age returns the age of the cache file in seconds. If the file does not
@@ -266,9 +267,17 @@ func (c *Cache) upsertLocked(obj AzureObject) error {
 
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
+	start := time.Now()
+
 	// Process changes under single lock
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Early Exit for Empty Deltas
+	if len(deltaSet) == 0 {
+		Logf("Empty deltaSet received - no changes to process\n")
+		return
+	}
 
 	// 1. Process deltaSet to track changes
 	deletedIds := make(utl.StringSet)                   // Track IDs to delete
@@ -292,6 +301,10 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 		}
 	}
 
+	// Metric collection
+	Logf("Delta stats: %d total items, %d new/updated, %d deleted\n",
+		len(deltaSet), len(mergeSet), len(deletedIds))
+
 	// 2. Batch deletion optimized for AzureObjectList
 	if len(deletedIds) > 0 {
 		c.BatchDeleteByIds(deletedIds)
@@ -307,7 +320,7 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 		for _, obj := range mergeSet {
 			id := ExtractID(obj)
 			if id == "" {
-				fmt.Printf("WARNING: object with blank ID not added to cache\n")
+				Logf("WARNING: object with blank ID not added to cache\n")
 				continue
 			}
 			c.data = append(c.data, obj)
@@ -319,4 +332,8 @@ func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
 			}
 		}
 	}
+
+	Logf("Normalize completed in %v (%.1f items/sec)\n",
+		time.Since(start),
+		float64(len(deltaSet))/time.Since(start).Seconds())
 }

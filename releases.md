@@ -1,5 +1,12 @@
 ## Releases
 
+### v1.0.2
+Release Date: 2025-apr-22
+- Renamed SaveFileBinaryObject & LoadFileBinaryObject to SaveFileBinaryMap and LoadFileBinaryMap, switching to more appropriate type
+- Added additional improved logging to cache Normalize method
+- Moved delta fetch logic to its own file, pkg/maz/dir_objects_fetch.go 
+- Refactored delta query logic to clarify sequential processing constraints and deprecated parallel attempt.
+
 ### v1.0.1
 Release Date: 2025-apr-21
 - Added -race to go test build command, to check for potential race conditions
