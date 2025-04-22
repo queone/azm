@@ -13,10 +13,11 @@ import (
 
 // Cache type
 type Cache struct {
-	filePath      string
-	deltaLinkFile string
-	data          AzureObjectList
-	mu            sync.Mutex
+	filePath        string
+	deltaLinkFile   string
+	partialFilePath string // file path for saving in-progress deltaSet
+	data            AzureObjectList
+	mu              sync.Mutex
 }
 
 // Extracts the Azure object's ID
@@ -48,11 +49,15 @@ func GetCache(mazType string, z *Config) (*Cache, error) {
 
 	// Construct both file paths
 	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
-	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
+	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin"      // Replace ".bin" with "_link.bin"
+	partialFilePath := cacheFile[:len(cacheFile)-4] + "_partial.bin" // e.g., "tenant_users_partial.bin"
 
+	// Initialize cache fields
 	cache := &Cache{
-		filePath:      cacheFile,
-		deltaLinkFile: deltaLinkFile,
+		filePath:        cacheFile,
+		deltaLinkFile:   deltaLinkFile,
+		partialFilePath: partialFilePath,
+		data:            AzureObjectList{},
 	}
 
 	// Try loading the cache
@@ -70,7 +75,7 @@ func GetCache(mazType string, z *Config) (*Cache, error) {
 	return cache, nil
 }
 
-// Purges cache and delta link files for a given type.
+// Purges files associated with cache for a given type.
 func PurgeCacheFiles(mazType string, z *Config) error {
 	// Validate the input type and get the suffix.
 	suffix, ok := CacheSuffix[mazType]
@@ -80,34 +85,52 @@ func PurgeCacheFiles(mazType string, z *Config) error {
 		return fmt.Errorf("%s: %s", msg, mazType)
 	}
 
-	// Build the cache and delta link file paths without loading the cache
-	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
-	deltaLinkFile := cacheFile[:len(cacheFile)-4] + "_link.bin" // Replace ".bin" with "_link.bin"
-
-	// Remove the cache file.
-	if err := os.Remove(cacheFile); err != nil && !os.IsNotExist(err) {
-		msg := "failed to remove cache file"
-		Logf("Error: %s %s\n", msg, utl.Red(cacheFile))
-		return fmt.Errorf("%s: %w", msg, err)
+	// Create a minimal Cache instance just for file paths
+	cache := &Cache{
+		filePath:        filepath.Join(MazConfigDir, z.TenantId+suffix+".bin"),
+		deltaLinkFile:   filepath.Join(MazConfigDir, z.TenantId+suffix+"_link.bin"),
+		partialFilePath: filepath.Join(MazConfigDir, z.TenantId+suffix+"_partial.bin"),
 	}
 
-	// Remove the delta link file.
-	if err := os.Remove(deltaLinkFile); err != nil && !os.IsNotExist(err) {
-		msg := "failed to remove deltaLink file"
-		Logf("Error: %s %s\n", msg, utl.Red(deltaLinkFile))
-		return fmt.Errorf("%s: %w", msg, err)
+	// Use the existing Erase method
+	if err := cache.Erase(); err != nil {
+		Logf("Error purging cache files: %v\n", err)
+		return fmt.Errorf("purge failed: %w", err)
 	}
 
 	return nil
 }
 
-// Deletes both the cache file and the deltaLink file from the filesystem.
-func (c *Cache) Erase() error {
-	if err := os.Remove(c.filePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove cache file: %w", err)
+// Attempts to resume cache normalization from a partial delta set file if available.
+func (c *Cache) ResumeFromPartialDelta(mazType string) error {
+	// If a usable partial file exists, always normalize it into the cache
+	if utl.FileUsable(c.partialFilePath) {
+		Logf("Partial delta set detected - loading from: %s\n", c.partialFilePath)
+		partialSet, err := LoadFileBinaryList(c.partialFilePath, false)
+		if err == nil && len(partialSet) > 0 {
+			Logf("Loaded %d items from partial delta set. Normalizing...\n", len(partialSet))
+			// Normalize the cache with the partial set
+			c.Normalize(mazType, partialSet)
+			// Save the cache after normalization
+			if err := c.Save(); err != nil {
+				return fmt.Errorf("error saving cache after partial normalize: %w", err)
+			}
+			// Clean up the partial file once processed
+			_ = os.Remove(c.partialFilePath)
+		} else {
+			Logf("WARNING: Failed to read partial file: %v — continuing with delta fetch\n", err)
+		}
 	}
-	if err := os.Remove(c.deltaLinkFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove deltaLink file: %w", err)
+	return nil
+}
+
+// Deletes files associated with the cache
+func (c *Cache) Erase() error {
+	files := []string{c.filePath, c.deltaLinkFile, c.partialFilePath}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove %q: %w", f, err)
+		}
 	}
 	return nil
 }
@@ -131,12 +154,6 @@ func (c *Cache) SaveDeltaLink(deltaLinkMap AzureObject) error {
 	return SaveFileBinaryMap(c.deltaLinkFile, deltaLinkMap, 0600)
 }
 
-// Age returns the age of the cache file in seconds. If the file does not
-// exist or is empty, it returns -1.
-func (c *Cache) Age() int64 {
-	return utl.FileAge(c.filePath)
-}
-
 // Load cache from file
 func (c *Cache) Load() error {
 	// TODO: Maybe take 'compressed' boolean option?
@@ -157,6 +174,12 @@ func (c *Cache) Save() error {
 	defer c.mu.Unlock()
 
 	return SaveFileBinaryList(c.filePath, c.data, 0600, false)
+}
+
+// Age returns the age of the cache file in seconds. If the file does not
+// exist or is empty, it returns -1.
+func (c *Cache) Age() int64 {
+	return utl.FileAge(c.filePath)
 }
 
 // Count returns the number of entries in the cache.
@@ -341,7 +364,7 @@ func MergeAzureObjects(newObj, existingObj AzureObject) {
 
 // Merges the deltaSet with the current cache data.
 func (c *Cache) Normalize(mazType string, deltaSet AzureObjectList) {
-	Logf("Normalizing cache...")
+	Logf("Normalizing cache...\n")
 	start := time.Now()
 
 	// Early Exit for Empty Deltas
