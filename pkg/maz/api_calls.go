@@ -71,8 +71,6 @@ func ApiCall(
 	payload map[string]interface{},
 	params map[string]string,
 ) (map[string]interface{}, int, error) {
-	Logf("%s %s\n", method, apiUrl) // Basic logging info
-
 	// Validate URL
 	if !strings.HasPrefix(apiUrl, "http") {
 		Logf("%s\n", utl.Red2("Error: Bad URL"))
@@ -202,8 +200,7 @@ func logRequestDetails(req *http.Request, payload map[string]interface{}, params
 		}
 	}
 
-	// Single Logf call
-	Logf("%s", b.String())
+	Logf("%s", b.String()) // Single Logf call
 }
 
 // Helper function to partially redact a token (shows first 10 and last 4 chars)
