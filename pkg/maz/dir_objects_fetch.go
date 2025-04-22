@@ -54,17 +54,10 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 	Logf("Starting sequential directory objects fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
-	visitedUrls := make(map[string]bool) // Track URLs we've already processed
 	currentUrl := apiUrl
 
 	// Continue fetching until we've processed all pages
 	for currentUrl != "" {
-		if visitedUrls[currentUrl] {
-			Logf("SKIPPED duplicate URL: %s\n", currentUrl)
-			break
-		}
-		visitedUrls[currentUrl] = true
-
 		// Fetch the current page
 		resp, err := apiGetWithRetry(currentUrl, z, 3)
 		if err != nil {
@@ -83,7 +76,8 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 
 		// Log progress periodically and save partial delta set
 		if len(deltaSet)%1000 == 0 {
-			Logf("Processed %d items (current URL: %s)\n", len(deltaSet), currentUrl)
+			countStr := utl.Cya(utl.ToStr(len(deltaSet)))
+			Logf("Processed %s items (current URL: %s)\n", countStr, currentUrl)
 			SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false)
 		}
 
@@ -96,7 +90,8 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 		currentUrl = utl.Str(resp["@odata.nextLink"])
 	}
 
-	Logf("Completed sequential fetch. Total items: %d\n", len(deltaSet))
+	countStr := utl.Cya(utl.ToStr(len(deltaSet)))
+	Logf("Completed fetch. Total items: %s\n", countStr)
 	return deltaSet, deltaLinkMap
 }
 
@@ -138,7 +133,7 @@ func colorStatus(code int) string {
 
 // ----------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------
-// PARALLEL Attempt, for posterity
+// PARALLEL attempt. Does not work. Keeping for posterity. See notes above.
 
 type deltaSyncState struct {
 	pendingMu   sync.Mutex

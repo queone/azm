@@ -1,5 +1,11 @@
 ## Releases
 
+### v1.0.3
+Release Date: 2025-apr-22
+- Optimized cache Normalize method to avoid the previous locking bottlekneck
+- Added partialFilePath string field to cache, for saving in-progress deltaSet
+- Added new cache ResumeFromPartialDelta method to allow resumming previously interrupted delta fetching
+
 ### v1.0.2
 Release Date: 2025-apr-22
 - Renamed SaveFileBinaryObject & LoadFileBinaryObject to SaveFileBinaryMap and LoadFileBinaryMap, switching to more appropriate type
