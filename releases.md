@@ -1,5 +1,10 @@
 ## Releases
 
+### v1.0.4
+Release Date: 2025-apr-22
+- Updated GetMatchingDirObjects to now call initializeCacheWithResume on every run, to ensure we take into account a previously interrupted partial delta fetch
+- Other minor adjustments
+
 ### v1.0.3
 Release Date: 2025-apr-22
 - Optimized cache Normalize method to avoid the previous locking bottlekneck
