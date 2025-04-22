@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// Saves a single AzureObject as a gob binary file with specified permissions.
-func SaveFileBinaryObject(filePath string, data AzureObject, perm os.FileMode) error {
+// Saves a single map[string]interface{} as a gob binary file with specified permissions.
+// It uses an atomic write strategy to ensure file integrity.
+func SaveFileBinaryMap(filePath string, data map[string]interface{}, perm os.FileMode) error {
 	// Step 1: Encode data into a buffer
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
@@ -35,8 +36,8 @@ func SaveFileBinaryObject(filePath string, data AzureObject, perm os.FileMode) e
 	return nil
 }
 
-// Reads a gob binary file and decodes it into an AzureObject.
-func LoadFileBinaryObject(filePath string) (AzureObject, error) {
+// Reads a gob binary file and decodes it into a map[string]interface{}.
+func LoadFileBinaryMap(filePath string) (map[string]interface{}, error) {
 	// Step 1: Check if the file exists and is usable
 	info, err := os.Stat(filePath)
 	if err != nil {
