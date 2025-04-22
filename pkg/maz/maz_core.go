@@ -348,10 +348,10 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 	// Assume the 2 API tokens will be acquired using the other variables, so let's check them
 	z.Interactive = utl.Bool(mazEnvironmentVars["MAZ_INTERACTIVE"])
 	if z.Interactive {
-		Logf("2. Environment variable MAZ_INTERACTIVE is set to %s", utl.Cya(z.Interactive))
+		Logf("2. Environment variable MAZ_INTERACTIVE is set to %s\n", utl.Cya(z.Interactive))
 		z.Username = strings.ToLower(utl.Str(mazEnvironmentVars["MAZ_USERNAME"]))
 		if z.Username != "" {
-			Logf("3. Environment variable MAZ_USERNAME is set to %s", utl.Cya(z.Username))
+			Logf("3. Environment variable MAZ_USERNAME is set to %s\n", utl.Cya(z.Username))
 			Logf("Attempting %s login\n", utl.Cya("interactive username"))
 		} else {
 			utl.Die("Error: Environment variable MAZ_USERNAME is blank. Cannot continue " +
@@ -363,7 +363,7 @@ func SetupMazCredentialsFromEnvVars(z *Config) {
 			utl.Die("Error: The chosen login method appears to be via environment variables, "+
 				"but variable MAZ_CLIENT_ID '%s' is not a valid UUID. Cannot continue.\n", z.ClientId)
 		}
-		Logf("2. Environment variable MAZ_CLIENT_ID is set to %s", utl.Cya(z.ClientId))
+		Logf("2. Environment variable MAZ_CLIENT_ID is set to %s\n", utl.Cya(z.ClientId))
 		z.ClientSecret = utl.Str(mazEnvironmentVars["MAZ_CLIENT_SECRET"])
 		if z.ClientSecret == "" {
 			utl.Die("Error: The chosen login method appears to be via environment variables, " +
