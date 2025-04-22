@@ -50,6 +50,7 @@ Microsoft’s Implicit Guidance:
 */
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
+// FetchDirObjectsDelta retrieves a full or delta directory object set, returning both the items and the delta link.
 func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectList, AzureObject) {
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
@@ -99,12 +100,10 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 		currentUrl = utl.Str(resp["@odata.nextLink"])
 	}
 
-	// Final save (ensure we capture everything)
-	if len(deltaSet) > 0 && len(deltaSet) != lastSave {
-		if err := SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false); err != nil {
-			Logf("WARNING: Final save failed: %v\n", err)
-		}
-	}
+	// Intentionally skipping final partial file save.
+	// If the loop completed without interruption, the consumer will receive a full deltaSet,
+	// and there's no need to persist a partial file that would immediately be deleted.
+	// Partial saves are only meant to support recovery in case of interrupted long-running fetches.
 
 	countStr := utl.Cya(utl.ToStr(len(deltaSet)))
 	Logf("Completed fetch. Total items: %s\n", countStr)
