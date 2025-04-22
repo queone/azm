@@ -50,7 +50,7 @@ Microsoft’s Implicit Guidance:
 */
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
-func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObject) {
+func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectList, AzureObject) {
 	Logf("Starting sequential directory objects fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
@@ -81,9 +81,10 @@ func FetchDirObjectsDelta(apiUrl string, z *Config) (AzureObjectList, AzureObjec
 			}
 		}
 
-		// Log progress periodically
-		if len(deltaSet)%100 == 0 {
+		// Log progress periodically and save partial delta set
+		if len(deltaSet)%1000 == 0 {
 			Logf("Processed %d items (current URL: %s)\n", len(deltaSet), currentUrl)
+			SaveFileBinaryList(cache.partialFilePath, deltaSet, 0600, false)
 		}
 
 		// Check for delta link first (higher priority than nextLink)

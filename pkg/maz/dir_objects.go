@@ -206,6 +206,12 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 	apiUrl := ConstMgUrl + ApiEndpoint[mazType]
 
+	// Attempt to resume from partial delta
+	if err := cache.ResumeFromPartialDelta(mazType); err != nil {
+		Logf("Error resuming from partial delta: %v\n", err)
+		Logf("Continuing with a normal cache refresh\n")
+	}
+
 	// Use regular pagination for initial sync, delta for updates
 	if cache.Count() == 0 {
 		// Full sync (faster)
@@ -261,7 +267,8 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 		}
 	}
 
-	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, z)
+	Logf("Doing delta fetch\n")
+	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, cache, z)
 
 	// Retry delta token save once before dying
 	if err := cache.SaveDeltaLink(deltaLinkMap); err != nil {
