@@ -51,8 +51,6 @@ Microsoft’s Implicit Guidance:
 
 // Fetches Azure object changes and returns updates + deltaLink for next query
 func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectList, AzureObject) {
-
-	Logf("Starting directory objects delta fetch\n")
 	deltaSet := AzureObjectList{}
 	deltaLinkMap := AzureObject{}
 	currentUrl := apiUrl
