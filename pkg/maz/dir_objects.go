@@ -144,6 +144,52 @@ func PreFetchAzureObject(mazType, identifier string, z *Config) AzureObject {
 	return matchingObjects[0]
 }
 
+// Helper function to handle cache initialization with partial delta resume support
+func initializeCacheWithResume(mazType string, z *Config) (*Cache, error) {
+	// First try to resume partial delta
+	tempCache, err := NewCache(mazType, z)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tempCache.ResumeFromPartialDelta(mazType); err == nil {
+		// Successfully resumed - create fresh cache
+		cache, err := GetCache(mazType, z)
+		if err != nil {
+			return nil, err
+		}
+
+		// Use existing Normalize() to merge the partial data
+		cache.Normalize(mazType, tempCache.data)
+		return cache, nil
+	}
+
+	// Fall back to normal cache load
+	return GetCache(mazType, z)
+}
+
+// Helper function for filtering cache data
+func filterCacheData(data AzureObjectList, filter string) AzureObjectList {
+	matchingList := AzureObjectList{} // Initialize an empty list for matching items
+	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
+
+	for _, obj := range data {
+		// Extract ID and skip if it is empty or has already been seen
+		id := utl.Str(obj["id"])
+		if id == "" || ids.Exists(id) {
+			continue
+		}
+
+		// Check if the object matches the filter
+		if obj.HasString(filter) {
+			matchingList = append(matchingList, obj) // Add matching object to the list
+			ids.Add(id)                              // Mark this ID as seen
+		}
+	}
+
+	return matchingList
+}
+
 // Gets all objects of given type, matching on 'filter'. Returns the entire list if filter is empty "".
 func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureObjectList {
 	// If the filter is a UUID, we deliberately treat it as an ID and perform a
@@ -156,10 +202,10 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 		}
 	}
 
-	// Get current cache data, or initialize a new cache for this type
-	cache, err := GetCache(mazType, z)
+	// Initialize cache with resume logic
+	cache, err := initializeCacheWithResume(mazType, z)
 	if err != nil {
-		utl.Die("Error: %v\n", err)
+		utl.Die("Cache initialization failed: %v\n", err)
 	}
 
 	// Return an empty list if cache is nil and internet is not available
@@ -179,26 +225,7 @@ func GetMatchingDirObjects(mazType, filter string, force bool, z *Config) AzureO
 		return cache.data // Return all data if no filter is specified
 	}
 
-	matchingList := AzureObjectList{} // Initialize an empty list for matching items
-	ids := utl.StringSet{}            // Keep track of unique IDs to eliminate duplicates
-
-	for i := range cache.data {
-		obj := cache.data[i] // No need to cast; should already be AzureObject type
-
-		// Extract ID and skip if it is empty or has already been seen
-		id := utl.Str(obj["id"])
-		if id == "" || ids.Exists(id) {
-			continue
-		}
-
-		// Check if the object matches the filter
-		if obj.HasString(filter) {
-			matchingList = append(matchingList, obj) // Add matching object to the list
-			ids.Add(id)                              // Mark this ID as seen
-		}
-	}
-
-	return matchingList
+	return filterCacheData(cache.data, filter)
 }
 
 // Retrieves all directory objects of given type from Azure and syncs them to local cache.
@@ -267,7 +294,7 @@ func RefreshLocalCacheWithAzure(mazType string, cache *Cache, z *Config) {
 		}
 	}
 
-	Logf("Doing delta fetch\n")
+	Logf("Calling %s delta fetch\n", utl.Cya(MazTypeNames[mazType]))
 	deltaSet, deltaLinkMap := FetchDirObjectsDelta(apiUrl, cache, z)
 
 	// Retry delta token save once before dying
