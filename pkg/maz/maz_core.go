@@ -223,6 +223,18 @@ func PurgeMazObjectCacheFiles(mazType string, z *Config) {
 	}
 }
 
+// Converts C:\path\to\file to /c/path/to/file for Git Bash display compatibility
+func normalizeFilePath(p string) string {
+	if !filepath.IsAbs(p) || len(p) < 3 || p[1] != ':' {
+		return p
+	}
+	drive := strings.ToLower(string(p[0]))
+	if drive < "a" || drive > "z" {
+		return p
+	}
+	return "/" + drive + filepath.ToSlash(p[2:])
+}
+
 // Dumps configured login values
 func DumpLoginValues(z *Config) {
 	fmt.Printf("%s: %s  %s\n", utl.Blu("config_dir"), utl.Gre(MazConfigDir),
@@ -244,16 +256,17 @@ func DumpLoginValues(z *Config) {
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_CLIENT_SECRET"), utl.Gre(os.Getenv("MAZ_CLIENT_SECRET")))
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_MG_TOKEN"), utl.Gre(os.Getenv("MAZ_MG_TOKEN")))
 	fmt.Printf("  %s: %s\n", utl.Blu("MAZ_AZ_TOKEN"), utl.Gre(os.Getenv("MAZ_AZ_TOKEN")))
+
 	fmt.Printf("%s:\n", utl.Blu("config_creds_file"))
 	credsFile := filepath.Join(MazConfigDir, CredentialsFile)
-	fmt.Printf("  %s: %s\n", utl.Blu("file_path"), utl.Gre(credsFile))
+	fmt.Printf("  %s: %s\n", utl.Blu("file_path"), utl.Gre(normalizeFilePath(credsFile)))
 	credsRaw, err := utl.LoadFileYaml(credsFile)
 	if err != nil {
-		utl.Die("  %s\n", utl.Red("Credentials file does not exists yet."))
+		utl.Die("  %s\n", utl.Red("Credentials file does not yest exist."))
 	}
 	if creds := utl.Map(credsRaw); creds != nil {
 		fmt.Printf("  %s: %s\n", utl.Blu("tenant_id"), utl.Gre(utl.Str(creds["tenant_id"])))
-		if strings.ToLower(utl.Str(creds["interactive"])) == "true" {
+		if utl.Bool(creds["interactive"]) {
 			fmt.Printf("  %s: %s\n", utl.Blu("username"), utl.Gre(utl.Str(creds["username"])))
 			fmt.Printf("  %s: %s\n", utl.Blu("interactive"), utl.Mag("true"))
 		} else {

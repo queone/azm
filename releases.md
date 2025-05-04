@@ -1,5 +1,10 @@
 ## Releases
 
+### v1.0.5
+Release Date: 2025-may-04
+- Fixed option -id
+- Also normalize file path for -id
+
 ### v1.0.4
 Release Date: 2025-apr-22
 - Updated GetMatchingDirObjects to now call initializeCacheWithResume on every run, to ensure we take into account a previously interrupted partial delta fetch
