@@ -1,5 +1,9 @@
 ## Releases
 
+### v1.0.6
+Release Date: 2025-may-14
+- Workaround to get group members which have SPs. API 'v1.0' doesn't work and we're forced to use 'beta'
+
 ### v1.0.5
 Release Date: 2025-may-04
 - Fixed option -id

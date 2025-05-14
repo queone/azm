@@ -60,7 +60,10 @@ func PrintGroup(x AzureObject, z *Config) {
 	}
 
 	// Print members of this group
-	apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members" // beta works
+	//apiUrl = ConstMgUrl + "/v1.0/groups/" + id + "/members"
+	apiUrl = ConstMgUrl + "/beta/groups/" + id + "/members"
+	// API v1.0 does not currently work for SP members
+	// See https://developer.microsoft.com/en-us/graph/known-issues/?search=25984
 	resp, statCode, _ = ApiGet(apiUrl, z, nil)
 	if statCode != 200 {
 		Logf("%s\n", utl.Red2(fmt.Sprintf("HTTP %d: %s", statCode, ApiErrorMsg(resp))))
