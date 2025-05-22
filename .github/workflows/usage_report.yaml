@@ -1,0 +1,62 @@
+name: Usage Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Usage Report'
+        required: true
+        default: 'main'
+        type: string
+  
+  # schedule:
+  #   - cron: "0 3 * * *"  # Run daily at 3am
+  #     timezone: "America/New_York"
+
+permissions:
+  id-token: write
+  contents:  write
+  pull-requests: read
+
+jobs:
+  usage-report:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/queone/quebase
+    steps:
+
+      - name: Checkout mybranch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || 'main' }}
+
+      # - name: Retrieve Github credentials from Vault
+      #   uses: hashicorp/vault-action@v3
+      #   with:
+      #     url: https://vault.mydomain.com
+      #     method: jwt
+      #     path: jwt_github
+      #     role: new-vault-role
+      #     secrets: |
+      #       secret/data/some/path/github/sub/folder/read-access-file APP_ID | APP_ID ;
+      #       secret/data/some/path/github/sub/folder/read-access-file INST_ID | INST_ID ;
+      #       secret/data/some/path/github/sub/folder/read-access-file PRIV_KEY | PRIV_KEY ;
+
+      - name: Run Usage Report
+        run: |
+          # echo "Using APP_ID : ${APP_ID:-Token_Not_Acquired}"
+          # echo "Using INST_ID: ${INST_ID:-Token_Not_Acquired}"
+          # [[ -z "${APP_ID}"" || -z "${INST_ID}"" || -z "${PRIV_KEY}"" ]] && exit 1
+          # python scripts/usage_report.py
+          printf "\n# Lenny wuz here!\n\n" >> README.md
+
+      - name: Commit changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory /__w/container_user/container_user
+          git pull
+          git add .
+          Date=$(TZ="America/New_York" date '+%a, %Y-%b-%d %I:%M%p')
+          git commit -m "Automated Usage Report: ${Date}" || echo "No changes to commit"
+          git push
