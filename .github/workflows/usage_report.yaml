@@ -54,7 +54,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global --add safe.directory /__w/container_user/container_user
+          git config --global --add safe.directory /__w/azm/azm
           git pull
           git add .
           Date=$(TZ="America/New_York" date '+%a, %Y-%b-%d %I:%M%p')
