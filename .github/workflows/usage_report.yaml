@@ -57,7 +57,7 @@ jobs:
           # echo "Using INST_ID: ${INST_ID:-Token_Not_Acquired}"
           # [[ -z "${APP_ID}"" || -z "${INST_ID}"" || -z "${PRIV_KEY}"" ]] && exit 1
           # python scripts/usage_report.py
-          printf "\n# Someone wuz here!\n\n" >> README.md
+          printf "\n# Someone wuz here YET AGAIN!\n\n" >> README.md
       
       - name: Commit changes
         run: |
