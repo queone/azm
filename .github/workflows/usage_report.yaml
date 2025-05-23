@@ -48,7 +48,7 @@ jobs:
           # echo "Using INST_ID: ${INST_ID:-Token_Not_Acquired}"
           # [[ -z "${APP_ID}"" || -z "${INST_ID}"" || -z "${PRIV_KEY}"" ]] && exit 1
           # python scripts/usage_report.py
-          printf "\n# Lenny wuz here!\n\n" >> README.md
+          printf "\n# Someone wuz here!\n\n" >> README.md
 
       - name: Commit changes
         run: |
@@ -60,3 +60,41 @@ jobs:
           Date=$(TZ="America/New_York" date '+%a, %Y-%b-%d %I:%M%p')
           git commit -m "Automated Usage Report: ${Date}" || echo "No changes to commit"
           git push
+
+      # # ALTERNATE: PR with auto-merge
+      # - name: Create new branch and commit changes
+      #   run: |
+      #     git config --global user.name "github-actions[bot]"
+      #     git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config --global --add safe.directory /__w/azm/azm
+      #     git checkout -b usage-report-$(date +%Y%m%d%H%M%S)
+      #     git add README.md
+      #     Date=$(TZ="America/New_York" date '+%a, %Y-%b-%d %I:%M%p')
+      #     git commit -m "Usage Report: ${Date}" || echo "No changes to commit"
+      #     git push --set-upstream origin $(git rev-parse --abbrev-ref HEAD)
+
+      # - name: Create pull request
+      #   # GH_TOKEN must have contents: write and pull-requests: write
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh pr create \
+      #       --title "Automated Usage Report" \
+      #       --body "Daily usage report update." \
+      #       --base main \
+      #       --head $(git rev-parse --abbrev-ref HEAD)
+
+      # - name: Enable auto-merge
+      #   # Repo settings must allow auto-merge:
+      #   # Settings > Pull Requests > Enable auto-merge
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     pr_url=$(gh pr list --state open --head $(git rev-parse --abbrev-ref HEAD) --json url -q '.[0].url')
+      #     gh pr merge "$pr_url" --auto --squash
+
+      # # Optional: Auto-approve step (requires PAT or GitHub App with approve permission)
+      # # - name: Auto-approve PR (example, not active)
+      # #   uses: hmarr/auto-approve-action@v3
+      # #   with:
+      # #     github-token: ${{ secrets.PAT_WITH_APPROVE_SCOPE }}
