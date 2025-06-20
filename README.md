@@ -24,10 +24,4 @@ To get started with azm, follow these steps:
 - Try experimenting with different options and arguments
 
 ## Releases
-
 See [releases](releases.md) for the changelogs.
-
-# Someone wuz here!
-
-# Someone wuz here YET AGAIN!
-
