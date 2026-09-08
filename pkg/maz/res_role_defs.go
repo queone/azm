@@ -234,7 +234,7 @@ func RenameResRoleDefinition(force bool, currentName, newName string, z *Config)
 
 	// Rename it
 	Logf("Renaming %s %s FROM %s TO %s\n", mazTypeName, id, utl.Yel(existingName), utl.Yel(newName))
-	obj["properties"].(map[string]interface{})["roleName"] = newName // Rename it
+	obj["properties"].(map[string]any)["roleName"] = newName // Rename it
 	UpsertAzureResRoleDefinition(force, obj, z)
 }
 
@@ -244,7 +244,7 @@ func UpsertAzureResRoleDefinition(force bool, obj AzureObject, z *Config) {
 
 	// Ensure required 'type' is set to CustomRole. Below addition with an assertion works because
 	// we have already validated that 'properties' is indeed part of the object's structure.
-	obj["properties"].(map[string]interface{})["type"] = "CustomRole"
+	obj["properties"].(map[string]any)["type"] = "CustomRole"
 
 	// Check if role definition already exists
 	var azureObj AzureObject

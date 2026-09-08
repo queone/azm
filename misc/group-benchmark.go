@@ -10,16 +10,16 @@ import (
 )
 
 // Generates dummy JSON groups and save to file for testing.
-func GenerateDummyGroupsJson(count int, filePath string) ([]interface{}, string) {
+func GenerateDummyGroupsJson(count int, filePath string) ([]any, string) {
 	rand.Seed(uint64(time.Now().UnixNano())) // Seed random number generator
-	groups := make([]interface{}, count)
-	for i := 0; i < count; i++ {
+	groups := make([]any, count)
+	for i := range count {
 		displayName := fmt.Sprintf("group-%05d", i+1)
 		description := fmt.Sprintf("group %s", utl.GenerateRandomString(20))
 		isAssignableToRole := rand.Intn(2) == 1
 
 		// Create a new JSON object as a map
-		group := map[string]interface{}{
+		group := map[string]any{
 			"id":                 uuid.New().String(), // Unique ID
 			"displayName":        displayName,         // Unique display name
 			"description":        description,         // Description with random text
@@ -43,7 +43,7 @@ func GenerateDummyGroupsJson(count int, filePath string) ([]interface{}, string)
 
 	// Return the generated groups and one random group's UUID
 	randomIndex := rand.Intn(count)
-	randomGroup := groups[randomIndex].(map[string]interface{})
+	randomGroup := groups[randomIndex].(map[string]any)
 	return groups, randomGroup["id"].(string)
 }
 

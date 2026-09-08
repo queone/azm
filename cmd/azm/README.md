@@ -249,8 +249,8 @@ To compile `azm`, first make sure you have installed and set up the Go language 
 
 - Also ensure that `$GOPATH/bin/` is in your `$PATH`, since that's where the executable binary will be placed.
 - Open a `bash` shell, clone this repo, then switch to the `azm` working directory
-- Type `./build` to build the binary executable
-- To build from a *regular* Windows Command Prompt, just run the corresponding line in the `build` file (`go build ...`)
+- Type `./build.sh` to build, validate, and install the binary executable
+- To build from a *regular* Windows Command Prompt, just run the corresponding line in the `build.sh` script (`go build ...`)
 - If there are no errors, you should now be able to type `azm` and see the usage screen for this utility.
 
 This utility has been successfully tested on macOS, Ubuntu Linux, and Windows. In Windows it works from a regular CMD.EXE, or PowerShell prompts, as well as from a GitBASH prompt. Remember that Go allows cross-compilation targets to be other OSes, so for examplce, from a Windows machine you can compile a Linux executable binary.

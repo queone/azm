@@ -54,8 +54,8 @@ func PrintTokenComponents(parts []string) {
 	claimsJSON, _ := base64.RawURLEncoding.DecodeString(parts[1])
 	signature := parts[2]
 
-	var header map[string]interface{}
-	var claims map[string]interface{}
+	var header map[string]any
+	var claims map[string]any
 	json.Unmarshal(headerJSON, &header)
 	json.Unmarshal(claimsJSON, &claims)
 
@@ -103,8 +103,8 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 	headerJSON, _ := base64.RawURLEncoding.DecodeString(parts[0])
 	claimsJSON, _ := base64.RawURLEncoding.DecodeString(parts[1])
 
-	var header map[string]interface{}
-	var claims map[string]interface{}
+	var header map[string]any
+	var claims map[string]any
 	json.Unmarshal(headerJSON, &header)
 	json.Unmarshal(claimsJSON, &claims)
 
@@ -121,7 +121,7 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 	defer resp.Body.Close()
 
 	var jwks struct {
-		Keys []map[string]interface{} `json:"keys"`
+		Keys []map[string]any `json:"keys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
 		return false, fmt.Errorf("failed to decode JWKS: %w", err)
@@ -130,7 +130,7 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 	var pubKey *rsa.PublicKey
 	for _, key := range jwks.Keys {
 		if key["kid"] == kid {
-			if x5cArr, ok := key["x5c"].([]interface{}); ok && len(x5cArr) > 0 {
+			if x5cArr, ok := key["x5c"].([]any); ok && len(x5cArr) > 0 {
 				decodedCert, _ := base64.StdEncoding.DecodeString(x5cArr[0].(string))
 				cert, err := x509.ParseCertificate(decodedCert)
 				if err == nil {
@@ -155,7 +155,7 @@ func VerifyAzureJwt(tokenString string) (bool, error) {
 	switch tokenType {
 	case AzApiToken:
 		Logf("Verifying AZ token\n")
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			return pubKey, nil
 		}, jwt.WithAudience(aud), jwt.WithIssuer(iss))
 
@@ -209,7 +209,7 @@ func GetApiTokenType(parts []string) string {
 		return UnknownApiToken
 	}
 
-	var claims map[string]interface{}
+	var claims map[string]any
 	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
 		return UnknownApiToken
 	}
@@ -238,7 +238,7 @@ func GetTokenSuffix(tokenString string) string {
 }
 
 // Convert a Unix timestamp (float, int, etc.) to a readable date-time string.
-func UnixDateTimeString(exp interface{}) string {
+func UnixDateTimeString(exp any) string {
 	var ts int64
 
 	switch v := exp.(type) {

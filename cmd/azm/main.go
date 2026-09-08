@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	program_name    = "azm"
-	program_version = "1.0.6"
+	programName    = "azm"
+	programVersion = "1.1.0"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
 
 func printUsage(extended bool) {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	X := utl.Red("X")
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Azure IAM CLI utility - github.com/queone/azm\n"+
@@ -124,6 +124,7 @@ func printUsage(extended bool) {
 		"  -td \"TokenString\"                Decode given JWT token string\n"+
 		"  -uuid                            Generate a random UUID\n"+
 		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
+		"  -v, --version                    Display the program version\n"+
 		"  -?, -h, --help                   Display the full list of options\n"+
 		"  LOGGING NOTE                     Use MAZLOG=1 to see extended logging\n",
 		utl.Whi2("Other Options"), X, X)
@@ -137,12 +138,21 @@ func printUsage(extended bool) {
 }
 
 func printUnknownCommandError() {
-	args := utl.Yel(program_name + " " + strings.Join(os.Args[1:], " "))
-	help := utl.Yel(program_name + " -h")
+	args := utl.Yel(programName + " " + strings.Join(os.Args[1:], " "))
+	help := utl.Yel(programName + " -h")
 	utl.Die("Unsupported command: %s. Run %s for more info.\n", args, help)
 }
 
+// versionLine returns the exact text printed by -v and --version.
+func versionLine() string {
+	return programName + " v" + programVersion
+}
+
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Println(versionLine())
+		return
+	}
 	maz.PrintRuntimeInfo()
 	numberOfArguments := len(os.Args[1:]) // Exclude the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {

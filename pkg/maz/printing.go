@@ -183,7 +183,7 @@ func PrintObject(mazType string, x AzureObject, z *Config) {
 }
 
 // Prints appRoleAssignments for given service principal (SP)
-func PrintAppRoleAssignmentsSp(roleNameMap map[string]string, appRoleAssignments []interface{}) {
+func PrintAppRoleAssignmentsSp(roleNameMap map[string]string, appRoleAssignments []any) {
 	if len(appRoleAssignments) < 1 {
 		return
 	}
@@ -209,7 +209,7 @@ func PrintAppRoleAssignmentsSp(roleNameMap map[string]string, appRoleAssignments
 }
 
 // Prints appRoleAssignments for other types of objects (Users and Groups)
-func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) {
+func PrintAppRoleAssignmentsOthers(appRoleAssignments []any, z *Config) {
 	if len(appRoleAssignments) < 1 {
 		return
 	}
@@ -259,7 +259,7 @@ func PrintAppRoleAssignmentsOthers(appRoleAssignments []interface{}, z *Config) 
 }
 
 // Prints all memberOf entries
-func PrintMemberOfs(memberOf []interface{}) {
+func PrintMemberOfs(memberOf []any) {
 	if len(memberOf) < 1 {
 		return
 	}
@@ -299,7 +299,7 @@ func ColorizeExpiryDateTime(endDateTime string) string {
 }
 
 // Prints secret list stanza for App and SP objects
-func PrintSecretList(secretsList []interface{}) {
+func PrintSecretList(secretsList []any) {
 	if len(secretsList) < 1 {
 		return
 	}
@@ -331,7 +331,7 @@ func PrintSecretList(secretsList []interface{}) {
 }
 
 // Prints certificate list stanza for Apps and Sps
-func PrintCertificateList(certificates []interface{}) {
+func PrintCertificateList(certificates []any) {
 	if len(certificates) < 1 {
 		return
 	}
@@ -364,7 +364,7 @@ func PrintCertificateList(certificates []interface{}) {
 }
 
 // Print owners stanza for applications and service principals
-func PrintOwners(owners []interface{}) {
+func PrintOwners(owners []any) {
 	if len(owners) < 1 {
 		return
 	}

@@ -7,16 +7,16 @@ import (
 )
 
 // Basic types for this package
-type AzureObject map[string]interface{} // Represents a single Azure JSON object
-type AzureObjectList []AzureObject      // Represents a list of Azure JSON objects
+type AzureObject map[string]any    // Represents a single Azure JSON object
+type AzureObjectList []AzureObject // Represents a list of Azure JSON objects
 
 // Register the types for Gob encoding.
 func init() {
 	gob.Register(AzureObject{})     // For single object
 	gob.Register(AzureObjectList{}) // For list of objects
 	// Register all concrete types that might appear in AzureObject or AzureObjectList
-	gob.Register(map[string]interface{}{})
-	gob.Register([]interface{}{})
+	gob.Register(map[string]any{})
+	gob.Register([]any{})
 }
 
 // Checks if the filter string is found anywhere within the AzureObject.
@@ -29,7 +29,7 @@ func (obj AzureObject) HasString(filter string) bool {
 			if utl.SubString(v, filter) {
 				return true
 			}
-		case []interface{}:
+		case []any:
 			// Drill into other maps and string fields in the slice
 			for i := range v {
 				element := v[i]
@@ -43,7 +43,7 @@ func (obj AzureObject) HasString(filter string) bool {
 					}
 				}
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			// Recursively call HasString on nested maps
 			if AzureObject(v).HasString(filter) {
 				return true
@@ -63,7 +63,7 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 			trimmed = AzureObject{
 				"id":   obj["id"],
 				"name": obj["name"],
-				"properties": map[string]interface{}{
+				"properties": map[string]any{
 					"assignableScopes": props["assignableScopes"],
 					"description":      props["description"],
 					"permissions":      props["permissions"],
@@ -84,7 +84,7 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 			trimmed = AzureObject{
 				"id":   obj["id"],
 				"name": obj["name"],
-				"properties": map[string]interface{}{
+				"properties": map[string]any{
 					"roleDefinitionId": props["roleDefinitionId"],
 					"description":      props["description"],
 					"principalId":      props["principalId"],
@@ -112,7 +112,7 @@ func (obj AzureObject) TrimForCache(mazType string) (trimmed AzureObject) {
 			trimmed = AzureObject{
 				"id":   obj["id"],
 				"name": obj["name"],
-				"properties": map[string]interface{}{
+				"properties": map[string]any{
 					"displayName": props["displayName"],
 					"tenantId":    props["tenantId"],
 				},

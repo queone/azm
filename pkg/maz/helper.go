@@ -188,7 +188,6 @@ func FindCachedObjectsById(id string, z *Config) AzureObjectList {
 	for _, mazType := range MazTypes {
 		// Capture loop variable locally to avoid closure issues in goroutines.
 		// Without this, all goroutines might see the same (last) value of mazType.
-		mazType := mazType
 		wg.Add(1) // Register one more goroutine with the WaitGroup
 
 		// Start a goroutine to search this type's cache in parallel
@@ -259,8 +258,7 @@ func FindAzureObjectsById(id string, z *Config) (AzureObjectList, error) {
 	var wg sync.WaitGroup // WaitGroup to wait for all goroutines to complete
 
 	for _, mazType := range MazTypes {
-		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
-		wg.Add(1)          // Register one more goroutine with the WaitGroup
+		wg.Add(1) // Register one more goroutine with the WaitGroup
 
 		// Start a goroutine to query Azure for this type in parallel
 		go func() {
@@ -353,7 +351,7 @@ func GetMatchingObjects(mazType, filter string, force bool, z *Config) AzureObje
 }
 
 // Returns all Azure pages for given API URL call
-func GetAzureAllPages(apiUrl string, z *Config) (list []interface{}) {
+func GetAzureAllPages(apiUrl string, z *Config) (list []any) {
 	list = nil
 	resp, statCode, _ := ApiGet(apiUrl, z, nil)
 	for {

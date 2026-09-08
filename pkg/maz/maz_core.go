@@ -532,7 +532,7 @@ func isMazLoggingEnabled() bool {
 }
 
 // Prints colorized, formatted debugging messages to stderr when MAZLOG is enabled
-func Logf(format string, args ...interface{}) {
+func Logf(format string, args ...any) {
 	if !isMazLoggingEnabled() {
 		return
 	}

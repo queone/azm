@@ -111,9 +111,9 @@ func FetchDirObjectsDelta(apiUrl string, cache *Cache, z *Config) (AzureObjectLi
 }
 
 // Performs an HTTP GET with retry and exponential backoff, up to a maximum number of attempts.
-func apiGetWithRetry(url string, z *Config, maxRetries int) (resp map[string]interface{}, err error) {
+func apiGetWithRetry(url string, z *Config, maxRetries int) (resp map[string]any, err error) {
 	var statusCode int
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		resp, statusCode, err = ApiGet(url, z, nil)
 
 		if statusCode >= 200 && statusCode < 300 && err == nil {
@@ -208,10 +208,9 @@ func getWorkerConfig() (workers, bufSize int) {
 	}
 
 	// Buffer size for results channel
-	bufSize = workers * 1000
-	if bufSize > 20000 {
-		bufSize = 20000 // Safety cap
-	}
+	bufSize = min(workers*1000,
+		// Safety cap
+		20000)
 
 	return workers, bufSize
 }
@@ -237,7 +236,7 @@ func FetchDirObjectsDeltaParallel(apiUrl string, z *Config) (AzureObjectList, Az
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
-	for i := 0; i < workerCount; i++ {
+	for i := range workerCount {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
@@ -315,7 +314,7 @@ func deltaWorker(workerID int, results chan<- AzureObject, z *Config, state *del
 }
 
 // Extracts directory objects from the raw API response and pushes them to the results channel.
-func processApiResponse(resp map[string]interface{}, results chan<- AzureObject, workerID int) {
+func processApiResponse(resp map[string]any, results chan<- AzureObject, workerID int) {
 	// Optionally tag each object with metadata (e.g. fetch source or worker ID) to help with
 	// future debugging or analysis. These fields are omitted for now but can be re-enabled easily.
 

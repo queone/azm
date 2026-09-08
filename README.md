@@ -18,10 +18,15 @@ The [Azure SDKs](https://github.com/Azure/azure-sdk-for-go) and [CLI tools](http
 To get started with azm, follow these steps:
 - Clone the repository: `git clone https://github.com/queone/azm`
 - Change into the repository directory: `cd azm`
-- Build the azm utility: `./build`
+- Build, validate, and install the azm utility: `./build.sh`
 - Run the azm utility without arguments to print the usage page
 - For extended usage info do `azm -?`
 - Try experimenting with different options and arguments
 
+`./build.sh` is the canonical build command. It tidies dependencies, formats, vets, tests, runs staticcheck, compiles every utility under `cmd/`, and installs the binaries into `$(go env GOPATH)/bin`. Pass utility names to scope the build, for example `./build.sh azm`.
+
+## Governance
+This repo is governed by an explicit session-entry contract for AI coding agents. See [`AGENTS.md`](AGENTS.md) for the operational rules and [`govna/operator-contract-rationale.md`](govna/operator-contract-rationale.md) for the design reasoning. Governance files are maintained with [govna](https://github.com/queone/govna).
+
 ## Releases
-See [releases](releases.md) for the changelogs.
+Changes from the govna adoption onward are recorded in [CHANGELOG.md](CHANGELOG.md). Earlier release notes remain in [releases.md](releases.md).

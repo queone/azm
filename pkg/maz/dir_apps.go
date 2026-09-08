@@ -101,7 +101,7 @@ func PrintFederatedCredentials(id string, z *Config) {
 }
 
 // Prints OAuth2 permission scopes and pre-authorized applications
-func PrintOAuth2PermissionScopes(api map[string]interface{}, displayName string) {
+func PrintOAuth2PermissionScopes(api map[string]any, displayName string) {
 	oauth2PermissionScopes := utl.Slice(api["oauth2PermissionScopes"]) // Cast to a slice
 	scopeValueMap := make(map[string]string)
 	if len(oauth2PermissionScopes) > 0 {
@@ -165,7 +165,7 @@ func PrintOAuth2PermissionScopes(api map[string]interface{}, displayName string)
 }
 
 // Prints API permissions that have already been assigned to this application
-func PrintAssignedApiPermissions(requiredResourceAccess interface{}, z *Config) {
+func PrintAssignedApiPermissions(requiredResourceAccess any, z *Config) {
 	// learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals
 	// learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview
 

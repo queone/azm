@@ -11,7 +11,7 @@ import (
 
 // Saves a single map[string]interface{} as a gob binary file with specified permissions.
 // It uses an atomic write strategy to ensure file integrity.
-func SaveFileBinaryMap(filePath string, data map[string]interface{}, perm os.FileMode) error {
+func SaveFileBinaryMap(filePath string, data map[string]any, perm os.FileMode) error {
 	// Step 1: Encode data into a buffer
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
@@ -37,7 +37,7 @@ func SaveFileBinaryMap(filePath string, data map[string]interface{}, perm os.Fil
 }
 
 // Reads a gob binary file and decodes it into a map[string]interface{}.
-func LoadFileBinaryMap(filePath string) (map[string]interface{}, error) {
+func LoadFileBinaryMap(filePath string) (map[string]any, error) {
 	// Step 1: Check if the file exists and is usable
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -115,7 +115,7 @@ func SaveFileBinaryList(filePath string, data AzureObjectList, perm os.FileMode,
 	// }
 	// Step 4: Atomic file replacement with retry
 	const maxRetries = 5
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		if err := os.Rename(tempFilePath, filePath); err != nil {
 			if i < maxRetries-1 {
 				time.Sleep(time.Duration(i+1) * time.Second) // Exponential backoff

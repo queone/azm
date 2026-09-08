@@ -21,7 +21,7 @@ func ApiGet(
 	apiUrl string,
 	z *Config,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	return ApiCall("GET", apiUrl, z, nil, params)
 }
 
@@ -29,9 +29,9 @@ func ApiGet(
 func ApiPatch(
 	apiUrl string,
 	z *Config,
-	payload map[string]interface{},
+	payload map[string]any,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	return ApiCall("PATCH", apiUrl, z, payload, params)
 }
 
@@ -39,9 +39,9 @@ func ApiPatch(
 func ApiPost(
 	apiUrl string,
 	z *Config,
-	payload map[string]interface{},
+	payload map[string]any,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	return ApiCall("POST", apiUrl, z, payload, params)
 }
 
@@ -49,9 +49,9 @@ func ApiPost(
 func ApiPut(
 	apiUrl string,
 	z *Config,
-	payload map[string]interface{},
+	payload map[string]any,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	return ApiCall("PUT", apiUrl, z, payload, params)
 }
 
@@ -60,7 +60,7 @@ func ApiDelete(
 	apiUrl string,
 	z *Config,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	return ApiCall("DELETE", apiUrl, z, nil, params)
 }
 
@@ -69,9 +69,9 @@ func ApiCall(
 	method string,
 	apiUrl string,
 	z *Config,
-	payload map[string]interface{},
+	payload map[string]any,
 	params map[string]string,
-) (map[string]interface{}, int, error) {
+) (map[string]any, int, error) {
 	// Validate URL
 	if !strings.HasPrefix(apiUrl, "http") {
 		Logf("%s\n", utl.Red2("Error: Bad URL"))
@@ -124,7 +124,7 @@ func getHeadersForApi(apiUrl string, z *Config) map[string]string {
 }
 
 // Helper function to create an HTTP request
-func createHttpRequest(method, apiUrl string, payload map[string]interface{}) (*http.Request, error) {
+func createHttpRequest(method, apiUrl string, payload map[string]any) (*http.Request, error) {
 	switch strings.ToUpper(method) {
 	case "GET":
 		return http.NewRequest("GET", apiUrl, nil)
@@ -158,7 +158,7 @@ func setQueryParameters(req *http.Request, params map[string]string) {
 }
 
 // Helper function to log request details
-func logRequestDetails(req *http.Request, payload map[string]interface{}, params map[string]string) {
+func logRequestDetails(req *http.Request, payload map[string]any, params map[string]string) {
 	var b strings.Builder
 
 	// Add method and URL line
@@ -215,16 +215,16 @@ func partiallyRedactToken(token string) string {
 }
 
 // Helper function to process the HTTP response
-func processResponse(resp *http.Response) (map[string]interface{}, error) {
+func processResponse(resp *http.Response) (map[string]any, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if intValue, err := strconv.ParseInt(string(body), 10, 64); err == nil {
 		// It's an integer, probably an API object count value
-		result = make(map[string]interface{})
+		result = make(map[string]any)
 		result["value"] = intValue
 	} else if len(body) > 0 {
 		// It's a regular JSON result
@@ -239,7 +239,7 @@ func processResponse(resp *http.Response) (map[string]interface{}, error) {
 }
 
 // Helper function to log response details
-func logResponseDetails(resp *http.Response, result map[string]interface{}) {
+func logResponseDetails(resp *http.Response, result map[string]any) {
 	var b strings.Builder
 
 	// Dump and trim response headers
@@ -253,12 +253,12 @@ func logResponseDetails(resp *http.Response, result map[string]interface{}) {
 	}
 
 	// Build a simplified version of the result
-	simplified := make(map[string]interface{})
+	simplified := make(map[string]any)
 	for k, v := range result {
 		switch val := v.(type) {
-		case []interface{}:
+		case []any:
 			simplified[k] = fmt.Sprintf("[%d items]", len(val))
-		case map[string]interface{}:
+		case map[string]any:
 			simplified[k] = "{...}"
 		default:
 			// Special case for @odata.deltaLink abbreviation
@@ -288,7 +288,7 @@ func logResponseDetails(resp *http.Response, result map[string]interface{}) {
 }
 
 // Extracts API error message as "<code> <message>".
-func ApiErrorMsg(obj map[string]interface{}) string {
+func ApiErrorMsg(obj map[string]any) string {
 	err := utl.Map(obj["error"])
 	if err == nil {
 		return ""

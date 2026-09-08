@@ -59,7 +59,7 @@ func GetAzureResObjectById(mazType, targetId string, z *Config) AzureObject {
 			| where type =~ "Microsoft.Management/managementGroups"
 			| where name =~ "%s"`, targetId)
 	}
-	payload := map[string]interface{}{"query": query}
+	payload := map[string]any{"query": query}
 
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
@@ -114,7 +114,7 @@ func GetAzureResObjectByName(mazType, targetName string, z *Config) AzureObject 
 			| where properties.displayName =~ "%s"`,
 			targetName)
 	}
-	payload := map[string]interface{}{"query": query}
+	payload := map[string]any{"query": query}
 
 	// Post the query to the Resource Graph API call
 	params := map[string]string{"api-version": "2024-04-01"}
@@ -275,8 +275,7 @@ func PrintPasswordExpiryReport(csvMode bool, daysStr string, z *Config) {
 	var wg sync.WaitGroup // WaitGroup to wait for all goroutines to complete
 
 	for _, mazType := range []string{Application, ServicePrincipal} {
-		mazType := mazType // Capture loop variable to avoid race condition inside goroutine
-		wg.Add(1)          // Register one more goroutine with the WaitGroup
+		wg.Add(1) // Register one more goroutine with the WaitGroup
 
 		// Start a goroutine to query cache/Azure for this type in parallel
 		go func() {
@@ -329,7 +328,7 @@ func fetchAndTagDirObjects(mazType string, z *Config) AzureObjectList {
 }
 
 // Print details of secrets that are expiring within the specified number of days.
-func PrintExpiringSecrets(csvMode bool, mazType, name, id, appId string, days int64, secrets []interface{}) {
+func PrintExpiringSecrets(csvMode bool, mazType, name, id, appId string, days int64, secrets []any) {
 	now := time.Now().Unix()
 
 	for _, item := range secrets {

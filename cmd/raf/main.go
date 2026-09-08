@@ -263,8 +263,22 @@ func generateFilename(ra RoleAssignment) (string, error) {
 	return filename, nil
 }
 
+const programVersion = "1.0.0"
+
+// versionLine returns the exact text printed by -v and --version.
+func versionLine() string {
+	return "raf v" + programVersion
+}
+
 func main() {
+	showVersion := false
+	flag.BoolVar(&showVersion, "v", false, "print the program version and exit")
+	flag.BoolVar(&showVersion, "version", false, "print the program version and exit")
 	flag.Parse()
+	if showVersion {
+		fmt.Println(versionLine())
+		return
+	}
 	if flag.NArg() < 1 {
 		fmt.Fprintln(os.Stderr, "Error: missing input file argument")
 		os.Exit(1)

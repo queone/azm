@@ -124,8 +124,8 @@ func PrintSp(x AzureObject, z *Config) {
 				}
 				// Collect each Delegated claim value for this permission
 				scope := strings.TrimSpace(utl.Str(api["scope"]))
-				scopeValues := strings.Split(scope, " ")
-				for _, claim := range scopeValues {
+				scopeValues := strings.SplitSeq(scope, " ")
+				for claim := range scopeValues {
 					// Keep growing the list of api permission grants
 					apiPerms = append(apiPerms, []string{oauthId, apiName, "Delegated", claim})
 				}
@@ -267,7 +267,7 @@ func PrintSp(x AzureObject, z *Config) {
 
 				// Use type assertion to determine the type of v2
 				switch val := v2.(type) {
-				case []interface{}:
+				case []any:
 					if len(val) > 0 {
 						switch val[0].(type) {
 						case string:

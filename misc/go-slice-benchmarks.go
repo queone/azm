@@ -6,15 +6,15 @@ import (
 )
 
 // Safely casts obj to a map (map[string]interface{}); returns nil if not possible.
-func Map(obj interface{}) map[string]interface{} {
-	if objMap, ok := obj.(map[string]interface{}); ok {
+func Map(obj any) map[string]any {
+	if objMap, ok := obj.(map[string]any); ok {
 		return objMap
 	}
 	return nil
 }
 
 // Safely casts obj to a string (string); returns empty string "" if not possible.
-func Str(obj interface{}) string {
+func Str(obj any) string {
 	if objString, ok := obj.(string); ok {
 		return objString
 	}
@@ -22,13 +22,13 @@ func Str(obj interface{}) string {
 }
 
 // generateAssignments creates a slice of assignment objects as maps.
-func generateAssignments(numElements int) []interface{} {
-	assignments := make([]interface{}, numElements)
-	for i := 0; i < numElements; i++ {
-		assignments[i] = map[string]interface{}{
+func generateAssignments(numElements int) []any {
+	assignments := make([]any, numElements)
+	for i := range numElements {
+		assignments[i] = map[string]any{
 			"id":   fmt.Sprintf("id-%d", i),
 			"name": fmt.Sprintf("name-%d", i),
-			"properties": map[string]interface{}{
+			"properties": map[string]any{
 				"principalId":      fmt.Sprintf("principal-%d", i),
 				"roleDefinitionId": fmt.Sprintf("role-%d", i),
 				"scope":            fmt.Sprintf("scope-%d", i),

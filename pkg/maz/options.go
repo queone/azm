@@ -8,24 +8,24 @@ import (
 
 // Options map type to facilitate calling functions with many variables.
 type Options struct {
-	options map[string]interface{}
+	options map[string]any
 }
 
 // Constructor to initialize an options map
 func NewOptions() *Options {
 	return &Options{
-		options: make(map[string]interface{}),
+		options: make(map[string]any),
 	}
 }
 
 // Sets values in an options map.
-func (a *Options) Set(key string, value interface{}) *Options {
+func (a *Options) Set(key string, value any) *Options {
 	a.options[key] = value
 	return a // Return the object for chaining
 }
 
 // Gets a value of any type from the options map.
-func (a *Options) Get(key string) (interface{}, bool) {
+func (a *Options) Get(key string) (any, bool) {
 	value, ok := a.options[key]
 	return value, ok
 }

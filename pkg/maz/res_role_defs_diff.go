@@ -14,7 +14,7 @@ const (
 )
 
 // DiffLists compares two lists of strings and returns a map with the string entry and its status.
-func DiffLists(list1, list2 []interface{}) map[string]string {
+func DiffLists(list1, list2 []any) map[string]string {
 	result := make(map[string]string)
 
 	// Create sets for quick lookup
@@ -51,7 +51,7 @@ func DiffLists(list1, list2 []interface{}) map[string]string {
 // Prints differences between the two role definition objects. The caller
 // should have already validated that all the respective fields exist within
 // each object.
-func DiffRoleDefinitionSpecfileVsAzure(obj, azureObj map[string]interface{}) {
+func DiffRoleDefinitionSpecfileVsAzure(obj, azureObj map[string]any) {
 	// Gather the new object values
 	objProps := utl.Map(obj["properties"])
 	objRoleName := utl.Str(objProps["roleName"])

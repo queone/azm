@@ -204,7 +204,7 @@ func CreateAzureResRoleAssignment(force bool, obj AzureObject, z *Config) {
 	}
 
 	// Call API to create assignment
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"properties": map[string]string{
 			"roleDefinitionId": "/providers/Microsoft.Authorization/roleDefinitions/" + roleDefinitionId,
 			"principalId":      principalId,

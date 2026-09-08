@@ -7,7 +7,7 @@ import (
 )
 
 // Prints user object in YAML-like format
-func PrintUser(obj map[string]interface{}, z *Config) {
+func PrintUser(obj map[string]any, z *Config) {
 	id := utl.Str(obj["id"])
 	if id == "" {
 		Logf("PrintUser(): Directory user object has no %s attribute\n", utl.Yel("id"))

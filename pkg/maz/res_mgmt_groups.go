@@ -139,7 +139,7 @@ func CacheAzureMgmtGroups(cache *Cache, z *Config) {
 }
 
 // Recursively prints children management groups subscriptions
-func PrintMgmtGroupChildren(indent int, children []interface{}) {
+func PrintMgmtGroupChildren(indent int, children []any) {
 	mgmtType := map[string]string{
 		"Microsoft.Management/managementGroups":               "(Management Group)",
 		"Microsoft.Management/managementGroups/subscriptions": "(Subscription)",
@@ -155,10 +155,7 @@ func PrintMgmtGroupChildren(indent int, children []interface{}) {
 				continue // Ignore legacy subscriptions
 			}
 			fmt.Printf("%*s", indent, " ") // Space padded indent
-			padding := 44 - indent
-			if padding < 12 {
-				padding = 12
-			}
+			padding := max(44-indent, 12)
 			cDisplayName := utl.Blu(utl.PostSpc(displayName, padding))
 			cName := utl.Gre(utl.PostSpc(utl.Str(child["name"]), 38))
 			fmt.Printf("%s%s%s\n", cDisplayName, cName, utl.Gre(Type))

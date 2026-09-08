@@ -512,7 +512,7 @@ func RenameDirObject(force bool, mazType, from, newName string, z *Config) {
 }
 
 // Find JSON object with given ID in slice
-func FindObjectOld(objSet []interface{}, id string) map[string]interface{} {
+func FindObjectOld(objSet []any, id string) map[string]any {
 	for _, item := range objSet {
 		if x := utl.Map(item); x != nil {
 			if utl.Str(x["id"]) == id {
