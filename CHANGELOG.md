@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 1.2.1 | AC3 adopt govna canon v0.54.0 with the prep sweep grep guard fix |
 | 1.2.0 | AC2 XDG config dirs, drop utl dep, module path, retire raf, backfill changelog |
 | 1.1.0 | AC1 adopt govna canon v0.53.0, build.sh, -v/--version; go fix modernizations |
 | 1.0.6 | Work around Graph v1.0 not returning group members that are service principals by using the beta endpoint |

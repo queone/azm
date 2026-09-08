@@ -12,7 +12,7 @@ import (
 
 const (
 	programName    = "azm"
-	programVersion = "1.2.0"
+	programVersion = "1.2.1"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )
