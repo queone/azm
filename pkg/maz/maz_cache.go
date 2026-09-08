@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Cache type
@@ -38,7 +38,7 @@ func NewCache(mazType string, z *Config) (*Cache, error) {
 		return nil, fmt.Errorf("invalid object type code: %s", utl.Red(mazType))
 	}
 
-	cacheFile := filepath.Join(MazConfigDir, z.TenantId+suffix+".bin")
+	cacheFile := filepath.Join(MazCacheDir, z.TenantId+suffix+".bin")
 	return &Cache{
 		filePath:        cacheFile,
 		deltaLinkFile:   cacheFile[:len(cacheFile)-4] + "_link.bin",

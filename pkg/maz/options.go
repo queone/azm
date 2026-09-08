@@ -3,7 +3,7 @@ package maz
 import (
 	"fmt"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Options map type to facilitate calling functions with many variables.

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Decode and validate the given JWT token string, print all decoded fields and final validation status.

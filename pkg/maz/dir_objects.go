@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Returns the number of object entries in the local cache file for the given type.

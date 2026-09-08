@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Generates and prints a sanitized specfile name from given specfile or ID

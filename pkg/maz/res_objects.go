@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Consolidate -a/-d/-s/-m into single generic functions:

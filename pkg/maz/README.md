@@ -39,18 +39,20 @@ There are four (4) different ways to set up the login credentials to use this li
 
 |#|Type|Method|Details|
 |-|-|-|-|
-|1|Interactive|Config file|Set up attributes via `~/.maz/credentials.yaml` file|
+|1|Interactive|Config file|Set up attributes via `~/.config/maz/credentials.yaml` file|
 |2|Interactive|Environment variables|Set up attributes via environment variables (**OVERIDES config file**)|
-|3|Automated|Config file|Set up attributes via `~/.maz/credentials.yaml` file|
+|3|Automated|Config file|Set up attributes via `~/.config/maz/credentials.yaml` file|
 |4|Automated|Environment variables|Set up attributes via environment variables (**OVERIDES config file**)|
 
-1. *Interactive via config file*: The calling utility sets up a way to allow setting up the `~/.maz/credentials.yaml` file with
+The library resolves its directories following the XDG convention: `$XDG_CONFIG_HOME/maz` (default `~/.config/maz`) holds `credentials.yaml` and the token cache, and `$XDG_CACHE_HOME/maz` (default `~/.cache/maz`) holds cached object snapshots. An existing legacy `~/.maz` directory keeps being used for both. The resolved paths are exported as `maz.MazConfigDir` and `maz.MazCacheDir`.
+
+1. *Interactive via config file*: The calling utility sets up a way to allow setting up the `~/.config/maz/credentials.yaml` file with
    the 3 special attributes. For example, the [azm CLI utility](https://github.com/queone/azm) does this via the `-id`
    switch, to _Set up MSAL interactive browser popup login_:
    ```
    azm -id 3f050090-20b0-40a0-a060-c05060104010 user1@domain.io
    ```
-   Above will populate the `~/.maz/credentials.yaml` file as follows:
+   Above will populate the `~/.config/maz/credentials.yaml` file as follows:
    ```yaml
    tenant_id: 3f050090-20b0-40a0-a060-c05060104010
    username: user1@domain.io
@@ -65,15 +67,15 @@ There are four (4) different ways to set up the login credentials to use this li
    MAZ_USERNAME=user1@domain.io
    MAZ_INTERACTIVE=true
    ```
-   Above values take **precedence** and **OVERIDE** any existing config `~/.maz/credentials.yaml` file values. 
+   Above values take **precedence** and **OVERIDE** any existing config `~/.config/maz/credentials.yaml` file values. 
 
-3. *Automated via config file*: The calling utility sets up a way to allow setting up the `~/.maz/credentials.yaml` file with
+3. *Automated via config file*: The calling utility sets up a way to allow setting up the `~/.config/maz/credentials.yaml` file with
    the 3 special attributes. For example, the [azm CLI utility](https://github.com/queone/azm) does this via the `-id`
    switch, to _Set up MSAL automated ClientId + Secret login_:
    ```
    azm -id 3f050090-20b0-40a0-a060-c05060104010 f1110121-7111-4171-a181-e1614131e181 ACB8c~HdLejfQGiHeI9LUKgNOODPQRISNTmVLX_i
    ```
-   Above will populate the `~/.maz/credentials.yaml` file as follows:
+   Above will populate the `~/.config/maz/credentials.yaml` file as follows:
    ```yaml
    tenant_id: 3f050090-20b0-40a0-a060-c05060104010
    client_id: f1110121-7111-4171-a181-e1614131e181
@@ -88,7 +90,7 @@ There are four (4) different ways to set up the login credentials to use this li
    MAZ_CLIENT_ID=f1110121-7111-4171-a181-e1614131e181
    MAZ_CLIENT_SECRET=<deliberately obfuscated>
    ```
-   Above values take **precedence** and **OVERIDE** any existing config `~/.maz/credentials.yaml` file values. 
+   Above values take **precedence** and **OVERIDE** any existing config `~/.config/maz/credentials.yaml` file values. 
 
 The benefit of using environment variables is to be able to override an existing `credentials.yaml` file, and to specify different credentials, as well as being able to use different credentials from different shell sessions _on the same host_. They also allow utilities written with this library to be used in continuous delivery and other types of automation.
 

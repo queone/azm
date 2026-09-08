@@ -3,7 +3,7 @@ package maz
 import (
 	"encoding/gob"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Basic types for this package

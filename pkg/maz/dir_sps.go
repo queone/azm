@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Prints service principal object in YAML-like format

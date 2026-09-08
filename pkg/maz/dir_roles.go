@@ -3,7 +3,7 @@ package maz
 import (
 	"fmt"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Prints Azure directory role definition object in YAML-like format

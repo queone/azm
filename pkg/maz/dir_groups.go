@@ -3,7 +3,7 @@ package maz
 import (
 	"fmt"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Print directory group object in YAML-like format

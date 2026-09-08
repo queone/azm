@@ -11,7 +11,7 @@ import (
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/cache"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // The MSAL Go library defines the types of cache file, and expect you to roll your own

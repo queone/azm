@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Returns a file name and object name based on the given mazType and name.

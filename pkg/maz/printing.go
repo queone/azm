@@ -5,7 +5,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Prints a status count of all AZ and MG objects that are in Azure, and the local files.

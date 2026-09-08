@@ -16,10 +16,9 @@ A user runs `azm` with a short option code that names an object type and an opti
 
 - `cmd/azm`: the command-line entrypoint; parses one to four positional arguments and dispatches to `maz`
 - `pkg/maz`: the library; authentication and tokens (`token.go`, `token_decode.go`), REST calls (`api_calls.go`), directory objects (`dir_*.go`), resource objects (`res_*.go`), the local object cache (`maz_cache.go`), specfile comparison and skeletons (`specfile.go`, `skeleton.go`), and printing
-- `cmd/raf`: a standalone filename generator for role-assignment specfiles; legacy, since `azm -sfn` now covers it
 - `misc/`: scratch benchmarks and scripts that are not shipped
 - external integrations: Microsoft Entra ID for MSAL logon (user device code, service principal secret, or OIDC), ARM for resource objects, and Microsoft Graph for directory objects
-- local state: credentials, configuration, and cached object snapshots under `~/.maz`
+- local state: credentials and the token cache under `$XDG_CONFIG_HOME/maz` (default `~/.config/maz`), cached object snapshots under `$XDG_CACHE_HOME/maz` (default `~/.cache/maz`), and an existing legacy `~/.maz` used for both when present
 
 ## Core Files
 
@@ -34,7 +33,7 @@ A user runs `azm` with a short option code that names an object type and an opti
 
 ## Data And Control Flow
 
-`azm` validates the argument count, builds a `maz.Config`, and handles the few options that need no API access, such as printing login values or generating a UUID. For every other option it sets up API tokens, which loads or refreshes credentials from `~/.maz`, then calls the matching `maz` function. Read options resolve the object type from the option code, consult or refresh the local cache through delta queries, and print matching objects. Write options read a YAML specfile or arguments, compare them with the live tenant, prompt for confirmation unless forced, and call ARM or Graph to apply the change.
+`azm` validates the argument count, builds a `maz.Config`, and handles the few options that need no API access, such as printing login values or generating a UUID. For every other option it sets up API tokens, which loads or refreshes credentials from the configuration directory, then calls the matching `maz` function. Read options resolve the object type from the option code, consult or refresh the local cache through delta queries, and print matching objects. Write options read a YAML specfile or arguments, compare them with the live tenant, prompt for confirmation unless forced, and call ARM or Graph to apply the change.
 
 ## AC Lifecycle Control Flow
 
@@ -46,8 +45,9 @@ Integrated audit adoption is the only command-mediated phase exception. It can a
 
 - call ARM and Graph directly over HTTPS rather than through the Azure SDK; follow the official REST documentation
 - cache directory objects locally and refresh them with Graph delta queries, resuming an interrupted delta fetch on the next run
-- keep the Go module path `azm` with a `replace` to `github.com/queone/azm` so the library imports resolve both locally and from the published module
-- the `azm` utility owns the repository release version; `raf` carries an independent version
+- declare the module as `github.com/queone/azm` so the library is importable by other projects and internal packages resolve
+- keep shared helpers in `internal/utl`, a copied subset of the former `queone/utl` library; color output is emitted only on a color-capable terminal
+- `azm` is the only utility, so its `programVersion` is the repository release version
 
 ## Conventions
 

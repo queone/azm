@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 const (
-	ConfigBaseDir   = ".maz"
+	ConfigBaseDir   = ".maz" // legacy directory earlier versions used for everything, see dirs.go
 	CredentialsFile = "credentials.yaml"
 	TokenCacheFile  = "token_cache.json"
 	ConstAuthUrl    = "https://login.microsoftonline.com/"
@@ -67,7 +67,8 @@ const (
 )
 
 var (
-	MazConfigDir string // Global configuration directory, see init()
+	MazConfigDir string // Global configuration directory for credentials and the token cache, see init()
+	MazCacheDir  string // Global cache directory for object snapshots, see init()
 
 	MazTypes = []string{
 		ResRoleDefinition,
@@ -144,20 +145,22 @@ type Config struct {
 	// --- Add other API token/headers here...
 }
 
-// Initialize MazConfigDir to the user's home directory in a cross-platform way.
+// Resolve MazConfigDir and MazCacheDir following the XDG convention with a
+// legacy ~/.maz fallback, and make sure both directories exist.
 func init() {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		utl.Die("Could not determine user home directory: %v", err)
 	}
-
-	MazConfigDir = filepath.Join(homeDir, ConfigBaseDir)
-
-	// Ensure the configuration directory exists
-	if _, err := os.Stat(MazConfigDir); os.IsNotExist(err) {
-		if err := os.Mkdir(MazConfigDir, 0700); err != nil {
-			utl.Die("Failed to create '%s' config directory: %v",
-				utl.Yel(MazConfigDir), err)
+	dirs, err := ResolveDirs(homeDir, os.Getenv, dirExists)
+	if err != nil {
+		utl.Die("Could not resolve maz directories: %v", err)
+	}
+	MazConfigDir = dirs.Config
+	MazCacheDir = dirs.Cache
+	for _, dir := range []string{MazConfigDir, MazCacheDir} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			utl.Die("Failed to create '%s' directory: %v", utl.Yel(dir), err)
 		}
 	}
 }
@@ -238,7 +241,9 @@ func normalizeFilePath(p string) string {
 // Dumps configured login values
 func DumpLoginValues(z *Config) {
 	fmt.Printf("%s: %s  %s\n", utl.Blu("config_dir"), utl.Gre(MazConfigDir),
-		utl.Gra("# Config and cache directory"))
+		utl.Gra("# Credentials and token cache directory"))
+	fmt.Printf("%s: %s  %s\n", utl.Blu("cache_dir"), utl.Gre(MazCacheDir),
+		utl.Gra("# Cached object snapshots directory"))
 
 	fmt.Printf("%s:\n", utl.Blu("config_vars"))
 	comment := "  # 1. MS Graph and Azure ARM tokens can be supplied directly via MAZ_MG_TOKEN and\n" +

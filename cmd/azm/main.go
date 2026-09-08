@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/queone/azm/internal/utl"
 	"github.com/queone/azm/pkg/maz"
-	"github.com/queone/utl"
 )
 
 const (
 	programName    = "azm"
-	programVersion = "1.1.0"
+	programVersion = "1.2.0"
 
 	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
 )

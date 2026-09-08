@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 const (

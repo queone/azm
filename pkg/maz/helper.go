@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Creates or updates an Azure object by given specfile

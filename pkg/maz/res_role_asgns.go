@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Prints resource role assignment object in YAML-like format

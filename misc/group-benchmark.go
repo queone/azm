@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 	"golang.org/x/exp/rand"
 )
 

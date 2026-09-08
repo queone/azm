@@ -29,4 +29,4 @@ To get started with azm, follow these steps:
 This repo is governed by an explicit session-entry contract for AI coding agents. See [`AGENTS.md`](AGENTS.md) for the operational rules and [`govna/operator-contract-rationale.md`](govna/operator-contract-rationale.md) for the design reasoning. Governance files are maintained with [govna](https://github.com/queone/govna).
 
 ## Releases
-Changes from the govna adoption onward are recorded in [CHANGELOG.md](CHANGELOG.md). Earlier release notes remain in [releases.md](releases.md).
+Every release, including the history that predates the govna adoption, is recorded in [CHANGELOG.md](CHANGELOG.md).

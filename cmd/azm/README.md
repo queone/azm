@@ -58,11 +58,13 @@ Another way of connecting is to leverage an access token that has been acquired 
 
 #### User Logon
 
+`azm` keeps `credentials.yaml` and its token cache under `$XDG_CONFIG_HOME/maz` (default `~/.config/maz`) and its cached object snapshots under `$XDG_CACHE_HOME/maz` (default `~/.cache/maz`). An existing `~/.maz` directory from earlier versions keeps being used for both until you move its contents.
+
 For example, if your Tenant ID was **c44154ad-6b37-4972-8067-0ef1068079b2**, and your User ID UPN was __bob@contoso.com__, you would type: 
 
 ```bash
 $ azm -id c44154ad-6b37-4972-8067-0ef1068079b2 bob@contoso.com
-Updated /Users/myuser/.maz/credentials.yaml file
+Updated ~/.config/maz/credentials.yaml file
 ```
 
 `azm` responds that the special `credentials.yaml` file has been updated accordingly.
@@ -71,7 +73,8 @@ To view, dump all configured logon values type the following:
 
 ```bash
 $ azm -id
-config_dir: /Users/MYUSER/.maz  # Config and cache directory
+config_dir: ~/.config/maz  # Credentials and token cache directory
+cache_dir: ~/.cache/maz  # Cached object snapshots directory
 config_env_variables:
   # 1. MS Graph and Azure ARM tokens can be supplied directly via MAZ_MG_TOKEN and
   #    MAZ_AZ_TOKEN environment variables, and they have the highest precedence.
@@ -88,7 +91,7 @@ config_env_variables:
   MAZ_MG_TOKEN:
   MAZ_AZ_TOKEN:
 config_creds_file:
-  file_path: /Users/MYUSER/.maz/credentials.yaml
+  file_path: ~/.config/maz/credentials.yaml
   tenant_id: c44154ad-6b37-4972-8067-0ef1068079b2
   username: bob@contoso.com
   interactive: true
@@ -100,7 +103,8 @@ Note also, that instead of setting up Bob's login with the `-id` argument, you c
 
 ```bash
 $ azm -id
-config_dir: /Users/myuser/.maz  # Config and cache directory
+config_dir: ~/.config/maz  # Credentials and token cache directory
+cache_dir: ~/.cache/maz  # Cached object snapshots directory
 config_env_variables:
   # 1. Credentials supplied via environment variables override values provided via credentials file
   # 2. MAZ_USERNAME+MAZ_INTERACTIVE login have priority over MAZ_CLIENT_ID+MAZ_CLIENT_SECRET login
@@ -112,7 +116,7 @@ config_env_variables:
   MAZ_MG_TOKEN:
   MAZ_AZ_TOKEN:
 config_creds_file:
-  file_path: /Users/myuser/.maz/credentials.yaml
+  file_path: ~/.config/maz/credentials.yaml
   tenant_id: 
   username: 
   interactive:
@@ -188,7 +192,7 @@ $
 
 ### Known Issues
 
-The program is stable enough to be relied on as a quick, useful utility. There are a number of little things that can of course be improved. Please see [Planned Features in releases](releases.md) page. In general, is also worth remembering [Tony Hoare](https://en.wikipedia.org/wiki/Tony_Hoare)'s famous quote: "_Inside every large program is a small program struggling to get out_", so I'm sure there's a small bug here and there.
+The program is stable enough to be relied on as a quick, useful utility. There are a number of little things that can of course be improved. Planned work is tracked in [plan.md](../../plan.md). In general, is also worth remembering [Tony Hoare](https://en.wikipedia.org/wiki/Tony_Hoare)'s famous quote: "_Inside every large program is a small program struggling to get out_", so I'm sure there's a small bug here and there.
 
 ### Feedback
 The primary goal of this utility is to serve as a study aid for coding Azure utilities in the Go language, so the code is deliberately kept simple and clear for this reason.
@@ -275,7 +279,7 @@ For example, if your Tenant ID was **c44154ad-6b37-4972-8067-0ef1068079b2**, and
 
 ```
 $ azm -id c44154ad-6b37-4972-8067-0ef1068079b2 bob@contoso.com
-Updated /Users/myuser/.maz/credentials.yaml file
+Updated ~/.config/maz/credentials.yaml file
 ```
 `azm` responds that the special `credentials.yaml` file has been updated accordingly.
 
@@ -283,7 +287,8 @@ To view, dump all configured logon values type the following:
 
 ```bash
 $ azm -id
-config_dir: /Users/myuser/.maz  # Config and cache directory
+config_dir: ~/.config/maz  # Credentials and token cache directory
+cache_dir: ~/.cache/maz  # Cached object snapshots directory
 config_env_variables:
   # 1. MS Graph and Azure ARM tokens can be supplied directly via MAZ_MG_TOKEN and
   #    MAZ_AZ_TOKEN environment variables, and they have the highest precedence.
@@ -300,7 +305,7 @@ config_env_variables:
   MAZ_MG_TOKEN:
   MAZ_AZ_TOKEN:
 config_creds_file:
-  file_path: /Users/myuser/.maz/credentials.yaml
+  file_path: ~/.config/maz/credentials.yaml
   tenant_id: c44154ad-6b37-4972-8067-0ef1068079b2
   username: bob@contoso.com
   interactive: true
@@ -312,7 +317,8 @@ Note also, that instead of setting up Bob's login with the `-id` argument, you c
 
 ```bash
 $ azm -id
-config_dir: /Users/myuser/.maz  # Config and cache directory
+config_dir: ~/.config/maz  # Credentials and token cache directory
+cache_dir: ~/.cache/maz  # Cached object snapshots directory
 config_env_variables:
   # 1. Credentials supplied via environment variables override values provided via credentials file
   # 2. MAZ_USERNAME+MAZ_INTERACTIVE login have priority over MAZ_CLIENT_ID+MAZ_CLIENT_SECRET login
@@ -324,7 +330,7 @@ config_env_variables:
   MAZ_MG_TOKEN:
   MAZ_AZ_TOKEN:
 config_creds_file:
-  file_path: /Users/myuser/.maz/credentials.yaml
+  file_path: ~/.config/maz/credentials.yaml
   tenant_id: 
   username: 
   interactive:

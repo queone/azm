@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/queone/utl"
+	"github.com/queone/azm/internal/utl"
 )
 
 // Prints Azure management group object in YAML-like format
