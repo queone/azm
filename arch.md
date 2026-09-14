@@ -28,7 +28,7 @@ A user runs `azm` with a short option code that names an object type and an opti
 - `govna/development-cycle.md`: workflow from roadmap through release
 - `govna/ac-template.md`: acceptance-criteria template for new work
 - `govna/build-release.md`: build, test, and release rules
-- `cmd/azm/main.go`: usage text, argument dispatch, and the `programVersion` declaration
+- `cmd/azm/main.go`: help page data, argument dispatch, and the `programVersion` declaration
 - `pkg/maz/maz_core.go`: configuration, credentials, and the `Config` object every call carries
 
 ## Data And Control Flow
@@ -46,7 +46,7 @@ Integrated audit adoption is the only command-mediated phase exception. It can a
 - call ARM and Graph directly over HTTPS rather than through the Azure SDK; follow the official REST documentation
 - cache directory objects locally and refresh them with Graph delta queries, resuming an interrupted delta fetch on the next run
 - declare the module as `github.com/queone/azm` so the library is importable by other projects and internal packages resolve
-- keep shared helpers in `internal/utl`, a copied subset of the former `queone/utl` library; color output is emitted only on a color-capable terminal
+- keep shared helpers in `internal/utl`, a copied subset of the former `queone/utl` library, including the shared help renderer every utility prints its help page through; color output is emitted only on a color-capable terminal
 - `azm` is the only utility, so its `programVersion` is the repository release version
 
 ## Conventions

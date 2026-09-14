@@ -190,6 +190,82 @@ $
 
 4. ( TODO: Provide other examples ... )
 
+### Usage
+
+The full help page printed by `azm -h`:
+
+```text
+azm v1.3.0
+Azure IAM CLI utility
+github.com/queone/azm
+
+Usage
+  azm OPTION [ARGUMENT ...]
+  azm UUID
+
+Options
+  UUID                            Show every Azure object linked to the given UUID
+  -lc UUID                        Show every cached object linked to the given UUID
+  -X[j] [FILTER]                  List X objects tersely; FILTER matches the id, name, and other
+                                  attributes; a single match is fetched from Azure in full
+  -vs SPECFILE                    Compare a specfile to Azure (d, a, g, ap, and sp only)
+  -ar                             Resource role assignment report with resolved attribute names
+  -apr[c] [DAYS]                  Password expiry report for apps and SPs; c for CSV; limit to DAYS
+  -mt                             Print the management group and subscription tree
+  -pags                           List every Entra ID privileged access group
+  -st                             Count the objects in the local cache and in the Azure tenant
+  -Xk [NAME]                      Write a YAML skeleton specfile (d, a, g, ap, and sp only)
+  -up[f] SPECFILE                 Create or update the object in a specfile (d, a, g, ap, and sp only)
+  -upg NAME [DESC] [ASSIGN]       Create a group; ASSIGN true makes it role-assignable, needs DESC,
+                                  and requires the Privileged Role Administrator role
+  -upap NAME, -upsp NAME          Create an app and SP pair with the given name
+  -rm[f] SPECFILE                 Delete the object in a specfile (d, a, g, ap, and sp only)
+  -rm[f] ID|NAME                  Delete an object by id or name; assignments by id only
+  -rnX[f] NAME|ID NEWNAME         Rename an object (d, a, g, ap, and sp only)
+  -apas ID NAME [EXPIRY]          Add a secret to an app; EXPIRY is YYYY-MM-DD or a day count
+  -aprs[f] ID SECRET_ID           Remove a secret from an app
+  -spas ID NAME [EXPIRY]          Add a secret to an SP; EXPIRY is YYYY-MM-DD or a day count
+  -sprs[f] ID SECRET_ID           Remove a secret from an SP
+  -id                             Print the configured login values
+  -id TENANT_ID USERNAME          Configure interactive user login
+  -id TENANT_ID CLIENT_ID SECRET  Configure automated client login
+  -tx                             Delete the token cache and the configured login values
+  -xx                             Delete the whole local object cache
+  -Xx                             Delete the local cache of X objects
+  -tmg                            Print the current Microsoft Graph access token
+  -taz                            Print the current Azure Resource Manager access token
+  -td TOKEN                       Decode a JWT token string
+  -uuid                           Generate a random UUID
+  -sfn SPECFILE|ID                Suggest a specfile name from a specfile or an object id
+  -v, --version                   Print the version
+  -h, -?, --help                  Print this help
+
+  Append j to a list option for JSON output. Append f to a write option to skip
+  the confirmation prompt. Set MAZLOG=1 for extended logging.
+
+Types
+  d   Resource role definitions
+  a   Resource role assignments
+  s   Resource subscriptions
+  m   Resource management groups
+  u   Directory users
+  g   Directory groups
+  ap  Directory applications
+  sp  Directory service principals
+  dr  Directory role definitions
+  da  Directory role assignments
+
+  Replace X in an option with one of these codes.
+
+Examples
+  azm -id                                      Print the configured login values
+  azm -ap                                      List every app in the tenant
+  azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  Show the role definition with this id
+  azm -d Reader                                Show every role with Reader in its name
+  azm -g MyGroup                               Show every group matching MyGroup
+  azm -s                                       List every subscription in the tenant
+```
+
 ### Known Issues
 
 The program is stable enough to be relied on as a quick, useful utility. There are a number of little things that can of course be improved. Planned work is tracked in [plan.md](../../plan.md). In general, is also worth remembering [Tony Hoare](https://en.wikipedia.org/wiki/Tony_Hoare)'s famous quote: "_Inside every large program is a small program struggling to get out_", so I'm sure there's a small bug here and there.

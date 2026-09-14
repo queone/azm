@@ -72,3 +72,6 @@ func Mag(value any) string { return wrap("38;5;201", value) }
 
 // Gra renders value in gray.
 func Gra(value any) string { return wrap("38;5;245", value) }
+
+// ColorEnabled reports whether the package gate allows color escapes on stdout.
+func ColorEnabled() bool { return enabled }

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 1.3.0 | AC6 canon-style azm help page; AC7 adopt govna canon v0.58.0 |
 | 1.2.1 | AC3 adopt govna canon v0.54.0 with the prep sweep grep guard fix |
 | 1.2.0 | AC2 XDG config dirs, drop utl dep, module path, retire raf, backfill changelog |
 | 1.1.0 | AC1 adopt govna canon v0.53.0, build.sh, -v/--version; go fix modernizations |

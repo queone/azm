@@ -11,130 +11,104 @@ import (
 )
 
 const (
-	programName    = "azm"
-	programVersion = "1.2.1"
-
-	clrPrevLine = "\x1B[1A\x1B[2K\r" // Move up one line, clear it, and return cursor to start
+	programName        = "azm"
+	programVersion     = "1.3.0"
+	programDescription = "Azure IAM CLI utility"
+	programURL         = "github.com/queone/azm"
 )
 
-func printUsage(extended bool) {
-	n := utl.Whi2(programName)
-	v := programVersion
-	X := utl.Red("X")
-	usageHeader := fmt.Sprintf("%s v%s\n"+
-		"Azure IAM CLI utility - github.com/queone/azm\n"+
-		"%s\n"+
-		"  %s [options] [arguments]\n", n, v, utl.Whi2("Usage"), n)
-	usageHeader += fmt.Sprintf("\n"+
-		"  This tool helps with querying and managing Azure IAM-related objects. Many options use %s\n"+
-		"  as a placeholder for a 1–2 letter code indicating the object type. Supported types:\n\n"+
-		"    %s = Resource Role Definitions     %s = Resource Role Assignments\n"+
-		"    %s = Resource Subscriptions        %s = Resource Management Groups\n"+
-		"    %s = Directory Users               %s = Directory Groups\n"+
-		"    %s = Directory Applications        %s = Directory Service Principals\n"+
-		"    %s = Directory Role Definitions    %s = Directory Role Assignments\n\n"+
-		"  Replace %s with the relevant code in supported options.\n"+
-		"\n", X,
-		utl.Red(fmt.Sprintf("%2s", maz.ResRoleDefinition)), utl.Red(fmt.Sprintf("%2s", maz.ResRoleAssignment)),
-		utl.Red(fmt.Sprintf("%2s", maz.Subscription)), utl.Red(fmt.Sprintf("%2s", maz.ManagementGroup)),
-		utl.Red(fmt.Sprintf("%2s", maz.DirectoryUser)), utl.Red(fmt.Sprintf("%2s", maz.DirectoryGroup)),
-		utl.Red(fmt.Sprintf("%2s", maz.Application)), utl.Red(fmt.Sprintf("%2s", maz.ServicePrincipal)),
-		utl.Red(fmt.Sprintf("%2s", maz.DirRoleDefinition)), utl.Red(fmt.Sprintf("%2s", maz.DirRoleAssignment)), X)
-	usageHeader += fmt.Sprintf("%s\n"+
-		"  Try experimenting with different options and arguments, such as:\n"+
-		"\n"+
-		"  %s -id                                      To display the currently configured login values\n"+
-		"  %s -ap                                      To list all Apps in current tenant\n"+
-		"  %s -d 3819d436-726a-4e40-933e-b0ffeee1d4b9  Show resource role definition with this UUID\n"+
-		"  %s -d Reader                                Show all roles with 'Reader' in the name\n"+
-		"  %s -g MyGroup                               Show any directory group matching 'MyGroup'\n"+
-		"  %s -s                                       To list all subscriptions in current tenant\n"+
-		"  %s -?                                       To display the full list of options\n",
-		utl.Whi2("Quick Examples"), n, n, n, n, n, n, n)
+// typeCodes lists every object type code and its meaning for the help page.
+var typeCodes = []utl.Row{
+	{Form: maz.ResRoleDefinition, Meaning: []string{"Resource role definitions"}},
+	{Form: maz.ResRoleAssignment, Meaning: []string{"Resource role assignments"}},
+	{Form: maz.Subscription, Meaning: []string{"Resource subscriptions"}},
+	{Form: maz.ManagementGroup, Meaning: []string{"Resource management groups"}},
+	{Form: maz.DirectoryUser, Meaning: []string{"Directory users"}},
+	{Form: maz.DirectoryGroup, Meaning: []string{"Directory groups"}},
+	{Form: maz.Application, Meaning: []string{"Directory applications"}},
+	{Form: maz.ServicePrincipal, Meaning: []string{"Directory service principals"}},
+	{Form: maz.DirRoleDefinition, Meaning: []string{"Directory role definitions"}},
+	{Form: maz.DirRoleAssignment, Meaning: []string{"Directory role assignments"}},
+}
 
-	set1 := fmt.Sprintf("%s, %s, %s, %s, and %s",
-		utl.Red(maz.ResRoleDefinition), utl.Red(maz.ResRoleAssignment), utl.Red(maz.DirectoryGroup),
-		utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
-
-	usageExtended := fmt.Sprintf("\n%s\n"+
-		"  Use optional [j] for JSON output\n"+
-		"\n"+
-		"  UUID                             Show all Azure objects linked to the given UUID\n"+
-		"  -lc UUID                         Show all cached objects linked to the given UUID\n"+
-		"  -%s[j] [FILTER]                   List all %s objects tersely (ID, name, etc.); optional match\n"+
-		"                                   on FILTER string for Id, DisplayName, and other attributes. If\n"+
-		"                                   the result is a single object, it is fetched directly from Azure\n"+
-		"                                   and printed in more detail.\n"+
-		"  -vs SPECFILE                     Compare specfile to Azure (%s only)\n"+
-		"  -ar                              Resource role assignment report with resolved attribute names\n"+
-		"  -apr[c] [DAYS]                   Password expiry report for Apps/SPs; CSV optional; limit by DAYS\n"+
-		"  -mt                              List Management Group and subscriptions tree\n"+
-		"  -pags                            List all Entra ID Privileged Access Groups\n"+
-		"  -st                              Show count of all objects in local cache and Azure tenant\n",
-		utl.Whi2("Read Options"), X, X, set1)
-
-	usageExtended += fmt.Sprintf("\n%s\n"+
-		"  Use optional [f] to bypass confirmation prompts (e.g., -rmf to skip confirm)\n"+
-		"\n"+
-		"  -%sk [NAME]                       Generate YAML skeleton (%s only); NAME optional\n",
-		utl.Whi2("Write Options"), X, set1)
-
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -up[f] SPECFILE                  Create/update object defined in specfile (%s only)\n",
-		clrPrevLine, set1)
-
-	G := utl.Red(maz.DirectoryGroup)
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -up%s NAME [DESC] [ASSIGN]        Create a group (ASSIGN sets the isAssignableToRole flag):\n"+
-		"                                   DESC: Optional description (required if ASSIGN is used)\n"+
-		"                                   ASSIGN: Optional; set to 'true' to make group role-assignable\n"+
-		"                                           (requires Privileged Role Administrator role)\n"+
-		"                                   Examples: azgrp -up%s my_group1\n"+
-		"                                             azgrp -up%s my_role_group \"\" true\n",
-		clrPrevLine, G, G, G)
-
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -up%s NAME, -up%s NAME           Create App/SP pair with the given name (defaults for all else)\n",
-		clrPrevLine, utl.Red(maz.Application), utl.Red(maz.ServicePrincipal))
-
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -rm[f] SPECFILE                  Delete object defined in specfile (%s only)\n"+
-		"  -rm[f] ID|NAME                   Delete object (assignments don't support NAME)\n",
-		clrPrevLine, set1)
-
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -rn%s[f] NAME|ID NEWNAME          Rename object (%s only)\n", clrPrevLine, X, set1)
-
-	usageExtended += fmt.Sprintf("\n%s"+
-		"  -apas ID NAME [EXPIRY]           Add secret to App ID; optional expiry (YYYY-MM-DD or in X days)\n"+
-		"  -aprs[f] ID SECRET_ID            Remove secret from App ID\n"+
-		"  -spas ID NAME [EXPIRY]           Add secret to SP ID; optional expiry (YYYY-MM-DD or in X days)\n"+
-		"  -sprs[f] ID SECRET_ID            Remove secret from SP ID\n"+
-		"\n", clrPrevLine)
-
-	usageExtended += fmt.Sprintf("%s\n"+
-		"  -id                              Display the currently configured login values\n"+
-		"  -id TenantId Username            Set up user credentials for interactive login\n"+
-		"  -id TenantId ClientId Secret     Configure ID for automated login\n"+
-		"  -tx                              Delete the current token and other configured login values\n"+
-		"  -xx                              Delete ALL local file cache\n"+
-		"  -%sx                              Delete %s object local file cache\n"+
-		"  -tmg                             Display current Microsoft Graph API access token\n"+
-		"  -taz                             Display current Azure Resource API access token\n"+
-		"  -td \"TokenString\"                Decode given JWT token string\n"+
-		"  -uuid                            Generate a random UUID\n"+
-		"  -sfn SPECFILE|ID                 Generate specfile from another specfile or object ID\n"+
-		"  -v, --version                    Display the program version\n"+
-		"  -?, -h, --help                   Display the full list of options\n"+
-		"  LOGGING NOTE                     Use MAZLOG=1 to see extended logging\n",
-		utl.Whi2("Other Options"), X, X)
-
-	fmt.Print(usageHeader)
-	if extended {
-		fmt.Print(usageExtended)
+// helpPage returns the help page data. The short page keeps only Usage and Examples
+// and points at -h for every option.
+func helpPage(short bool) utl.Help {
+	row := func(form string, meaning ...string) utl.Row {
+		return utl.Row{Form: form, Meaning: meaning}
 	}
+	const set = "d, a, g, ap, and sp only"
+	h := utl.Help{
+		Name:        programName,
+		Version:     programVersion,
+		Description: programDescription,
+		URL:         programURL,
+		Sections: []utl.Section{
+			{Heading: "Usage", Rows: []utl.Row{
+				row("azm OPTION [ARGUMENT ...]"),
+				row("azm UUID"),
+			}},
+			{Heading: "Options", Rows: []utl.Row{
+				row("UUID", "Show every Azure object linked to the given UUID"),
+				row("-lc UUID", "Show every cached object linked to the given UUID"),
+				row("-X[j] [FILTER]", "List X objects tersely; FILTER matches the id, name, and other",
+					"attributes; a single match is fetched from Azure in full"),
+				row("-vs SPECFILE", "Compare a specfile to Azure ("+set+")"),
+				row("-ar", "Resource role assignment report with resolved attribute names"),
+				row("-apr[c] [DAYS]", "Password expiry report for apps and SPs; c for CSV; limit to DAYS"),
+				row("-mt", "Print the management group and subscription tree"),
+				row("-pags", "List every Entra ID privileged access group"),
+				row("-st", "Count the objects in the local cache and in the Azure tenant"),
+				row("-Xk [NAME]", "Write a YAML skeleton specfile ("+set+")"),
+				row("-up[f] SPECFILE", "Create or update the object in a specfile ("+set+")"),
+				row("-upg NAME [DESC] [ASSIGN]", "Create a group; ASSIGN true makes it role-assignable, needs DESC,",
+					"and requires the Privileged Role Administrator role"),
+				row("-upap NAME, -upsp NAME", "Create an app and SP pair with the given name"),
+				row("-rm[f] SPECFILE", "Delete the object in a specfile ("+set+")"),
+				row("-rm[f] ID|NAME", "Delete an object by id or name; assignments by id only"),
+				row("-rnX[f] NAME|ID NEWNAME", "Rename an object ("+set+")"),
+				row("-apas ID NAME [EXPIRY]", "Add a secret to an app; EXPIRY is YYYY-MM-DD or a day count"),
+				row("-aprs[f] ID SECRET_ID", "Remove a secret from an app"),
+				row("-spas ID NAME [EXPIRY]", "Add a secret to an SP; EXPIRY is YYYY-MM-DD or a day count"),
+				row("-sprs[f] ID SECRET_ID", "Remove a secret from an SP"),
+				row("-id", "Print the configured login values"),
+				row("-id TENANT_ID USERNAME", "Configure interactive user login"),
+				row("-id TENANT_ID CLIENT_ID SECRET", "Configure automated client login"),
+				row("-tx", "Delete the token cache and the configured login values"),
+				row("-xx", "Delete the whole local object cache"),
+				row("-Xx", "Delete the local cache of X objects"),
+				row("-tmg", "Print the current Microsoft Graph access token"),
+				row("-taz", "Print the current Azure Resource Manager access token"),
+				row("-td TOKEN", "Decode a JWT token string"),
+				row("-uuid", "Generate a random UUID"),
+				row("-sfn SPECFILE|ID", "Suggest a specfile name from a specfile or an object id"),
+			}, Note: []string{
+				"Append j to a list option for JSON output. Append f to a write option to skip",
+				"the confirmation prompt. Set MAZLOG=1 for extended logging.",
+			}},
+			{Heading: "Types", Rows: typeCodes, Note: []string{
+				"Replace X in an option with one of these codes.",
+			}},
+			{Heading: "Examples", Rows: []utl.Row{
+				row("azm -id", "Print the configured login values"),
+				row("azm -ap", "List every app in the tenant"),
+				row("azm -d 3819d436-726a-4e40-933e-b0ffeee1d4b9", "Show the role definition with this id"),
+				row("azm -d Reader", "Show every role with Reader in its name"),
+				row("azm -g MyGroup", "Show every group matching MyGroup"),
+				row("azm -s", "List every subscription in the tenant"),
+			}},
+		},
+	}
+	if short {
+		h = h.Select("Usage", "Examples")
+		h.Sections[1].Note = []string{"Run azm -h for every option."}
+	}
+	return h
+}
 
-	os.Exit(0)
+// printHelp prints the full or short help page on stdout.
+func printHelp(short bool) {
+	fmt.Print(utl.RenderHelp(helpPage(short), utl.ColorEnabled()))
 }
 
 func printUnknownCommandError() {
@@ -149,15 +123,22 @@ func versionLine() string {
 }
 
 func main() {
-	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
-		fmt.Println(versionLine())
-		return
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "-v", "--version":
+			fmt.Println(versionLine())
+			return
+		case "-h", "-?", "--help":
+			printHelp(false)
+			return
+		}
 	}
 	maz.PrintRuntimeInfo()
 	numberOfArguments := len(os.Args[1:]) // Exclude the program itself
 	if numberOfArguments < 1 || numberOfArguments > 4 {
 		// Don't accept less than 1, or more than 4 arguments
-		printUsage(false) // false = display short usage
+		printHelp(true)
+		return
 	}
 
 	// Set up required global configuration pointer variable
@@ -171,8 +152,6 @@ func main() {
 		switch arg1 {
 		case "-id":
 			maz.DumpLoginValues(z)
-		case "-?", "-h", "--help":
-			printUsage(true) // true = display long usage
 		case "-uuid":
 			utl.Die("%s\n", uuid.New().String())
 		case "-tx":

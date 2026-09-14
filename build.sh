@@ -222,6 +222,14 @@ only against those cmd packages. To validate the full repo, run with no targets.
 
 _failure() { printf '%s\n' "$1" >&2; }
 
+_tmp_root() { # print ${TMPDIR:-/tmp} without trailing slashes; empty when TMPDIR=/
+  local root="${TMPDIR:-/tmp}"
+  while [ "${root%/}" != "$root" ]; do
+    root="${root%/}"
+  done
+  printf '%s\n' "$root"
+}
+
 _cleanup_build_owned() {
   local cleanup_failed=0 path
   for path in "${_build_install_temps[@]+"${_build_install_temps[@]}"}"; do
@@ -334,7 +342,7 @@ EOF
   fi
 
   _build_install_temps=()
-  _build_owned_dir=$(mktemp -d "${TMPDIR:-/tmp}/govna-go-build.XXXXXX") || {
+  _build_owned_dir=$(mktemp -d "$(_tmp_root)/govna-go-build.XXXXXX") || {
     printf 'build: create owned temporary directory failed\n' >&2
     return 1
   }
@@ -472,6 +480,7 @@ EOF
   for target in "${install_targets[@]+"${install_targets[@]}"}"; do
     compiled_path="$_build_owned_dir/$target$ext"
     _validate_utility_version_output "$compiled_path" "$target" "${install_versions[$index]}" || return 1
+    _validate_utility_help_output "$compiled_path" "$target" "${install_versions[$index]}" || return 1
     index=$((index + 1))
   done
 
@@ -482,6 +491,7 @@ EOF
     compiled_path="$_build_owned_dir/$target$ext"
     output_path="$bin_dir/$target$ext"
     _install_validated_utility "$compiled_path" "$output_path" "$target" || return 1
+    printf '    installed: %s\n' "$(cya4 "$output_path")"
   done
 
   local next_tag
@@ -566,7 +576,7 @@ _is_strict_stable_semver() { # $1=version -> success when MAJOR.MINOR.PATCH
 
 _validate_utility_version_output() { # $1=binary $2=utility ID $3=declared version
   local binary="$1" utility_id="$2" declared="$3" probe_root probe_dir rc actual
-  probe_root="${_build_owned_dir:-${TMPDIR:-/tmp}}"
+  probe_root="${_build_owned_dir:-$(_tmp_root)}"
   probe_dir=$(mktemp -d "$probe_root/govna-version.XXXXXX") || {
     printf 'utility %s: create version probe workspace: check temporary-directory permissions and retry\n' "$utility_id" >&2
     return 1
@@ -598,6 +608,137 @@ _validate_utility_version_output() { # $1=binary $2=utility ID $3=declared versi
   rm -rf "$probe_dir"
 }
 
+_module_path() { # -> go.mod module path without a trailing major-version segment, or empty
+  local line
+  [ -f go.mod ] || { printf ''; return; }
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+    module\ * | module"$(printf '\t')"*)
+      line=$(_trim "${line#module}")
+      case "$line" in
+      */v[1-9] | */v[1-9][0-9] | */v[1-9][0-9][0-9]) line=${line%/*} ;;
+      esac
+      printf '%s' "$line"
+      return
+      ;;
+    esac
+  done <go.mod
+  printf ''
+}
+
+_help_probe_fail() { # $1=utility ID $2=message $3=probe dir
+  printf 'utility %s: %s\n' "$1" "$2" >&2
+  rm -rf "$3"
+}
+
+_validate_utility_help_output() { # $1=binary $2=utility ID $3=declared version
+  local binary="$1" utility_id="$2" declared="$3" probe_root probe_dir rc i flag line rank last custom seen_options readme module_path
+  module_path=$(_module_path)
+  if [ -z "$module_path" ]; then
+    printf 'utility %s: help probe needs the module line in go.mod\n' "$utility_id" >&2
+    return 1
+  fi
+  probe_root="${_build_owned_dir:-$(_tmp_root)}"
+  probe_dir=$(mktemp -d "$probe_root/govna-help.XXXXXX") || {
+    printf 'utility %s: create help probe workspace: check temporary-directory permissions and retry\n' "$utility_id" >&2
+    return 1
+  }
+  i=0
+  for flag in -h '-?' --help; do
+    i=$((i + 1))
+    rc=0
+    "$binary" "$flag" >"$probe_dir/out$i" 2>"$probe_dir/err$i" </dev/null || rc=$?
+    if [ "$rc" -ne 0 ] || [ -s "$probe_dir/err$i" ]; then
+      _help_probe_fail "$utility_id" "$flag exited $rc or wrote to stderr; print the help on stdout and exit 0" "$probe_dir"
+      return 1
+    fi
+  done
+  if ! cmp -s "$probe_dir/out1" "$probe_dir/out2" || ! cmp -s "$probe_dir/out1" "$probe_dir/out3"; then
+    _help_probe_fail "$utility_id" "-h, -?, and --help print different help" "$probe_dir"
+    return 1
+  fi
+  if LC_ALL=C grep -q "$(printf '\033')" "$probe_dir/out1"; then
+    _help_probe_fail "$utility_id" "help carries an escape sequence without a terminal" "$probe_dir"
+    return 1
+  fi
+  if [ "$(sed -n '1p' "$probe_dir/out1")" != "$utility_id v$declared" ]; then
+    _help_probe_fail "$utility_id" "help line 1 must be exactly '$utility_id v$declared'" "$probe_dir"
+    return 1
+  fi
+  line=$(sed -n '2p' "$probe_dir/out1")
+  case "$line" in
+    '' | *.)
+      _help_probe_fail "$utility_id" "help line 2 must be a one-line description with no trailing period" "$probe_dir"
+      return 1
+      ;;
+  esac
+  line=$(sed -n '3p' "$probe_dir/out1")
+  case "$line" in
+    "$module_path" | "$module_path"/*) ;;
+    *)
+      _help_probe_fail "$utility_id" "help line 3 must be the utility's URL without a scheme: $module_path or $module_path/<path>" "$probe_dir"
+      return 1
+      ;;
+  esac
+  case "$line" in
+    *://* | *' '*)
+      _help_probe_fail "$utility_id" "help line 3 must carry the URL alone with no scheme" "$probe_dir"
+      return 1
+      ;;
+  esac
+  if [ -n "$(sed -n '4p' "$probe_dir/out1")" ] || [ "$(sed -n '5p' "$probe_dir/out1")" != "Usage" ]; then
+    _help_probe_fail "$utility_id" "help line 4 must be blank and line 5 must be Usage" "$probe_dir"
+    return 1
+  fi
+  last=0
+  custom=0
+  seen_options=0
+  while IFS= read -r line; do
+    case "$line" in
+      '' | ' '*) continue ;;
+      Commands) rank=1 ;;
+      Options) rank=2; seen_options=1 ;;
+      Examples) rank=4 ;;
+      Usage | Overview | Notes)
+        _help_probe_fail "$utility_id" "heading $line: Usage appears once; Overview and Notes belong in the README" "$probe_dir"
+        return 1
+        ;;
+      *)
+        if printf '%s\n' "$line" | LC_ALL=C grep -Eq '^[A-Z][a-z]+$'; then
+          rank=3
+          custom=$((custom + 1))
+          if [ "$custom" -gt 1 ]; then
+            _help_probe_fail "$utility_id" "second utility-specific section $line; at most one is allowed" "$probe_dir"
+            return 1
+          fi
+        else
+          _help_probe_fail "$utility_id" "help text outside a section: $line" "$probe_dir"
+          return 1
+        fi
+        ;;
+    esac
+    if [ "$rank" -le "$last" ]; then
+      _help_probe_fail "$utility_id" "section $line is out of order; the order is Usage, Commands, Options, one other, Examples" "$probe_dir"
+      return 1
+    fi
+    last=$rank
+  done < <(sed -n '6,$p' "$probe_dir/out1")
+  if [ "$seen_options" -ne 1 ]; then
+    _help_probe_fail "$utility_id" "help has no Options section" "$probe_dir"
+    return 1
+  fi
+  readme="cmd/$utility_id/README.md"
+  if [ -f "$readme" ]; then
+    awk '/^### Usage$/{f=1;next} f==1&&/^```text$/{f=2;next} f==2&&/^```$/{exit} f==2{print}' "$readme" >"$probe_dir/readme"
+    if ! cmp -s "$probe_dir/readme" "$probe_dir/out1"; then
+      _help_probe_fail "$utility_id" "$readme '### Usage' text block differs from the help; paste the plain help output there" "$probe_dir"
+      return 1
+    fi
+  fi
+  rm -rf "$probe_dir"
+  return 0
+}
+
 _install_validated_utility() { # $1=compiled $2=destination $3=utility ID
   local compiled="$1" output="$2" utility_id="$3" install_tmp temp_index
   if [ -L "$output" ] || { [ -e "$output" ] && [ ! -f "$output" ]; }; then
@@ -614,7 +755,6 @@ _install_validated_utility() { # $1=compiled $2=destination $3=utility ID
   chmod 0755 "$install_tmp" || { rm -f "$install_tmp"; return 1; }
   mv -f "$install_tmp" "$output" || { rm -f "$install_tmp"; return 1; }
   _build_install_temps[$temp_index]=''
-  printf '    installed: %s\n' "$(cya4 "$output")"
 }
 
 _ensure_staticcheck() { # $1=bin_dir $2=ext -> sets _staticcheck_path; stdout msgs
@@ -806,7 +946,7 @@ rel_usage() {
 rel_run() {
   local tag="$1" message="$2" rc=0 cleanup_rc=0
   _build_install_temps=()
-  _build_owned_dir=$(mktemp -d "${TMPDIR:-/tmp}/govna-go-release.XXXXXX") || {
+  _build_owned_dir=$(mktemp -d "$(_tmp_root)/govna-go-release.XXXXXX") || {
     _failure 'release: create invocation-owned temporary directory failed'
     return 1
   }
@@ -1025,6 +1165,14 @@ _validate_binary_provenance() { # $1=binary $2=revision $3=label
   }
 }
 
+_utility_count_label() { # $1=count -> "1 utility" or "<N> utilities"
+  if [ "$1" -eq 1 ]; then
+    printf '%s\n' '1 utility'
+  else
+    printf '%s utilities\n' "$1"
+  fi
+}
+
 _release_compile_validate_install() { # $1=tag
   local tag="$1" release_version="${1#v}" revision bin_dir ext d target version decls compiled output
   local targets=() versions=()
@@ -1091,10 +1239,11 @@ EOF
     version="${versions[$i]}"
     compiled="$_build_owned_dir/$target$ext"
     _validate_utility_version_output "$compiled" "$target" "$version" || return 1
+    _validate_utility_help_output "$compiled" "$target" "$version" || return 1
     _validate_binary_provenance "$compiled" "$revision" "compiled $target" || return 1
-    printf '    verified: %s\n' "$(cya4 "$target")"
     i=$((i + 1))
   done
+  printf '    verified: %s\n' "$(cya4 "$(_utility_count_label "${#targets[@]}")")"
 
   mkdir -p "$bin_dir" || {
     _failure "release: create install directory failed: $bin_dir"
@@ -1106,6 +1255,7 @@ EOF
     output="$bin_dir/$target$ext"
     _install_validated_utility "$compiled" "$output" "$target" || return 1
   done
+  printf '    installed: %s to %s\n' "$(cya4 "$(_utility_count_label "${#targets[@]}")")" "$(cya4 "$bin_dir")"
 
   printf '\n%s\n' "$(yel7 '==> Recheck installed release utilities')"
   i=0
@@ -1113,10 +1263,11 @@ EOF
     version="${versions[$i]}"
     output="$bin_dir/$target$ext"
     _validate_utility_version_output "$output" "$target" "$version" || return 1
+    _validate_utility_help_output "$output" "$target" "$version" || return 1
     _validate_binary_provenance "$output" "$revision" "installed $target" || return 1
-    printf '    verified installed: %s\n' "$(cya4 "$output")"
     i=$((i + 1))
   done
+  printf '    verified installed: %s\n' "$(cya4 "$(_utility_count_label "${#targets[@]}")")"
 }
 
 # _rel_step NAME COMPLETED gitargs... — run one git step; on failure emit the
@@ -1214,7 +1365,7 @@ EOF
 # prep_run DRY VERSION MESSAGE.
 prep_run() {
   local dry="$1" version="$2" message="$3" rc=0 cleanup_rc=0
-  _prep_owned_dir=$(mktemp -d "${TMPDIR:-/tmp}/govna-go-prep.XXXXXX") || {
+  _prep_owned_dir=$(mktemp -d "$(_tmp_root)/govna-go-prep.XXXXXX") || {
     printf 'prep: create invocation-owned temporary directory failed\n' >&2
     return 1
   }
@@ -1653,10 +1804,6 @@ _prep_find_ac_files() { # $1=root $2=acnums -> sorted govna/ac<N>-*.md paths
 
 _prep_validate_ac_selection() { # $1=root $2=acnums $3=acfiles
   local root="$1" acnums="$2" acfiles="$3" number count path name
-  if [ -z "$acnums" ]; then
-    printf 'prep: release message must name at least one AC<number> reference\n' >&2
-    return 1
-  fi
   while IFS= read -r number; do
     [ -n "$number" ] || continue
     count=0
@@ -1696,7 +1843,7 @@ _prep_remove_ie_lines() { # $1=root $2=ielines(newline-sep)
   local root="$1" lines="$2"
   [ -n "$lines" ] || return 0
   local tmp
-  tmp=$(mktemp "${TMPDIR:-/tmp}/prep-plan.XXXXXX")
+  tmp=$(mktemp "$(_tmp_root)/prep-plan.XXXXXX")
   _prep_ie_err=''
   drop="$lines" awk '
     BEGIN { n = split(ENVIRON["drop"], arr, "\n"); for (i = 1; i <= n; i++) if (arr[i] != "") d[arr[i]] = 1 }
@@ -1854,7 +2001,7 @@ _prep_apply_version_bump() { # $1=path $2=kind $3=vstripped
     return 1
   fi
   local tmp
-  tmp=$(mktemp "${TMPDIR:-/tmp}/prep-bump.XXXXXX")
+  tmp=$(mktemp "$(_tmp_root)/prep-bump.XXXXXX")
   if ! sed -E "s/$pat/\\1\"$v\"/g" "$path" >"$tmp"; then
     rm -f "$tmp"; _prep_bump_err="sed failed on $path"; return 1
   fi
@@ -1866,7 +2013,7 @@ _prep_apply_changelog_insert() { # $1=path $2=vstripped $3=message
   local path="$1" v="$2" msg="$3"
   _validate_changelog_shape "$path" || return 1
   local tmp row
-  tmp=$(mktemp "${TMPDIR:-/tmp}/prep-cl.XXXXXX")
+  tmp=$(mktemp "$(_tmp_root)/prep-cl.XXXXXX")
   row="| $v | $msg |"
   if ! row="$row" awk '
     BEGIN { row = ENVIRON["row"] }
