@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 1.3.2 | AC9 adopt govna canon v0.59.1 |
 | 1.3.1 | AC8 adopt govna canon v0.59.0 |
 | 1.3.0 | AC6 canon-style azm help page; AC7 adopt govna canon v0.58.0 |
 | 1.2.1 | AC3 adopt govna canon v0.54.0 with the prep sweep grep guard fix |

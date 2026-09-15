@@ -12,7 +12,7 @@ import (
 
 const (
 	programName        = "azm"
-	programVersion     = "1.3.1"
+	programVersion     = "1.3.2"
 	programDescription = "Azure IAM CLI utility"
 	programURL         = "github.com/queone/azm"
 )
