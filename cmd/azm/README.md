@@ -195,7 +195,7 @@ $
 The full help page printed by `azm -h`:
 
 ```text
-azm v1.3.3
+azm v1.3.4
 Azure IAM CLI utility
 github.com/queone/azm
 
